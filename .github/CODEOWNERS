@@ -1,0 +1,5 @@
+# CODEOWNERS file for Slidey
+# This file defines who owns the code in this repository
+
+# Global code owner
+* @josephclloyd
