@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 import CoreImage
 
+enum PanDirection {
+    case left, right, up, down
+}
+
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @EnvironmentObject var recentDirectories: RecentDirectories
@@ -147,6 +151,35 @@ struct SlideshowView: View {
         }
     }
 
+    private func canPan(direction: PanDirection) -> Bool {
+        guard zoomScale > 1.0,
+              let image = currentDisplayImage ?? imageLoader.currentImage,
+              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return false
+        }
+
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let fitScale = min(windowSize.width / imageSize.width, windowSize.height / imageSize.height)
+        let displayedSize = CGSize(
+            width: imageSize.width * fitScale * zoomScale,
+            height: imageSize.height * fitScale * zoomScale
+        )
+
+        let maxOffsetX = max(0, (displayedSize.width - windowSize.width) / 2)
+        let maxOffsetY = max(0, (displayedSize.height - windowSize.height) / 2)
+
+        switch direction {
+        case .left:
+            return imageOffset.width < maxOffsetX - 10
+        case .right:
+            return imageOffset.width > -maxOffsetX + 10
+        case .up:
+            return imageOffset.height < maxOffsetY - 10
+        case .down:
+            return imageOffset.height > -maxOffsetY + 10
+        }
+    }
+
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
 
@@ -158,16 +191,32 @@ struct SlideshowView: View {
         if zoomScale > 1.0 {
             switch key {
             case .leftArrow:
-                imageOffset.width += 50
+                if canPan(direction: .left) {
+                    imageOffset.width += 50
+                } else {
+                    imageLoader.previousImage()
+                }
                 return .handled
             case .rightArrow:
-                imageOffset.width -= 50
+                if canPan(direction: .right) {
+                    imageOffset.width -= 50
+                } else {
+                    imageLoader.nextImage()
+                }
                 return .handled
             case .upArrow:
-                imageOffset.height += 50
+                if canPan(direction: .up) {
+                    imageOffset.height += 50
+                } else {
+                    // Optional: could navigate images here too
+                }
                 return .handled
             case .downArrow:
-                imageOffset.height -= 50
+                if canPan(direction: .down) {
+                    imageOffset.height -= 50
+                } else {
+                    // Optional: could navigate images here too
+                }
                 return .handled
             default:
                 break
