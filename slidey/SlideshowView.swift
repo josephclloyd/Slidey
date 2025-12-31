@@ -20,6 +20,7 @@ struct SlideshowView: View {
     @State private var enhancedImages: [Int: NSImage] = [:]
     @State private var smoothedImages: [Int: NSImage] = [:]
     @State private var currentDisplayImage: NSImage?
+    @State private var myWindow: NSWindow?
 
     var body: some View {
         ZStack {
@@ -82,6 +83,7 @@ struct SlideshowView: View {
                         .onAppear {
                             windowSize = geometry.size
                             updateDisplayImage()
+                            captureWindow()
                         }
                         .onChange(of: geometry.size) { oldSize, newSize in
                             windowSize = newSize
@@ -103,6 +105,12 @@ struct SlideshowView: View {
                 NSCursor.unhide()
             }
         }
+        .onChange(of: imageLoader.images) { oldImages, newImages in
+            // When images change, update the display
+            if !newImages.isEmpty {
+                updateDisplayImage()
+            }
+        }
         .onChange(of: imageLoader.currentIndex) { oldIndex, newIndex in
             saveRotationForImage(at: oldIndex)
             loadRotationForImage(at: newIndex)
@@ -115,10 +123,15 @@ struct SlideshowView: View {
             handleKeyPress(keyPress)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectDirectory"))) { _ in
-            selectDirectory()
+            // Only respond if this view's window is the key window
+            if let myWindow = myWindow, myWindow.isKeyWindow {
+                selectDirectory()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
-            if let url = notification.object as? URL {
+            // Only respond if this view's window is the key window
+            if let myWindow = myWindow, myWindow.isKeyWindow,
+               let url = notification.object as? URL {
                 openDirectory(url: url)
             }
         }
@@ -278,23 +291,42 @@ struct SlideshowView: View {
         return .ignored
     }
 
-    private func selectDirectory() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
+    private func captureWindow() {
+        myWindow = NSApplication.shared.keyWindow
+    }
 
-        if panel.runModal() == .OK, let url = panel.url {
-            openDirectory(url: url)
+    private func selectDirectory() {
+        DispatchQueue.main.async {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+
+            // Show panel as a sheet on this view's window
+            if let window = self.myWindow {
+                panel.beginSheetModal(for: window) { response in
+                    if response == .OK, let url = panel.url {
+                        self.openDirectory(url: url)
+                    }
+                }
+            }
         }
     }
 
     private func openDirectory(url: URL) {
         selectedDirectory = url
         recentDirectories.addDirectory(url)
+
+        // Reset all image modifications
+        rotationAngles = [:]
+        rotationAngle = .zero
+        enhancedImages = [:]
+        smoothedImages = [:]
+        resetZoomAndPan()
+
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
-        enterFullScreen()
+        // updateDisplayImage will be called by onChange(of: imageLoader.images)
     }
 
     private func enterFullScreen() {
