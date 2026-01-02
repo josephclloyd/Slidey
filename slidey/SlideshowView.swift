@@ -21,6 +21,7 @@ struct SlideshowView: View {
     @State private var smoothedImages: [Int: NSImage] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
+    @State private var windowHasFocus = false
 
     var body: some View {
         ZStack {
@@ -84,6 +85,7 @@ struct SlideshowView: View {
                             windowSize = geometry.size
                             updateDisplayImage()
                             captureWindow()
+                            setupWindowObservers()
                         }
                         .onChange(of: geometry.size) { oldSize, newSize in
                             windowSize = newSize
@@ -99,11 +101,9 @@ struct SlideshowView: View {
                 enhancedImages = [:]
                 smoothedImages = [:]
                 updateDisplayImage()
-                NSCursor.hide()
                 enterFullScreen()
-            } else {
-                NSCursor.unhide()
             }
+            updateCursorVisibility()
         }
         .onChange(of: imageLoader.images) { oldImages, newImages in
             // When images change, update the display
@@ -116,6 +116,9 @@ struct SlideshowView: View {
             loadRotationForImage(at: newIndex)
             resetZoomAndPan()
             updateDisplayImage()
+        }
+        .onChange(of: isFullScreen) { _, _ in
+            updateCursorVisibility()
         }
         .focusable()
         .focusEffectDisabled()
@@ -295,6 +298,51 @@ struct SlideshowView: View {
         myWindow = NSApplication.shared.keyWindow
     }
 
+    private func setupWindowObservers() {
+        // Observe when window becomes key (gains focus)
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [self] notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = true
+                updateCursorVisibility()
+            }
+        }
+
+        // Observe when window resigns key (loses focus)
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [self] notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = false
+                updateCursorVisibility()
+            }
+        }
+
+        // Set initial focus state
+        if let myWindow = myWindow {
+            windowHasFocus = myWindow.isKeyWindow
+            updateCursorVisibility()
+        }
+    }
+
+    private func updateCursorVisibility() {
+        // Hide cursor only if: images are loaded AND fullscreen AND window has focus
+        let shouldHideCursor = !imageLoader.images.isEmpty && isFullScreen && windowHasFocus
+
+        DispatchQueue.main.async {
+            if shouldHideCursor {
+                NSCursor.hide()
+            } else {
+                NSCursor.unhide()
+            }
+        }
+    }
+
     private func selectDirectory() {
         DispatchQueue.main.async {
             let panel = NSOpenPanel()
@@ -365,13 +413,7 @@ struct SlideshowView: View {
         if let window = NSApplication.shared.keyWindow {
             window.toggleFullScreen(nil)
             isFullScreen.toggle()
-
-            // Show cursor when exiting fullscreen
-            if !isFullScreen {
-                NSCursor.unhide()
-            } else {
-                NSCursor.hide()
-            }
+            updateCursorVisibility()
         }
     }
 
@@ -380,7 +422,7 @@ struct SlideshowView: View {
             if window.styleMask.contains(.fullScreen) {
                 window.toggleFullScreen(nil)
                 isFullScreen = false
-                NSCursor.unhide()
+                updateCursorVisibility()
             }
         }
     }
