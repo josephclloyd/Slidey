@@ -71,6 +71,10 @@ struct SlideshowView: View {
                         }
                     }
                 }
+                .onAppear {
+                    captureWindow()
+                    setupWindowObservers()
+                }
             } else {
                 GeometryReader { geometry in
                     if let image = currentDisplayImage {
@@ -126,16 +130,17 @@ struct SlideshowView: View {
             handleKeyPress(keyPress)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectDirectory"))) { _ in
-            // Only respond if this view's window is the key window
-            if let myWindow = myWindow, myWindow.isKeyWindow {
+            // Only respond if this view's window is the key window (or if we haven't captured a window yet)
+            if myWindow == nil || myWindow?.isKeyWindow == true {
                 selectDirectory()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
-            // Only respond if this view's window is the key window
-            if let myWindow = myWindow, myWindow.isKeyWindow,
-               let url = notification.object as? URL {
-                openDirectory(url: url)
+            // Only respond if this view's window is the key window (or if we haven't captured a window yet)
+            if let url = notification.object as? URL {
+                if myWindow == nil || myWindow?.isKeyWindow == true {
+                    openDirectory(url: url)
+                }
             }
         }
         .onChange(of: windowTitle) { _, newTitle in
@@ -350,8 +355,8 @@ struct SlideshowView: View {
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = false
 
-            // Show panel as a sheet on this view's window
-            if let window = self.myWindow {
+            // Show panel as a sheet on this view's window (or the key window if we haven't captured it yet)
+            if let window = self.myWindow ?? NSApplication.shared.keyWindow {
                 panel.beginSheetModal(for: window) { response in
                     if response == .OK, let url = panel.url {
                         self.openDirectory(url: url)
