@@ -6,6 +6,67 @@ enum PanDirection {
     case left, right, up, down
 }
 
+// View modifier for handling right-click
+struct RightClickModifier: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RightClickHandler(action: action)
+                    .allowsHitTesting(true)
+            )
+    }
+}
+
+struct RightClickHandler: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = RightClickView()
+        view.onRightClick = action
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let view = nsView as? RightClickView {
+            view.onRightClick = action
+        }
+    }
+}
+
+class RightClickView: NSView {
+    var onRightClick: (() -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        // Make sure we can receive mouse events
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        onRightClick?()
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+
+    override var acceptsFirstResponder: Bool {
+        return true
+    }
+}
+
+extension View {
+    func onRightClick(perform action: @escaping () -> Void) -> some View {
+        self.modifier(RightClickModifier(action: action))
+    }
+}
+
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @EnvironmentObject var recentDirectories: RecentDirectories
@@ -83,7 +144,13 @@ struct SlideshowView: View {
                             zoomScale: $zoomScale,
                             imageOffset: $imageOffset,
                             containerSize: geometry.size,
-                            rotationAngle: $rotationAngle
+                            rotationAngle: $rotationAngle,
+                            onLeftClick: {
+                                imageLoader.nextImage()
+                            },
+                            onRightClick: {
+                                imageLoader.previousImage()
+                            }
                         )
                         .onAppear {
                             windowSize = geometry.size
@@ -561,16 +628,31 @@ struct ImageDisplayView: View {
     @Binding var imageOffset: CGSize
     let containerSize: CGSize
     @Binding var rotationAngle: Angle
+    let onLeftClick: () -> Void
+    let onRightClick: () -> Void
 
     var body: some View {
         GeometryReader { geometry in
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .rotationEffect(rotationAngle)
-                .scaleEffect(zoomScale)
-                .offset(imageOffset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ZStack {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .rotationEffect(rotationAngle)
+                    .scaleEffect(zoomScale)
+                    .offset(imageOffset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // Transparent overlay to capture clicks
+                Color.clear
+                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onTapGesture {
+                        onLeftClick()
+                    }
+                    .onRightClick {
+                        onRightClick()
+                    }
+            }
         }
     }
 }
