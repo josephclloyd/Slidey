@@ -80,9 +80,14 @@ struct SlideshowView: View {
     @State private var windowTitle: String = "Slidey"
     @State private var enhancedImages: [Int: NSImage] = [:]
     @State private var smoothedImages: [Int: NSImage] = [:]
+    @State private var upscaledImages: [Int: NSImage] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
+    @State private var isProcessing = false
+    @State private var debugOutput = ""
+    @State private var showDebugWindow = false
+    @State private var showFilename = false
 
     var body: some View {
         ZStack {
@@ -164,6 +169,89 @@ struct SlideshowView: View {
                     }
                 }
             }
+
+            // Filename overlay
+            if showFilename, let filename = imageLoader.currentImageURL?.lastPathComponent {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Text(filename)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.6))
+                            .cornerRadius(6)
+                            .padding(.leading, 20)
+                            .padding(.bottom, 20)
+                        Spacer()
+                    }
+                }
+            }
+
+            // Progress indicator overlay
+            if isProcessing {
+                VStack {
+                    Spacer()
+                    VStack(spacing: 15) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(1.5)
+                            .tint(.white)
+
+                        Text("AI Upscaling Image (4x)...")
+                            .font(.headline)
+                            .foregroundColor(.white)
+
+                        Text("This may take 10-30 seconds")
+                            .font(.subheadline)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .padding(30)
+                    .background(.black.opacity(0.85))
+                    .cornerRadius(12)
+                    .padding(.bottom, 100)
+                }
+            }
+
+            // Debug window overlay (toggle with 'd' key)
+            if showDebugWindow {
+                VStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("Upscaling Debug Output")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Spacer()
+                            Button("Close") {
+                                showDebugWindow = false
+                            }
+                            .buttonStyle(.bordered)
+                        }
+
+                        ScrollView {
+                            Text(debugOutput)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                        .frame(height: 300)
+
+                        if isProcessing {
+                            ProgressView()
+                                .progressViewStyle(.linear)
+                                .tint(.white)
+                        }
+                    }
+                    .padding(20)
+                    .background(.black.opacity(0.9))
+                    .cornerRadius(12)
+                    .frame(width: 700)
+                    .padding(.bottom, 40)
+                }
+            }
         }
         .onChange(of: imageLoader.images.isEmpty) { _, isEmpty in
             if !isEmpty {
@@ -171,6 +259,7 @@ struct SlideshowView: View {
                 rotationAngle = .zero
                 enhancedImages = [:]
                 smoothedImages = [:]
+                upscaledImages = [:]
                 updateDisplayImage()
                 enterFullScreen()
             }
@@ -236,6 +325,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveSmoothing"))) { _ in
             removeSmoothing()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UpscaleImage"))) { _ in
+            upscaleCurrentImage()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
+            removeUpscaling()
         }
     }
 
@@ -356,6 +451,18 @@ struct SlideshowView: View {
         case "M":
             removeSmoothing()
             return .handled
+        case "u":
+            upscaleCurrentImage()
+            return .handled
+        case "U":
+            removeUpscaling()
+            return .handled
+        case "n":
+            showFilename.toggle()
+            return .handled
+        case "d":
+            showDebugWindow.toggle()
+            return .handled
         default:
             if zoomScale <= 1.0 {
                 imageLoader.nextImage()
@@ -442,6 +549,7 @@ struct SlideshowView: View {
         rotationAngle = .zero
         enhancedImages = [:]
         smoothedImages = [:]
+        upscaledImages = [:]
         resetZoomAndPan()
 
         imageLoader.loadImagesFromDirectory(url: url)
@@ -509,7 +617,10 @@ struct SlideshowView: View {
 
     private func updateDisplayImage() {
         let index = imageLoader.currentIndex
-        if let smoothed = smoothedImages[index] {
+        // Priority: upscaled > smoothed > enhanced > original
+        if let upscaled = upscaledImages[index] {
+            currentDisplayImage = upscaled
+        } else if let smoothed = smoothedImages[index] {
             currentDisplayImage = smoothed
         } else if let enhanced = enhancedImages[index] {
             currentDisplayImage = enhanced
@@ -573,6 +684,199 @@ struct SlideshowView: View {
 
     private func removeSmoothing() {
         smoothedImages[imageLoader.currentIndex] = nil
+        updateDisplayImage()
+    }
+
+    private func upscaleCurrentImage() {
+        guard !isProcessing else { return }
+        guard let originalImage = imageLoader.currentImage else { return }
+
+        isProcessing = true
+        debugOutput = "Starting upscale process...\n"
+
+        // Create temp files
+        let tempDir = FileManager.default.temporaryDirectory
+        let inputPath = tempDir.appendingPathComponent("realesrgan_input.png")
+        let outputPath = tempDir.appendingPathComponent("realesrgan_output.png")
+
+        debugOutput += "Temp input: \(inputPath.path)\n"
+        debugOutput += "Temp output: \(outputPath.path)\n"
+
+        // Save image to temp file
+        guard let tiffData = originalImage.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+            debugOutput += "ERROR: Failed to convert image to PNG\n"
+            isProcessing = false
+            return
+        }
+
+        do {
+            try pngData.write(to: inputPath)
+            debugOutput += "Saved input image (\(pngData.count) bytes)\n"
+        } catch {
+            debugOutput += "ERROR writing temp input file: \(error)\n"
+            isProcessing = false
+            return
+        }
+
+        // Get paths from bundle - try multiple lookup methods
+        var executablePath: String?
+        var modelsPath: String?
+
+        // First, show bundle info
+        let bundlePath = Bundle.main.resourcePath
+        debugOutput += "Bundle resource path: \(bundlePath ?? "nil")\n"
+
+        if let bundlePath = bundlePath {
+            // List what's actually in the bundle
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(atPath: bundlePath)
+                debugOutput += "Bundle contents: \(contents.joined(separator: ", "))\n"
+            } catch {
+                debugOutput += "Error listing bundle contents: \(error)\n"
+            }
+        }
+
+        // Method 1: Try with Resources directory
+        executablePath = Bundle.main.path(forResource: "realesrgan-ncnn-vulkan", ofType: "", inDirectory: "Resources")
+        modelsPath = Bundle.main.path(forResource: "models", ofType: nil, inDirectory: "Resources")
+
+        if executablePath != nil {
+            debugOutput += "Method 1 success: Found in Resources/\n"
+        }
+
+        // Method 2: Try without Resources directory
+        if executablePath == nil {
+            executablePath = Bundle.main.path(forResource: "realesrgan-ncnn-vulkan", ofType: "")
+            if executablePath != nil {
+                debugOutput += "Method 2 success: Found at root level\n"
+            }
+        }
+        if modelsPath == nil {
+            modelsPath = Bundle.main.path(forResource: "models", ofType: nil)
+        }
+
+        // Method 3: Try direct bundle resource path
+        if executablePath == nil, let bundlePath = bundlePath {
+            let testPath = (bundlePath as NSString).appendingPathComponent("Resources/realesrgan-ncnn-vulkan")
+            debugOutput += "Testing path: \(testPath)\n"
+            if FileManager.default.fileExists(atPath: testPath) {
+                executablePath = testPath
+                debugOutput += "Method 3 success: Found at \(testPath)\n"
+            } else {
+                debugOutput += "File does not exist at \(testPath)\n"
+            }
+
+            let testModelsPath = (bundlePath as NSString).appendingPathComponent("Resources/models")
+            if FileManager.default.fileExists(atPath: testModelsPath) {
+                modelsPath = testModelsPath
+                debugOutput += "Found models at: \(testModelsPath)\n"
+            }
+        }
+
+        guard let executablePath = executablePath, let modelsPath = modelsPath else {
+            debugOutput += "\nERROR: Binary or models not found in bundle\n"
+            debugOutput += "The Resources folder needs to be added to the Xcode project's Copy Bundle Resources build phase\n"
+            isProcessing = false
+            return
+        }
+
+        debugOutput += "Executable: \(executablePath)\n"
+        debugOutput += "Models path: \(modelsPath)\n"
+
+        // Run upscaling in background
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executablePath)
+            process.arguments = [
+                "-i", inputPath.path,
+                "-o", outputPath.path,
+                "-n", "realesrgan-x4plus",
+                "-s", "4",
+                "-m", modelsPath
+            ]
+
+            // Capture stdout and stderr
+            let outputPipe = Pipe()
+            let errorPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = errorPipe
+
+            DispatchQueue.main.async {
+                self.debugOutput += "Command: \(executablePath) \(process.arguments!.joined(separator: " "))\n\n"
+            }
+
+            do {
+                try process.run()
+
+                // Read output asynchronously
+                let outputHandle = outputPipe.fileHandleForReading
+                let errorHandle = errorPipe.fileHandleForReading
+
+                outputHandle.readabilityHandler = { handle in
+                    let data = handle.availableData
+                    if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
+                        DispatchQueue.main.async {
+                            self.debugOutput += output
+                        }
+                    }
+                }
+
+                errorHandle.readabilityHandler = { handle in
+                    let data = handle.availableData
+                    if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
+                        DispatchQueue.main.async {
+                            self.debugOutput += output
+                        }
+                    }
+                }
+
+                process.waitUntilExit()
+
+                // Stop reading
+                outputHandle.readabilityHandler = nil
+                errorHandle.readabilityHandler = nil
+
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.debugOutput += "\nProcess exited with status: \(process.terminationStatus)\n"
+
+                    if process.terminationStatus == 0 {
+                        if FileManager.default.fileExists(atPath: outputPath.path) {
+                            if let upscaledImage = NSImage(contentsOf: outputPath) {
+                                self.debugOutput += "SUCCESS: Loaded upscaled image\n"
+                                self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
+                                self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
+                                self.upscaledImages[self.imageLoader.currentIndex] = upscaledImage
+                                self.updateDisplayImage()
+                            } else {
+                                self.debugOutput += "ERROR: Failed to load output image from \(outputPath.path)\n"
+                            }
+                        } else {
+                            self.debugOutput += "ERROR: Output file not created at \(outputPath.path)\n"
+                        }
+                    } else {
+                        self.debugOutput += "ERROR: Upscaling failed\n"
+                    }
+
+                    // Cleanup temp files
+                    try? FileManager.default.removeItem(at: inputPath)
+                    try? FileManager.default.removeItem(at: outputPath)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isProcessing = false
+                    self.debugOutput += "ERROR running upscaling process: \(error)\n"
+                    try? FileManager.default.removeItem(at: inputPath)
+                    try? FileManager.default.removeItem(at: outputPath)
+                }
+            }
+        }
+    }
+
+    private func removeUpscaling() {
+        upscaledImages[imageLoader.currentIndex] = nil
         updateDisplayImage()
     }
 

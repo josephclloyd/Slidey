@@ -3,9 +3,15 @@ import AppKit
 
 class ImageLoader: ObservableObject {
     @Published var images: [NSImage] = []
+    @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
 
     private let supportedExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
+
+    var currentImageURL: URL? {
+        guard !imageURLs.isEmpty && currentIndex < imageURLs.count else { return nil }
+        return imageURLs[currentIndex]
+    }
 
     func loadImagesFromDirectory(url: URL) {
         var fileURLs: [(URL, Date)] = []
@@ -37,14 +43,17 @@ class ImageLoader: ObservableObject {
 
         // Load images in sorted order
         var loadedImages: [NSImage] = []
+        var loadedURLs: [URL] = []
         for (fileURL, _) in fileURLs {
             if let image = NSImage(contentsOf: fileURL) {
                 loadedImages.append(image)
+                loadedURLs.append(fileURL)
             }
         }
 
         DispatchQueue.main.async {
             self.images = loadedImages
+            self.imageURLs = loadedURLs
             self.currentIndex = loadedImages.isEmpty ? 0 : 0
         }
     }

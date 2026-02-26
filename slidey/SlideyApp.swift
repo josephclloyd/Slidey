@@ -83,6 +83,18 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("AI Upscale Image (4x)") {
+                NotificationCenter.default.post(name: NSNotification.Name("UpscaleImage"), object: nil)
+            }
+            .keyboardShortcut("u", modifiers: [])
+
+            Button("Remove Upscaling") {
+                NotificationCenter.default.post(name: NSNotification.Name("RemoveUpscaling"), object: nil)
+            }
+            .keyboardShortcut("u", modifiers: .shift)
+
+            Divider()
+
             Button("Scale to Native Size") {
                 NotificationCenter.default.post(name: NSNotification.Name("ScaleToNative"), object: nil)
             }
