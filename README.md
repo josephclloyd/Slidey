@@ -13,7 +13,9 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **Pan and zoom** - Navigate zoomed images with arrow keys
 - **Recent directories** - Quick access to last 5 opened folders
 - **Multiple windows** - Open multiple slideshows simultaneously
-- **Session memory** - Remembers rotations, enhancements, and smoothing per session
+- **AI upscaling** - 4x AI-powered upscaling using Real-ESRGAN
+- **Filename overlay** - Toggle display of the current image filename
+- **Session memory** - Remembers rotations, enhancements, smoothing, and upscaling per session
 
 ## Keyboard Shortcuts
 
@@ -36,6 +38,12 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **Shift+A** - Remove enhancement
 - **m** - Smooth current image (reduce noise/pixelation)
 - **Shift+M** - Remove smoothing
+- **u** - AI upscale image 4x (uses Real-ESRGAN)
+- **Shift+U** - Remove upscaling
+
+### Overlay
+- **n** - Toggle filename overlay (lower-left corner)
+- **d** - Toggle debug output window
 
 ### Window
 - **Escape** - Toggle fullscreen
@@ -75,6 +83,8 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **Remove Enhancement** (Shift+A)
 - **Smooth Image** (m)
 - **Remove Smoothing** (Shift+M)
+- **AI Upscale Image (4x)** (u)
+- **Remove Upscaling** (Shift+U)
 - **Scale to Native Size** (s)
 - **Scale to Fill Screen** (f)
 - **Rotate Clockwise** (r)
@@ -85,20 +95,25 @@ A native macOS slideshow application for viewing images with powerful navigation
 ### Built With
 - **SwiftUI** - Modern declarative UI framework
 - **AppKit** - macOS native components
-- **Core Image** - Auto-enhancement filters
+- **Core Image** - Auto-enhancement and noise reduction filters
+- **Real-ESRGAN** - AI-powered image upscaling
 
 ### Image Processing
 - Images are sorted by creation date
 - Auto-enhancement uses Core Image's `autoAdjustmentFilters()`
 - Image smoothing uses Core Image's `CINoiseReduction` filter
-- Enhancements, smoothing, and rotations are session-persistent
-- Original images are never modified on disk
+- AI upscaling uses Real-ESRGAN (4x) via bundled `realesrgan-ncnn-vulkan` binary
+- Upscaling is applied to the best available version (smoothed > enhanced > original)
+- Adding or removing enhance/smooth invalidates any existing upscale
+- All edits are session-persistent; original images are never modified on disk
 
 ### Architecture
 - `SlideyApp.swift` - Main app entry point and menu commands
 - `SlideshowView.swift` - Main slideshow interface and controls
 - `ImageLoader.swift` - Directory scanning and image loading
 - `RecentDirectories.swift` - Recent directory management
+- `Resources/realesrgan-ncnn-vulkan` - Bundled AI upscaling binary
+- `Resources/models/` - Real-ESRGAN model files
 
 ## Requirements
 
