@@ -116,6 +116,7 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: NSNotification.Name("RotateCounterClockwise"), object: nil)
             }
             .keyboardShortcut("r", modifiers: .shift)
+
         }
     }
 }

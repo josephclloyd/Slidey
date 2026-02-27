@@ -260,6 +260,7 @@ struct SlideshowView: View {
                 enhancedImages = [:]
                 smoothedImages = [:]
                 upscaledImages = [:]
+                loadRotationForImage(at: imageLoader.currentIndex)
                 updateDisplayImage()
                 enterFullScreen()
             }
@@ -649,13 +650,17 @@ struct SlideshowView: View {
         let context = CIContext()
         if let enhancedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: originalImage.size)
-            enhancedImages[imageLoader.currentIndex] = enhancedNSImage
+            let index = imageLoader.currentIndex
+            enhancedImages[index] = enhancedNSImage
+            invalidateUpscaling(for: index)
             currentDisplayImage = enhancedNSImage
         }
     }
 
     private func removeEnhancement() {
-        enhancedImages[imageLoader.currentIndex] = nil
+        let index = imageLoader.currentIndex
+        enhancedImages[index] = nil
+        invalidateUpscaling(for: index)
         updateDisplayImage()
     }
 
@@ -677,22 +682,29 @@ struct SlideshowView: View {
         let context = CIContext()
         if let smoothedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: originalImage.size)
-            smoothedImages[imageLoader.currentIndex] = smoothedNSImage
+            let index = imageLoader.currentIndex
+            smoothedImages[index] = smoothedNSImage
+            invalidateUpscaling(for: index)
             currentDisplayImage = smoothedNSImage
         }
     }
 
     private func removeSmoothing() {
-        smoothedImages[imageLoader.currentIndex] = nil
+        let index = imageLoader.currentIndex
+        smoothedImages[index] = nil
+        invalidateUpscaling(for: index)
         updateDisplayImage()
     }
 
     private func upscaleCurrentImage() {
         guard !isProcessing else { return }
-        guard let originalImage = imageLoader.currentImage else { return }
+        let index = imageLoader.currentIndex
+        // Upscale the best non-upscaled version: smoothed > enhanced > original
+        guard let sourceImage = smoothedImages[index] ?? enhancedImages[index] ?? imageLoader.currentImage else { return }
 
         isProcessing = true
         debugOutput = "Starting upscale process...\n"
+        let originalImage = sourceImage
 
         // Create temp files
         let tempDir = FileManager.default.temporaryDirectory
@@ -844,11 +856,12 @@ struct SlideshowView: View {
 
                     if process.terminationStatus == 0 {
                         if FileManager.default.fileExists(atPath: outputPath.path) {
+                            let index = self.imageLoader.currentIndex
                             if let upscaledImage = NSImage(contentsOf: outputPath) {
                                 self.debugOutput += "SUCCESS: Loaded upscaled image\n"
                                 self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
                                 self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
-                                self.upscaledImages[self.imageLoader.currentIndex] = upscaledImage
+                                self.upscaledImages[index] = upscaledImage
                                 self.updateDisplayImage()
                             } else {
                                 self.debugOutput += "ERROR: Failed to load output image from \(outputPath.path)\n"
@@ -873,6 +886,10 @@ struct SlideshowView: View {
                 }
             }
         }
+    }
+
+    private func invalidateUpscaling(for index: Int) {
+        upscaledImages[index] = nil
     }
 
     private func removeUpscaling() {
