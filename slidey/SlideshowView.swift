@@ -99,6 +99,9 @@ struct SlideshowView: View {
     @State private var debugOutput = ""
     @State private var showDebugWindow = false
     @State private var showFilename = false
+    @State private var upscaleProcess: Process?
+    @State private var upscaleCancelled = false
+    @State private var upscaleProgress: Double = 0
 
     var body: some View {
         ZStack {
@@ -161,9 +164,11 @@ struct SlideshowView: View {
                             containerSize: geometry.size,
                             rotationAngle: $rotationAngle,
                             onLeftClick: {
+                                guard !isProcessing else { return }
                                 imageLoader.nextImage()
                             },
                             onRightClick: {
+                                guard !isProcessing else { return }
                                 imageLoader.previousImage()
                             }
                         )
@@ -203,18 +208,22 @@ struct SlideshowView: View {
                 VStack {
                     Spacer()
                     VStack(spacing: 15) {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .scaleEffect(1.5)
-                            .tint(.white)
-
-                        Text("AI Upscaling Image (4x)...")
+                        Text("AI Upscaling Image (4x)…")
                             .font(.headline)
                             .foregroundColor(.white)
 
-                        Text("This may take 10-30 seconds")
-                            .font(.subheadline)
+                        ProgressView(value: upscaleProgress)
+                            .progressViewStyle(.linear)
+                            .tint(.white)
+                            .frame(width: 220)
+
+                        Text("\(Int(upscaleProgress * 100))%")
+                            .font(.system(.subheadline, design: .monospaced))
                             .foregroundColor(.white.opacity(0.8))
+
+                        Button("Cancel", action: cancelUpscale)
+                            .buttonStyle(.bordered)
+                            .tint(.white)
                     }
                     .padding(30)
                     .background(.black.opacity(0.85))
@@ -305,17 +314,11 @@ struct SlideshowView: View {
             handleKeyPress(keyPress)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectDirectory"))) { _ in
-            // Only respond if this view's window is the key window (or if we haven't captured a window yet)
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                selectDirectory()
-            }
+            ifKeyWindow { selectDirectory() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
-            // Only respond if this view's window is the key window (or if we haven't captured a window yet)
             if let entry = notification.object as? RecentDirectory {
-                if myWindow == nil || myWindow?.isKeyWindow == true {
-                    openRecent(entry)
-                }
+                ifKeyWindow { openRecent(entry) }
             }
         }
         .onChange(of: windowTitle) { _, newTitle in
@@ -365,13 +368,14 @@ struct SlideshowView: View {
         }
     }
 
-    /// Run `action` only if this view's window is the key window. Edit-menu
-    /// commands fan out to every open SlideshowView via NotificationCenter,
-    /// so without this gate a single keystroke would enhance/rotate/upscale
-    /// every visible slideshow at once. Matches the SelectDirectory /
-    /// OpenDirectory gate elsewhere in this file.
+    /// Run `action` only if this view's window is the key window AND no
+    /// upscale is in progress. Edit-menu commands fan out to every open
+    /// SlideshowView via NotificationCenter, so without the key-window gate
+    /// a single keystroke would enhance/rotate/upscale every visible
+    /// slideshow at once. The isProcessing gate prevents edits and
+    /// navigation from racing an in-flight upscale on the same image.
     private func ifKeyWindow(_ action: () -> Void) {
-        if myWindow == nil || myWindow?.isKeyWindow == true {
+        if (myWindow == nil || myWindow?.isKeyWindow == true) && !isProcessing {
             action()
         }
     }
@@ -409,9 +413,18 @@ struct SlideshowView: View {
         let key = keyPress.key
 
         if key == .escape {
-            toggleFullScreen()
+            if isProcessing {
+                cancelUpscale()
+            } else {
+                toggleFullScreen()
+            }
             return .handled
         }
+
+        // Lock the keyboard to Escape (handled above) while an upscale is in
+        // flight, so the displayed image can't change underneath the
+        // progress overlay.
+        if isProcessing { return .handled }
 
         if zoomScale > 1.0 {
             switch key {
@@ -735,6 +748,8 @@ struct SlideshowView: View {
         guard let sourceImage = smoothedImages[targetURL] ?? enhancedImages[targetURL] ?? imageLoader.currentImage else { return }
 
         isProcessing = true
+        upscaleCancelled = false
+        upscaleProgress = 0
         debugOutput = "Starting upscale process...\n"
         let originalImage = sourceImage
 
@@ -832,33 +847,31 @@ struct SlideshowView: View {
         debugOutput += "Executable: \(executablePath)\n"
         debugOutput += "Models path: \(modelsPath)\n"
 
-        // Run upscaling in background
+        // Configure the process up front so cancellation can find it the moment
+        // the user clicks Cancel, even if .run() hasn't been called yet.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executablePath)
+        let arguments = [
+            "-i", inputPath.path,
+            "-o", outputPath.path,
+            "-n", "realesrgan-x4plus",
+            "-s", "4",
+            "-m", modelsPath
+        ]
+        process.arguments = arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        upscaleProcess = process
+        debugOutput += "Command: \(executablePath) \(arguments.joined(separator: " "))\n\n"
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executablePath)
-            let arguments = [
-                "-i", inputPath.path,
-                "-o", outputPath.path,
-                "-n", "realesrgan-x4plus",
-                "-s", "4",
-                "-m", modelsPath
-            ]
-            process.arguments = arguments
-
-            // Capture stdout and stderr
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
-
-            DispatchQueue.main.async {
-                self.debugOutput += "Command: \(executablePath) \(arguments.joined(separator: " "))\n\n"
-            }
-
             do {
                 try process.run()
 
-                // Read output asynchronously
                 let outputHandle = outputPipe.fileHandleForReading
                 let errorHandle = errorPipe.fileHandleForReading
 
@@ -867,6 +880,9 @@ struct SlideshowView: View {
                     if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
                         DispatchQueue.main.async {
                             self.debugOutput += output
+                            if let pct = Self.parseLastPercentage(in: output) {
+                                self.upscaleProgress = pct / 100.0
+                            }
                         }
                     }
                 }
@@ -876,27 +892,33 @@ struct SlideshowView: View {
                     if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
                         DispatchQueue.main.async {
                             self.debugOutput += output
+                            if let pct = Self.parseLastPercentage(in: output) {
+                                self.upscaleProgress = pct / 100.0
+                            }
                         }
                     }
                 }
 
                 process.waitUntilExit()
 
-                // Stop reading
                 outputHandle.readabilityHandler = nil
                 errorHandle.readabilityHandler = nil
 
                 DispatchQueue.main.async {
                     self.isProcessing = false
+                    self.upscaleProcess = nil
                     self.debugOutput += "\nProcess exited with status: \(process.terminationStatus)\n"
 
-                    if process.terminationStatus == 0 {
+                    if self.upscaleCancelled {
+                        self.debugOutput += "Upscaling cancelled by user.\n"
+                    } else if process.terminationStatus == 0 {
                         if FileManager.default.fileExists(atPath: outputPath.path) {
                             if let upscaledImage = NSImage(contentsOf: outputPath) {
                                 self.debugOutput += "SUCCESS: Loaded upscaled image\n"
                                 self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
                                 self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
                                 self.upscaledImages[targetURL] = upscaledImage
+                                self.upscaleProgress = 1.0
                                 self.updateDisplayImage()
                             } else {
                                 self.debugOutput += "ERROR: Failed to load output image from \(outputPath.path)\n"
@@ -915,12 +937,29 @@ struct SlideshowView: View {
             } catch {
                 DispatchQueue.main.async {
                     self.isProcessing = false
+                    self.upscaleProcess = nil
                     self.debugOutput += "ERROR running upscaling process: \(error)\n"
                     try? FileManager.default.removeItem(at: inputPath)
                     try? FileManager.default.removeItem(at: outputPath)
                 }
             }
         }
+    }
+
+    private func cancelUpscale() {
+        upscaleCancelled = true
+        upscaleProcess?.terminate()
+    }
+
+    /// Scans `text` for the last "DDD.DD%" token and returns its numeric value
+    /// (without the % sign). Used to drive the upscale progress bar from the
+    /// realesrgan-ncnn-vulkan binary's stderr stream.
+    private static func parseLastPercentage(in text: String) -> Double? {
+        guard let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)%"#) else { return nil }
+        let nsText = text as NSString
+        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+        guard let last = matches.last else { return nil }
+        return Double(nsText.substring(with: last.range(at: 1)))
     }
 
     private func invalidateUpscaling(for url: URL) {
