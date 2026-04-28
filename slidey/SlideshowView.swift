@@ -94,7 +94,7 @@ struct SlideshowView: View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
-            if imageLoader.images.isEmpty {
+            if imageLoader.imageURLs.isEmpty {
                 VStack(spacing: 30) {
                     Text("Welcome to Slidey")
                         .font(.largeTitle)
@@ -254,7 +254,7 @@ struct SlideshowView: View {
                 }
             }
         }
-        .onChange(of: imageLoader.images.isEmpty) { _, isEmpty in
+        .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
             if !isEmpty {
                 rotationAngles = [:]
                 rotationAngle = .zero
@@ -267,9 +267,10 @@ struct SlideshowView: View {
             }
             updateCursorVisibility()
         }
-        .onChange(of: imageLoader.images) { oldImages, newImages in
-            // When images change, update the display
-            if !newImages.isEmpty {
+        .onChange(of: imageLoader.imageURLs) { _, newURLs in
+            // Directory was reloaded with the same empty/non-empty state
+            // (e.g. switching between two non-empty folders). Refresh display.
+            if !newURLs.isEmpty {
                 updateDisplayImage()
             }
         }
@@ -513,7 +514,7 @@ struct SlideshowView: View {
 
     private func updateCursorVisibility() {
         // Hide cursor only if: images are loaded AND fullscreen AND window has focus
-        let shouldHideCursor = !imageLoader.images.isEmpty && isFullScreen && windowHasFocus
+        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus
 
         DispatchQueue.main.async {
             if shouldHideCursor {
@@ -569,7 +570,7 @@ struct SlideshowView: View {
 
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
-        // updateDisplayImage will be called by onChange(of: imageLoader.images)
+        // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
     private func enterFullScreen() {
