@@ -706,10 +706,13 @@ struct SlideshowView: View {
         debugOutput = "Starting upscale process...\n"
         let originalImage = sourceImage
 
-        // Create temp files
+        // Create temp files with a unique per-run prefix so concurrent upscales
+        // don't collide and so a local attacker can't pre-create a symlink at a
+        // predictable path to redirect the binary's write.
         let tempDir = FileManager.default.temporaryDirectory
-        let inputPath = tempDir.appendingPathComponent("realesrgan_input.png")
-        let outputPath = tempDir.appendingPathComponent("realesrgan_output.png")
+        let runID = UUID().uuidString
+        let inputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_input.png")
+        let outputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_output.png")
 
         debugOutput += "Temp input: \(inputPath.path)\n"
         debugOutput += "Temp output: \(outputPath.path)\n"
