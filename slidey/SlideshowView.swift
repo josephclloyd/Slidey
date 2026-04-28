@@ -140,7 +140,6 @@ struct SlideshowView: View {
                 }
                 .onAppear {
                     captureWindow()
-                    setupWindowObservers()
                 }
             } else {
                 GeometryReader { geometry in
@@ -162,7 +161,6 @@ struct SlideshowView: View {
                             windowSize = geometry.size
                             updateDisplayImage()
                             captureWindow()
-                            setupWindowObservers()
                         }
                         .onChange(of: geometry.size) { oldSize, newSize in
                             windowSize = newSize
@@ -335,6 +333,18 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
             ifKeyWindow { removeUpscaling() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = true
+                updateCursorVisibility()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = false
+                updateCursorVisibility()
+            }
+        }
     }
 
     /// Run `action` only if this view's window is the key window. Edit-menu
@@ -489,35 +499,7 @@ struct SlideshowView: View {
 
     private func captureWindow() {
         myWindow = NSApplication.shared.keyWindow
-    }
-
-    private func setupWindowObservers() {
-        // Observe when window becomes key (gains focus)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [self] notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = true
-                updateCursorVisibility()
-            }
-        }
-
-        // Observe when window resigns key (loses focus)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [self] notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = false
-                updateCursorVisibility()
-            }
-        }
-
-        // Set initial focus state
-        if let myWindow = myWindow {
+        if let myWindow {
             windowHasFocus = myWindow.isKeyWindow
             updateCursorVisibility()
         }
@@ -830,13 +812,14 @@ struct SlideshowView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = [
+            let arguments = [
                 "-i", inputPath.path,
                 "-o", outputPath.path,
                 "-n", "realesrgan-x4plus",
                 "-s", "4",
                 "-m", modelsPath
             ]
+            process.arguments = arguments
 
             // Capture stdout and stderr
             let outputPipe = Pipe()
@@ -845,7 +828,7 @@ struct SlideshowView: View {
             process.standardError = errorPipe
 
             DispatchQueue.main.async {
-                self.debugOutput += "Command: \(executablePath) \(process.arguments!.joined(separator: " "))\n\n"
+                self.debugOutput += "Command: \(executablePath) \(arguments.joined(separator: " "))\n\n"
             }
 
             do {
