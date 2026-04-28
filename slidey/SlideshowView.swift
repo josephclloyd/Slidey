@@ -71,6 +71,7 @@ struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @EnvironmentObject var recentDirectories: RecentDirectories
     @State private var selectedDirectory: URL?
+    @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
     @State private var zoomScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -114,14 +115,14 @@ struct SlideshowView: View {
                                     .foregroundColor(.white.opacity(0.7))
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(recentDirectories.directories, id: \.self) { url in
+                                    ForEach(recentDirectories.directories) { entry in
                                         Button(action: {
-                                            openDirectory(url: url)
+                                            openRecent(entry)
                                         }) {
                                             HStack {
                                                 Image(systemName: "folder.fill")
                                                     .foregroundColor(.blue)
-                                                Text(url.lastPathComponent)
+                                                Text(entry.displayName)
                                                     .foregroundColor(.white)
                                                 Spacer()
                                             }
@@ -294,9 +295,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
             // Only respond if this view's window is the key window (or if we haven't captured a window yet)
-            if let url = notification.object as? URL {
+            if let entry = notification.object as? RecentDirectory {
                 if myWindow == nil || myWindow?.isKeyWindow == true {
-                    openDirectory(url: url)
+                    openRecent(entry)
                 }
             }
         }
@@ -541,7 +542,20 @@ struct SlideshowView: View {
         }
     }
 
-    private func openDirectory(url: URL) {
+    private func openRecent(_ entry: RecentDirectory) {
+        guard let url = recentDirectories.resolveAndBeginAccess(for: entry) else {
+            return
+        }
+        openDirectory(url: url, isScoped: true)
+    }
+
+    private func openDirectory(url: URL, isScoped: Bool = false) {
+        // Release any prior security-scoped access before switching.
+        if let prior = scopedDirectory {
+            prior.stopAccessingSecurityScopedResource()
+        }
+        scopedDirectory = isScoped ? url : nil
+
         selectedDirectory = url
         recentDirectories.addDirectory(url)
 
