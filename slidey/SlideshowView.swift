@@ -306,34 +306,45 @@ struct SlideshowView: View {
             updateWindowTitle(newTitle)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnhanceImage"))) { _ in
-            enhanceCurrentImage()
+            ifKeyWindow { enhanceCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveEnhancement"))) { _ in
-            removeEnhancement()
+            ifKeyWindow { removeEnhancement() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToNative"))) { _ in
-            zoomToNativeSize()
+            ifKeyWindow { zoomToNativeSize() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToFill"))) { _ in
-            zoomToFillScreen()
+            ifKeyWindow { zoomToFillScreen() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateClockwise"))) { _ in
-            rotateClockwise()
+            ifKeyWindow { rotateClockwise() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateCounterClockwise"))) { _ in
-            rotateCounterClockwise()
+            ifKeyWindow { rotateCounterClockwise() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SmoothImage"))) { _ in
-            smoothCurrentImage()
+            ifKeyWindow { smoothCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveSmoothing"))) { _ in
-            removeSmoothing()
+            ifKeyWindow { removeSmoothing() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UpscaleImage"))) { _ in
-            upscaleCurrentImage()
+            ifKeyWindow { upscaleCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
-            removeUpscaling()
+            ifKeyWindow { removeUpscaling() }
+        }
+    }
+
+    /// Run `action` only if this view's window is the key window. Edit-menu
+    /// commands fan out to every open SlideshowView via NotificationCenter,
+    /// so without this gate a single keystroke would enhance/rotate/upscale
+    /// every visible slideshow at once. Matches the SelectDirectory /
+    /// OpenDirectory gate elsewhere in this file.
+    private func ifKeyWindow(_ action: () -> Void) {
+        if myWindow == nil || myWindow?.isKeyWindow == true {
+            action()
         }
     }
 
