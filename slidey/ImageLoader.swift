@@ -19,7 +19,14 @@ class ImageLoader: ObservableObject {
     /// in memory. Bounds resident memory regardless of folder size.
     private let cacheRadius = 1
 
+    /// Coalesce window for filesystem events. A burst of writes (e.g. unzip
+    /// into the directory) collapses into a single rescan after this delay.
+    private let rescanDebounce: DispatchTimeInterval = .milliseconds(500)
+
     private var cache: [Int: NSImage] = [:]
+    private var directoryURL: URL?
+    private var watcherSource: DispatchSourceFileSystemObject?
+    private var rescanWorkItem: DispatchWorkItem?
 
     var currentImageURL: URL? {
         guard !imageURLs.isEmpty && currentIndex < imageURLs.count else { return nil }
@@ -27,6 +34,21 @@ class ImageLoader: ObservableObject {
     }
 
     func loadImagesFromDirectory(url: URL) {
+        let urls = scanDirectory(url: url)
+
+        DispatchQueue.main.async {
+            self.stopWatching()
+            self.directoryURL = url
+            self.cache.removeAll()
+            self.imageURLs = urls
+            self.currentIndex = 0
+            self.currentImage = self.loadImage(at: 0)
+            self.preloadNeighbours()
+            self.startWatching(url: url)
+        }
+    }
+
+    private func scanDirectory(url: URL) -> [URL] {
         var fileURLs: [(URL, Date)] = []
 
         guard let enumerator = FileManager.default.enumerator(
@@ -34,7 +56,7 @@ class ImageLoader: ObservableObject {
             includingPropertiesForKeys: [.isRegularFileKey, .creationDateKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
-            return
+            return []
         }
 
         for case let fileURL as URL in enumerator {
@@ -52,15 +74,7 @@ class ImageLoader: ObservableObject {
         }
 
         fileURLs.sort { $0.1 < $1.1 }
-        let urls = fileURLs.map { $0.0 }
-
-        DispatchQueue.main.async {
-            self.cache.removeAll()
-            self.imageURLs = urls
-            self.currentIndex = 0
-            self.currentImage = self.loadImage(at: 0)
-            self.preloadNeighbours()
-        }
+        return fileURLs.map { $0.0 }
     }
 
     func nextImage() {
@@ -147,5 +161,75 @@ class ImageLoader: ObservableObject {
         for k in cache.keys where !keep.contains(k) {
             cache.removeValue(forKey: k)
         }
+    }
+
+    private func startWatching(url: URL) {
+        let fd = open(url.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue.global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleRescan()
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        watcherSource = source
+        source.resume()
+    }
+
+    private func stopWatching() {
+        watcherSource?.cancel()
+        watcherSource = nil
+        rescanWorkItem?.cancel()
+        rescanWorkItem = nil
+    }
+
+    /// Coalesce a burst of filesystem events into a single rescan.
+    private func scheduleRescan() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.rescanWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.rescanDirectory()
+            }
+            self.rescanWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + self.rescanDebounce, execute: work)
+        }
+    }
+
+    private func rescanDirectory() {
+        guard let url = directoryURL else { return }
+        let newURLs = scanDirectory(url: url)
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if newURLs == self.imageURLs { return }
+
+            let previousURL = self.currentImageURL
+            self.cache.removeAll()
+            self.imageURLs = newURLs
+
+            if newURLs.isEmpty {
+                self.currentIndex = 0
+                self.currentImage = nil
+                return
+            }
+
+            if let prev = previousURL, let idx = newURLs.firstIndex(of: prev) {
+                self.currentIndex = idx
+            } else {
+                self.currentIndex = min(self.currentIndex, newURLs.count - 1)
+            }
+            self.currentImage = self.loadImage(at: self.currentIndex)
+            self.preloadNeighbours()
+        }
+    }
+
+    deinit {
+        stopWatching()
     }
 }

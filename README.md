@@ -126,6 +126,28 @@ A native macOS slideshow application for viewing images with powerful navigation
 2. Select your target device (e.g., "My Mac")
 3. Press Command+R to build and run
 
+## Roadmap / TODO
+
+Ideas worth implementing — not yet started.
+
+### Slideshow proper
+- [ ] Auto-advance with configurable interval + play/pause
+- [ ] Presentation mode on top of existing fullscreen (hide cursor, true black background)
+
+### Library ergonomics
+- [ ] Drag-and-drop a folder onto the window to open it
+- [ ] Sort options (name, creation, modification, random) — currently locked to creation-date ascending in `ImageLoader.swift`
+- [ ] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
+- [ ] Auto-open most recent directory at launch
+- [ ] Image counter (`3 / 47`) alongside the existing filename overlay
+- [x] Watch directory for new/removed files without requiring a reopen (`DispatchSource`)
+
+### Image viewing
+- [ ] Continuous zoom/pan via scroll + pinch, beyond the current binary native/fill modes
+- [ ] Save / Export edited images — auto-enhance, smooth, rotate, upscale results currently live only in memory
+- [ ] Cancel button + progress indicator for AI upscale (4x can be slow with no way to bail)
+- [ ] Thumbnail strip / jump-to-index for large folders
+
 ## License
 
 Created for personal use.

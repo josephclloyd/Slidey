@@ -62,11 +62,12 @@ struct SlideshowView: View {
     @State private var imageOffset: CGSize = .zero
     @State private var windowSize: CGSize = .zero
     @State private var rotationAngle: Angle = .zero
-    @State private var rotationAngles: [Int: Angle] = [:]
+    @State private var rotationAngles: [URL: Angle] = [:]
+    @State private var lastDisplayedURL: URL?
     @State private var windowTitle: String = "Slidey"
-    @State private var enhancedImages: [Int: NSImage] = [:]
-    @State private var smoothedImages: [Int: NSImage] = [:]
-    @State private var upscaledImages: [Int: NSImage] = [:]
+    @State private var enhancedImages: [URL: NSImage] = [:]
+    @State private var smoothedImages: [URL: NSImage] = [:]
+    @State private var upscaledImages: [URL: NSImage] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
@@ -239,28 +240,36 @@ struct SlideshowView: View {
         }
         .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
             if !isEmpty {
-                rotationAngles = [:]
-                rotationAngle = .zero
-                enhancedImages = [:]
-                smoothedImages = [:]
-                upscaledImages = [:]
-                loadRotationForImage(at: imageLoader.currentIndex)
+                rotationAngle = currentURLRotation()
                 updateDisplayImage()
                 enterFullScreen()
             }
             updateCursorVisibility()
         }
         .onChange(of: imageLoader.imageURLs) { _, newURLs in
-            // Directory was reloaded with the same empty/non-empty state
-            // (e.g. switching between two non-empty folders). Refresh display.
+            // Drop any per-URL session state for files that no longer exist
+            // in the directory (deleted on disk, or we switched folders).
+            let valid = Set(newURLs)
+            rotationAngles = rotationAngles.filter { valid.contains($0.key) }
+            enhancedImages = enhancedImages.filter { valid.contains($0.key) }
+            smoothedImages = smoothedImages.filter { valid.contains($0.key) }
+            upscaledImages = upscaledImages.filter { valid.contains($0.key) }
+
+            rotationAngle = currentURLRotation()
             if !newURLs.isEmpty {
                 updateDisplayImage()
             }
         }
-        .onChange(of: imageLoader.currentIndex) { oldIndex, newIndex in
-            saveRotationForImage(at: oldIndex)
-            loadRotationForImage(at: newIndex)
-            resetZoomAndPan()
+        .onChange(of: imageLoader.currentIndex) { _, _ in
+            // Only reset zoom/pan when the displayed *file* changes. A rescan
+            // can shift currentIndex while keeping the same file under the
+            // cursor; that shouldn't yank the user out of their zoom.
+            let newURL = imageLoader.currentImageURL
+            if newURL != lastDisplayedURL {
+                resetZoomAndPan()
+                lastDisplayedURL = newURL
+            }
+            rotationAngle = currentURLRotation()
             updateDisplayImage()
         }
         .onChange(of: isFullScreen) { _, _ in
@@ -567,20 +576,23 @@ struct SlideshowView: View {
         imageOffset = .zero
     }
 
-    private func saveRotationForImage(at index: Int) {
-        rotationAngles[index] = rotationAngle
-    }
-
-    private func loadRotationForImage(at index: Int) {
-        rotationAngle = rotationAngles[index] ?? .zero
+    private func currentURLRotation() -> Angle {
+        guard let url = imageLoader.currentImageURL else { return .zero }
+        return rotationAngles[url] ?? .zero
     }
 
     private func rotateClockwise() {
         rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
+        if let url = imageLoader.currentImageURL {
+            rotationAngles[url] = rotationAngle
+        }
     }
 
     private func rotateCounterClockwise() {
         rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
+        if let url = imageLoader.currentImageURL {
+            rotationAngles[url] = rotationAngle
+        }
     }
 
     private func toggleFullScreen() {
@@ -610,13 +622,16 @@ struct SlideshowView: View {
     }
 
     private func updateDisplayImage() {
-        let index = imageLoader.currentIndex
+        guard let url = imageLoader.currentImageURL else {
+            currentDisplayImage = imageLoader.currentImage
+            return
+        }
         // Priority: upscaled > smoothed > enhanced > original
-        if let upscaled = upscaledImages[index] {
+        if let upscaled = upscaledImages[url] {
             currentDisplayImage = upscaled
-        } else if let smoothed = smoothedImages[index] {
+        } else if let smoothed = smoothedImages[url] {
             currentDisplayImage = smoothed
-        } else if let enhanced = enhancedImages[index] {
+        } else if let enhanced = enhancedImages[url] {
             currentDisplayImage = enhanced
         } else {
             currentDisplayImage = imageLoader.currentImage
@@ -643,17 +658,17 @@ struct SlideshowView: View {
         let context = CIContext()
         if let enhancedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: originalImage.size)
-            let index = imageLoader.currentIndex
-            enhancedImages[index] = enhancedNSImage
-            invalidateUpscaling(for: index)
+            guard let url = imageLoader.currentImageURL else { return }
+            enhancedImages[url] = enhancedNSImage
+            invalidateUpscaling(for: url)
             currentDisplayImage = enhancedNSImage
         }
     }
 
     private func removeEnhancement() {
-        let index = imageLoader.currentIndex
-        enhancedImages[index] = nil
-        invalidateUpscaling(for: index)
+        guard let url = imageLoader.currentImageURL else { return }
+        enhancedImages[url] = nil
+        invalidateUpscaling(for: url)
         updateDisplayImage()
     }
 
@@ -675,25 +690,25 @@ struct SlideshowView: View {
         let context = CIContext()
         if let smoothedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: originalImage.size)
-            let index = imageLoader.currentIndex
-            smoothedImages[index] = smoothedNSImage
-            invalidateUpscaling(for: index)
+            guard let url = imageLoader.currentImageURL else { return }
+            smoothedImages[url] = smoothedNSImage
+            invalidateUpscaling(for: url)
             currentDisplayImage = smoothedNSImage
         }
     }
 
     private func removeSmoothing() {
-        let index = imageLoader.currentIndex
-        smoothedImages[index] = nil
-        invalidateUpscaling(for: index)
+        guard let url = imageLoader.currentImageURL else { return }
+        smoothedImages[url] = nil
+        invalidateUpscaling(for: url)
         updateDisplayImage()
     }
 
     private func upscaleCurrentImage() {
         guard !isProcessing else { return }
-        let index = imageLoader.currentIndex
+        guard let targetURL = imageLoader.currentImageURL else { return }
         // Upscale the best non-upscaled version: smoothed > enhanced > original
-        guard let sourceImage = smoothedImages[index] ?? enhancedImages[index] ?? imageLoader.currentImage else { return }
+        guard let sourceImage = smoothedImages[targetURL] ?? enhancedImages[targetURL] ?? imageLoader.currentImage else { return }
 
         isProcessing = true
         debugOutput = "Starting upscale process...\n"
@@ -853,12 +868,11 @@ struct SlideshowView: View {
 
                     if process.terminationStatus == 0 {
                         if FileManager.default.fileExists(atPath: outputPath.path) {
-                            let index = self.imageLoader.currentIndex
                             if let upscaledImage = NSImage(contentsOf: outputPath) {
                                 self.debugOutput += "SUCCESS: Loaded upscaled image\n"
                                 self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
                                 self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
-                                self.upscaledImages[index] = upscaledImage
+                                self.upscaledImages[targetURL] = upscaledImage
                                 self.updateDisplayImage()
                             } else {
                                 self.debugOutput += "ERROR: Failed to load output image from \(outputPath.path)\n"
@@ -885,12 +899,13 @@ struct SlideshowView: View {
         }
     }
 
-    private func invalidateUpscaling(for index: Int) {
-        upscaledImages[index] = nil
+    private func invalidateUpscaling(for url: URL) {
+        upscaledImages[url] = nil
     }
 
     private func removeUpscaling() {
-        upscaledImages[imageLoader.currentIndex] = nil
+        guard let url = imageLoader.currentImageURL else { return }
+        upscaledImages[url] = nil
         updateDisplayImage()
     }
 
