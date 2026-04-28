@@ -36,11 +36,11 @@ struct FileMenuCommands: Commands {
                     Text("No Recent Directories")
                         .disabled(true)
                 } else {
-                    ForEach(recentDirectories.directories, id: \.self) { url in
-                        Button(url.lastPathComponent) {
+                    ForEach(recentDirectories.directories) { entry in
+                        Button(entry.displayName) {
                             NotificationCenter.default.post(
                                 name: NSNotification.Name("OpenDirectory"),
-                                object: url
+                                object: entry
                             )
                         }
                     }

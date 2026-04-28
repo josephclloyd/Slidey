@@ -71,6 +71,7 @@ struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @EnvironmentObject var recentDirectories: RecentDirectories
     @State private var selectedDirectory: URL?
+    @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
     @State private var zoomScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
@@ -93,7 +94,7 @@ struct SlideshowView: View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
-            if imageLoader.images.isEmpty {
+            if imageLoader.imageURLs.isEmpty {
                 VStack(spacing: 30) {
                     Text("Welcome to Slidey")
                         .font(.largeTitle)
@@ -114,14 +115,14 @@ struct SlideshowView: View {
                                     .foregroundColor(.white.opacity(0.7))
 
                                 VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(recentDirectories.directories, id: \.self) { url in
+                                    ForEach(recentDirectories.directories) { entry in
                                         Button(action: {
-                                            openDirectory(url: url)
+                                            openRecent(entry)
                                         }) {
                                             HStack {
                                                 Image(systemName: "folder.fill")
                                                     .foregroundColor(.blue)
-                                                Text(url.lastPathComponent)
+                                                Text(entry.displayName)
                                                     .foregroundColor(.white)
                                                 Spacer()
                                             }
@@ -139,7 +140,6 @@ struct SlideshowView: View {
                 }
                 .onAppear {
                     captureWindow()
-                    setupWindowObservers()
                 }
             } else {
                 GeometryReader { geometry in
@@ -161,7 +161,6 @@ struct SlideshowView: View {
                             windowSize = geometry.size
                             updateDisplayImage()
                             captureWindow()
-                            setupWindowObservers()
                         }
                         .onChange(of: geometry.size) { oldSize, newSize in
                             windowSize = newSize
@@ -253,7 +252,7 @@ struct SlideshowView: View {
                 }
             }
         }
-        .onChange(of: imageLoader.images.isEmpty) { _, isEmpty in
+        .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
             if !isEmpty {
                 rotationAngles = [:]
                 rotationAngle = .zero
@@ -266,9 +265,10 @@ struct SlideshowView: View {
             }
             updateCursorVisibility()
         }
-        .onChange(of: imageLoader.images) { oldImages, newImages in
-            // When images change, update the display
-            if !newImages.isEmpty {
+        .onChange(of: imageLoader.imageURLs) { _, newURLs in
+            // Directory was reloaded with the same empty/non-empty state
+            // (e.g. switching between two non-empty folders). Refresh display.
+            if !newURLs.isEmpty {
                 updateDisplayImage()
             }
         }
@@ -294,9 +294,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
             // Only respond if this view's window is the key window (or if we haven't captured a window yet)
-            if let url = notification.object as? URL {
+            if let entry = notification.object as? RecentDirectory {
                 if myWindow == nil || myWindow?.isKeyWindow == true {
-                    openDirectory(url: url)
+                    openRecent(entry)
                 }
             }
         }
@@ -304,34 +304,57 @@ struct SlideshowView: View {
             updateWindowTitle(newTitle)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnhanceImage"))) { _ in
-            enhanceCurrentImage()
+            ifKeyWindow { enhanceCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveEnhancement"))) { _ in
-            removeEnhancement()
+            ifKeyWindow { removeEnhancement() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToNative"))) { _ in
-            zoomToNativeSize()
+            ifKeyWindow { zoomToNativeSize() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToFill"))) { _ in
-            zoomToFillScreen()
+            ifKeyWindow { zoomToFillScreen() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateClockwise"))) { _ in
-            rotateClockwise()
+            ifKeyWindow { rotateClockwise() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateCounterClockwise"))) { _ in
-            rotateCounterClockwise()
+            ifKeyWindow { rotateCounterClockwise() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SmoothImage"))) { _ in
-            smoothCurrentImage()
+            ifKeyWindow { smoothCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveSmoothing"))) { _ in
-            removeSmoothing()
+            ifKeyWindow { removeSmoothing() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UpscaleImage"))) { _ in
-            upscaleCurrentImage()
+            ifKeyWindow { upscaleCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
-            removeUpscaling()
+            ifKeyWindow { removeUpscaling() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = true
+                updateCursorVisibility()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                windowHasFocus = false
+                updateCursorVisibility()
+            }
+        }
+    }
+
+    /// Run `action` only if this view's window is the key window. Edit-menu
+    /// commands fan out to every open SlideshowView via NotificationCenter,
+    /// so without this gate a single keystroke would enhance/rotate/upscale
+    /// every visible slideshow at once. Matches the SelectDirectory /
+    /// OpenDirectory gate elsewhere in this file.
+    private func ifKeyWindow(_ action: () -> Void) {
+        if myWindow == nil || myWindow?.isKeyWindow == true {
+            action()
         }
     }
 
@@ -476,35 +499,7 @@ struct SlideshowView: View {
 
     private func captureWindow() {
         myWindow = NSApplication.shared.keyWindow
-    }
-
-    private func setupWindowObservers() {
-        // Observe when window becomes key (gains focus)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [self] notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = true
-                updateCursorVisibility()
-            }
-        }
-
-        // Observe when window resigns key (loses focus)
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didResignKeyNotification,
-            object: nil,
-            queue: .main
-        ) { [self] notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = false
-                updateCursorVisibility()
-            }
-        }
-
-        // Set initial focus state
-        if let myWindow = myWindow {
+        if let myWindow {
             windowHasFocus = myWindow.isKeyWindow
             updateCursorVisibility()
         }
@@ -512,7 +507,7 @@ struct SlideshowView: View {
 
     private func updateCursorVisibility() {
         // Hide cursor only if: images are loaded AND fullscreen AND window has focus
-        let shouldHideCursor = !imageLoader.images.isEmpty && isFullScreen && windowHasFocus
+        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus
 
         DispatchQueue.main.async {
             if shouldHideCursor {
@@ -541,7 +536,20 @@ struct SlideshowView: View {
         }
     }
 
-    private func openDirectory(url: URL) {
+    private func openRecent(_ entry: RecentDirectory) {
+        guard let url = recentDirectories.resolveAndBeginAccess(for: entry) else {
+            return
+        }
+        openDirectory(url: url, isScoped: true)
+    }
+
+    private func openDirectory(url: URL, isScoped: Bool = false) {
+        // Release any prior security-scoped access before switching.
+        if let prior = scopedDirectory {
+            prior.stopAccessingSecurityScopedResource()
+        }
+        scopedDirectory = isScoped ? url : nil
+
         selectedDirectory = url
         recentDirectories.addDirectory(url)
 
@@ -555,7 +563,7 @@ struct SlideshowView: View {
 
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
-        // updateDisplayImage will be called by onChange(of: imageLoader.images)
+        // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
     private func enterFullScreen() {
@@ -706,10 +714,13 @@ struct SlideshowView: View {
         debugOutput = "Starting upscale process...\n"
         let originalImage = sourceImage
 
-        // Create temp files
+        // Create temp files with a unique per-run prefix so concurrent upscales
+        // don't collide and so a local attacker can't pre-create a symlink at a
+        // predictable path to redirect the binary's write.
         let tempDir = FileManager.default.temporaryDirectory
-        let inputPath = tempDir.appendingPathComponent("realesrgan_input.png")
-        let outputPath = tempDir.appendingPathComponent("realesrgan_output.png")
+        let runID = UUID().uuidString
+        let inputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_input.png")
+        let outputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_output.png")
 
         debugOutput += "Temp input: \(inputPath.path)\n"
         debugOutput += "Temp output: \(outputPath.path)\n"
@@ -801,13 +812,14 @@ struct SlideshowView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executablePath)
-            process.arguments = [
+            let arguments = [
                 "-i", inputPath.path,
                 "-o", outputPath.path,
                 "-n", "realesrgan-x4plus",
                 "-s", "4",
                 "-m", modelsPath
             ]
+            process.arguments = arguments
 
             // Capture stdout and stderr
             let outputPipe = Pipe()
@@ -816,7 +828,7 @@ struct SlideshowView: View {
             process.standardError = errorPipe
 
             DispatchQueue.main.async {
-                self.debugOutput += "Command: \(executablePath) \(process.arguments!.joined(separator: " "))\n\n"
+                self.debugOutput += "Command: \(executablePath) \(arguments.joined(separator: " "))\n\n"
             }
 
             do {
