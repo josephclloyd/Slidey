@@ -6,29 +6,39 @@ enum PanDirection {
     case left, right, up, down
 }
 
-/// Routes left and right mouse clicks (including ctrl+left as a right-click)
-/// to separate callbacks. Implemented as a single NSView so events aren't
-/// raced between the SwiftUI gesture system and an AppKit overlay.
+/// Routes mouse clicks, trackpad pinch, and scroll-wheel events to separate
+/// callbacks. Implemented as a single NSView so events aren't raced between
+/// the SwiftUI gesture system and an AppKit overlay.
 struct ClickCatcher: NSViewRepresentable {
     let onLeftClick: () -> Void
     let onRightClick: () -> Void
+    /// Multiplier (e.g. 1.05 means zoom in by 5%).
+    let onZoom: (CGFloat) -> Void
+    /// Pan deltas in points; sign matches NSEvent.scrollingDeltaX/Y.
+    let onScroll: (CGFloat, CGFloat) -> Void
 
     func makeNSView(context: Context) -> ClickCatcherView {
         let view = ClickCatcherView()
         view.onLeftClick = onLeftClick
         view.onRightClick = onRightClick
+        view.onZoom = onZoom
+        view.onScroll = onScroll
         return view
     }
 
     func updateNSView(_ nsView: ClickCatcherView, context: Context) {
         nsView.onLeftClick = onLeftClick
         nsView.onRightClick = onRightClick
+        nsView.onZoom = onZoom
+        nsView.onScroll = onScroll
     }
 }
 
 class ClickCatcherView: NSView {
     var onLeftClick: (() -> Void)?
     var onRightClick: (() -> Void)?
+    var onZoom: ((CGFloat) -> Void)?
+    var onScroll: ((CGFloat, CGFloat) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
         // Treat ctrl+left-click as right-click, matching AppKit menu conventions.
@@ -41,6 +51,20 @@ class ClickCatcherView: NSView {
 
     override func rightMouseDown(with event: NSEvent) {
         onRightClick?()
+    }
+
+    override func magnify(with event: NSEvent) {
+        // event.magnification is a per-tick delta multiplier (e.g. 0.05 ≈ +5%).
+        onZoom?(1.0 + event.magnification)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        if event.modifierFlags.contains(.command) {
+            // Cmd+scroll → zoom. 0.005 makes a typical wheel click ~5%.
+            onZoom?(1.0 + event.scrollingDeltaY * 0.005)
+        } else {
+            onScroll?(event.scrollingDeltaX, event.scrollingDeltaY)
+        }
     }
 
     // Receive clicks even when the window isn't yet key, so the first click
@@ -964,6 +988,8 @@ struct ImageDisplayView: View {
     let onLeftClick: () -> Void
     let onRightClick: () -> Void
 
+    @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -975,10 +1001,63 @@ struct ImageDisplayView: View {
                     .offset(imageOffset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                ClickCatcher(onLeftClick: onLeftClick, onRightClick: onRightClick)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ClickCatcher(
+                    onLeftClick: onLeftClick,
+                    onRightClick: onRightClick,
+                    onZoom: { factor in applyZoom(factor) },
+                    onScroll: { dx, dy in applyPan(dx: dx, dy: dy) }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    private func applyZoom(_ factor: CGFloat) {
+        let oldScale = zoomScale
+        let newScale = max(0.1, min(10.0, oldScale * factor))
+        if newScale == oldScale { return }
+        // Scale the existing offset so the same image point stays under the
+        // view center as we zoom in or out.
+        let actual = newScale / oldScale
+        zoomScale = newScale
+        imageOffset = CGSize(
+            width: imageOffset.width * actual,
+            height: imageOffset.height * actual
+        )
+        clampOffset()
+    }
+
+    private func applyPan(dx: CGFloat, dy: CGFloat) {
+        let bounds = panBounds()
+        // Don't pan when the image fits the container — there's nowhere to go,
+        // and we don't want plain trackpad scroll to do anything in fit-mode.
+        guard bounds.x > 0 || bounds.y > 0 else { return }
+        let sign: CGFloat = naturalScrollPan ? 1 : -1
+        imageOffset.width += sign * dx
+        imageOffset.height -= sign * dy
+        clampOffset()
+    }
+
+    private func clampOffset() {
+        let bounds = panBounds()
+        imageOffset.width = max(-bounds.x, min(bounds.x, imageOffset.width))
+        imageOffset.height = max(-bounds.y, min(bounds.y, imageOffset.height))
+    }
+
+    private func panBounds() -> (x: CGFloat, y: CGFloat) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return (0, 0)
+        }
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let fitScale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+        let displayed = CGSize(
+            width: imageSize.width * fitScale * zoomScale,
+            height: imageSize.height * fitScale * zoomScale
+        )
+        return (
+            x: max(0, (displayed.width - containerSize.width) / 2),
+            y: max(0, (displayed.height - containerSize.height) / 2)
+        )
     }
 }
 

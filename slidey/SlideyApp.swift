@@ -15,6 +15,26 @@ struct SlideyApp: App {
             FileMenuCommands(recentDirectories: recentDirectories)
             EditMenuCommands()
         }
+
+        Settings {
+            SettingsView()
+        }
+    }
+}
+
+struct SettingsView: View {
+    @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
+
+    var body: some View {
+        Form {
+            Toggle("Natural scroll pan", isOn: $naturalScrollPan)
+            Text("When on, the image follows your fingers (macOS-native feel). When off, scroll direction is inverted.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(20)
+        .frame(width: 380)
     }
 }
 
