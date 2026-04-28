@@ -6,65 +6,50 @@ enum PanDirection {
     case left, right, up, down
 }
 
-// View modifier for handling right-click
-struct RightClickModifier: ViewModifier {
-    let action: () -> Void
+/// Routes left and right mouse clicks (including ctrl+left as a right-click)
+/// to separate callbacks. Implemented as a single NSView so events aren't
+/// raced between the SwiftUI gesture system and an AppKit overlay.
+struct ClickCatcher: NSViewRepresentable {
+    let onLeftClick: () -> Void
+    let onRightClick: () -> Void
 
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                RightClickHandler(action: action)
-                    .allowsHitTesting(true)
-            )
-    }
-}
-
-struct RightClickHandler: NSViewRepresentable {
-    let action: () -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = RightClickView()
-        view.onRightClick = action
+    func makeNSView(context: Context) -> ClickCatcherView {
+        let view = ClickCatcherView()
+        view.onLeftClick = onLeftClick
+        view.onRightClick = onRightClick
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        if let view = nsView as? RightClickView {
-            view.onRightClick = action
-        }
+    func updateNSView(_ nsView: ClickCatcherView, context: Context) {
+        nsView.onLeftClick = onLeftClick
+        nsView.onRightClick = onRightClick
     }
 }
 
-class RightClickView: NSView {
+class ClickCatcherView: NSView {
+    var onLeftClick: (() -> Void)?
     var onRightClick: (() -> Void)?
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        // Make sure we can receive mouse events
-        wantsLayer = true
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+    override func mouseDown(with event: NSEvent) {
+        // Treat ctrl+left-click as right-click, matching AppKit menu conventions.
+        if event.modifierFlags.contains(.control) {
+            onRightClick?()
+        } else {
+            onLeftClick?()
+        }
     }
 
     override func rightMouseDown(with event: NSEvent) {
         onRightClick?()
     }
 
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        return true
-    }
+    // Receive clicks even when the window isn't yet key, so the first click
+    // navigates instead of just activating the window.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    override var acceptsFirstResponder: Bool {
-        return true
-    }
-}
-
-extension View {
-    func onRightClick(perform action: @escaping () -> Void) -> some View {
-        self.modifier(RightClickModifier(action: action))
-    }
+    // Stay out of the responder chain so the parent SwiftUI view keeps
+    // receiving key presses.
+    override var acceptsFirstResponder: Bool { false }
 }
 
 struct SlideshowView: View {
@@ -975,16 +960,8 @@ struct ImageDisplayView: View {
                     .offset(imageOffset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // Transparent overlay to capture clicks
-                Color.clear
-                    .contentShape(Rectangle())
+                ClickCatcher(onLeftClick: onLeftClick, onRightClick: onRightClick)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onTapGesture {
-                        onLeftClick()
-                    }
-                    .onRightClick {
-                        onRightClick()
-                    }
             }
         }
     }
