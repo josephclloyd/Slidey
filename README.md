@@ -16,6 +16,7 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **AI upscaling** - 4x AI-powered upscaling using Real-ESRGAN
 - **Filename overlay** - Toggle display of the current image filename
 - **Session memory** - Remembers rotations, enhancements, smoothing, and upscaling per session
+- **Auto-advance slideshow** - Play / pause with Space; interval configurable in Settings
 
 ## Keyboard Shortcuts
 
@@ -45,10 +46,14 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **n** - Toggle filename overlay (lower-left corner)
 - **d** - Toggle debug output window
 
+### Slideshow
+- **Space** - Play / Pause auto-advance (interval set in Settings)
+
 ### Window
-- **Escape** - Toggle fullscreen
+- **Escape** - Toggle fullscreen (or cancel an in-progress upscale)
 - **Command+N** - New window
 - **Command+O** - Open directory
+- **Command+,** - Settings…
 
 ### Pan (when zoomed)
 - **Arrow keys** - Pan image in all directions
@@ -89,6 +94,9 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **Scale to Fill Screen** (f)
 - **Rotate Clockwise** (r)
 - **Rotate Counter-Clockwise** (Shift+R)
+
+### Slideshow Menu
+- **Play / Pause Slideshow** (Space) - Toggle auto-advance through images
 
 ## Technical Details
 
@@ -131,7 +139,7 @@ A native macOS slideshow application for viewing images with powerful navigation
 Ideas worth implementing — not yet started.
 
 ### Slideshow proper
-- [ ] Auto-advance with configurable interval + play/pause
+- [x] Auto-advance with configurable interval + play/pause
 - [ ] Prevent display sleep / screensaver while in fullscreen (IOKit power assertion)
 
 ### Library ergonomics

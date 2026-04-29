@@ -16,10 +16,25 @@ struct SlideyApp: App {
         .commands {
             FileMenuCommands(recentDirectories: recentDirectories)
             EditMenuCommands()
+            SlideshowMenuCommands()
         }
 
         Settings {
             SettingsView()
+        }
+    }
+}
+
+struct SlideshowMenuCommands: Commands {
+    var body: some Commands {
+        CommandMenu("Slideshow") {
+            // No keyboard shortcut here. The slideshow view's .onKeyPress
+            // captures Space directly because .focusable() takes priority
+            // over menu key-equivalents — keep menu and key in sync by
+            // labeling the binding here for discoverability only.
+            Button("Play / Pause Slideshow (Space)") {
+                NotificationCenter.default.post(name: NSNotification.Name("ToggleSlideshow"), object: nil)
+            }
         }
     }
 }
@@ -55,14 +70,22 @@ class PendingOpens: ObservableObject {
 
 struct SettingsView: View {
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
 
     var body: some View {
         Form {
-            Toggle("Natural scroll pan", isOn: $naturalScrollPan)
-            Text("When on, the image follows your fingers (macOS-native feel). When off, scroll direction is inverted.")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Section("Slideshow") {
+                Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
+                    Text("Interval: \(Int(slideshowInterval)) second\(Int(slideshowInterval) == 1 ? "" : "s")")
+                }
+            }
+            Section("Input") {
+                Toggle("Natural scroll pan", isOn: $naturalScrollPan)
+                Text("When on, the image follows your fingers (macOS-native feel). When off, scroll direction is inverted.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(20)
         .frame(width: 380)

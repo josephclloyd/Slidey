@@ -105,6 +105,9 @@ struct SlideshowView: View {
     @State private var upscaleCancelled = false
     @State private var upscaleProgress: Double = 0
     @State private var isDragOver = false
+    @State private var isPlaying = false
+    @State private var slideshowTimer: Timer?
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
 
     var body: some View {
         ZStack {
@@ -290,6 +293,8 @@ struct SlideshowView: View {
                 rotationAngle = currentURLRotation()
                 updateDisplayImage()
                 enterFullScreen()
+            } else {
+                stopSlideshow()
             }
             updateCursorVisibility()
         }
@@ -318,6 +323,9 @@ struct SlideshowView: View {
             }
             rotationAngle = currentURLRotation()
             updateDisplayImage()
+            // Reset the auto-advance clock on every navigation (manual or
+            // auto) so the next tick is always `interval` from now.
+            if isPlaying { rescheduleSlideshowTimer() }
         }
         .onChange(of: isFullScreen) { _, _ in
             updateCursorVisibility()
@@ -325,11 +333,18 @@ struct SlideshowView: View {
         .onAppear {
             consumePendingOpenIfPossible()
         }
+        .onDisappear {
+            stopSlideshow()
+        }
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
         }
         .onChange(of: isProcessing) { _, isP in
-            if !isP { consumePendingOpenIfPossible() }
+            if isP {
+                stopSlideshow()
+            } else {
+                consumePendingOpenIfPossible()
+            }
         }
         .focusable()
         .focusEffectDisabled()
@@ -376,6 +391,16 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
             ifKeyWindow { removeUpscaling() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSlideshow"))) { _ in
+            // Allow toggle even mid-upscale: pause is always safe; play is
+            // gated inside startSlideshow on isProcessing.
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                toggleSlideshow()
+            }
+        }
+        .onChange(of: slideshowInterval) { _, _ in
+            if isPlaying { rescheduleSlideshowTimer() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
@@ -541,6 +566,9 @@ struct SlideshowView: View {
         case "d":
             showDebugWindow.toggle()
             return .handled
+        case " ":
+            toggleSlideshow()
+            return .handled
         default:
             if zoomScale <= 1.0 {
                 imageLoader.nextImage()
@@ -618,6 +646,31 @@ struct SlideshowView: View {
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
+    }
+
+    private func toggleSlideshow() {
+        if isPlaying { stopSlideshow() } else { startSlideshow() }
+    }
+
+    private func startSlideshow() {
+        guard !isProcessing,
+              !imageLoader.imageURLs.isEmpty,
+              imageLoader.imageURLs.count > 1 else { return }
+        isPlaying = true
+        rescheduleSlideshowTimer()
+    }
+
+    private func stopSlideshow() {
+        isPlaying = false
+        slideshowTimer?.invalidate()
+        slideshowTimer = nil
+    }
+
+    private func rescheduleSlideshowTimer() {
+        slideshowTimer?.invalidate()
+        slideshowTimer = Timer.scheduledTimer(withTimeInterval: slideshowInterval, repeats: true) { _ in
+            imageLoader.nextImage()
+        }
     }
 
     /// Consumes a URL from `pendingOpens` (set by AppDelegate when Launch
