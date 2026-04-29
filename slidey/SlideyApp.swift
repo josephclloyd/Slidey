@@ -16,11 +16,27 @@ struct SlideyApp: App {
         .commands {
             FileMenuCommands(recentDirectories: recentDirectories)
             EditMenuCommands()
+            ViewMenuCommands()
             SlideshowMenuCommands()
         }
 
         Settings {
             SettingsView()
+        }
+    }
+}
+
+struct ViewMenuCommands: Commands {
+    @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
+
+    var body: some Commands {
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Picker("Sort By", selection: $sortOrder) {
+                ForEach(AppSortOrder.allCases) { order in
+                    Text(order.displayName).tag(order)
+                }
+            }
         }
     }
 }
@@ -74,9 +90,17 @@ class PendingOpens: ObservableObject {
 struct SettingsView: View {
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
+    @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
 
     var body: some View {
         Form {
+            Section("Library") {
+                Picker("Sort by", selection: $sortOrder) {
+                    ForEach(AppSortOrder.allCases) { order in
+                        Text(order.displayName).tag(order)
+                    }
+                }
+            }
             Section("Slideshow") {
                 Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
                     Text("Interval: \(Int(slideshowInterval)) second\(Int(slideshowInterval) == 1 ? "" : "s")")
@@ -91,7 +115,7 @@ struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 380)
+        .frame(width: 420)
     }
 }
 

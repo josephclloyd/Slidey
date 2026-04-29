@@ -2,6 +2,30 @@ import Foundation
 import AppKit
 import ImageIO
 
+enum AppSortOrder: String, CaseIterable, Identifiable {
+    case creationDateAscending
+    case creationDateDescending
+    case modificationDateAscending
+    case modificationDateDescending
+    case nameAscending
+    case nameDescending
+    case random
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .creationDateAscending: return "Creation Date (Oldest First)"
+        case .creationDateDescending: return "Creation Date (Newest First)"
+        case .modificationDateAscending: return "Modification Date (Oldest First)"
+        case .modificationDateDescending: return "Modification Date (Newest First)"
+        case .nameAscending: return "Name (A → Z)"
+        case .nameDescending: return "Name (Z → A)"
+        case .random: return "Random"
+        }
+    }
+}
+
 class ImageLoader: ObservableObject {
     @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
@@ -28,6 +52,10 @@ class ImageLoader: ObservableObject {
     private var watcherSource: DispatchSourceFileSystemObject?
     private var rescanWorkItem: DispatchWorkItem?
 
+    /// Sort applied to scan results. Set by SlideshowView from @AppStorage so
+    /// menu and Settings changes flow into the next scan/rescan.
+    var sortOrder: AppSortOrder = .creationDateAscending
+
     var currentImageURL: URL? {
         guard !imageURLs.isEmpty && currentIndex < imageURLs.count else { return nil }
         return imageURLs[currentIndex]
@@ -49,32 +77,54 @@ class ImageLoader: ObservableObject {
     }
 
     private func scanDirectory(url: URL) -> [URL] {
-        var fileURLs: [(URL, Date)] = []
+        var entries: [(url: URL, created: Date, modified: Date)] = []
 
         guard let enumerator = FileManager.default.enumerator(
             at: url,
-            includingPropertiesForKeys: [.isRegularFileKey, .creationDateKey],
+            includingPropertiesForKeys: [.isRegularFileKey, .creationDateKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
         ) else {
             return []
         }
 
         for case let fileURL as URL in enumerator {
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .creationDateKey]),
-                  let isRegularFile = resourceValues.isRegularFile,
-                  isRegularFile else {
+            guard let r = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .creationDateKey, .contentModificationDateKey]),
+                  r.isRegularFile == true else {
                 continue
             }
-
-            let fileExtension = fileURL.pathExtension.lowercased()
-            if supportedExtensions.contains(fileExtension) {
-                let creationDate = resourceValues.creationDate ?? Date.distantPast
-                fileURLs.append((fileURL, creationDate))
-            }
+            let ext = fileURL.pathExtension.lowercased()
+            guard supportedExtensions.contains(ext) else { continue }
+            entries.append((
+                url: fileURL,
+                created: r.creationDate ?? Date.distantPast,
+                modified: r.contentModificationDate ?? Date.distantPast
+            ))
         }
 
-        fileURLs.sort { $0.1 < $1.1 }
-        return fileURLs.map { $0.0 }
+        switch sortOrder {
+        case .creationDateAscending:
+            entries.sort { $0.created < $1.created }
+        case .creationDateDescending:
+            entries.sort { $0.created > $1.created }
+        case .modificationDateAscending:
+            entries.sort { $0.modified < $1.modified }
+        case .modificationDateDescending:
+            entries.sort { $0.modified > $1.modified }
+        case .nameAscending:
+            entries.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
+        case .nameDescending:
+            entries.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedDescending }
+        case .random:
+            entries.shuffle()
+        }
+
+        return entries.map { $0.url }
+    }
+
+    /// Re-runs the scan with the current `sortOrder` and reconciles the
+    /// displayed image's index by URL. Use after changing sortOrder.
+    func applySort() {
+        rescanDirectory()
     }
 
     func nextImage() {

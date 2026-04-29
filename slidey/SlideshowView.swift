@@ -111,6 +111,7 @@ struct SlideshowView: View {
     @State private var savedToastIsError: Bool = false
     @State private var showThumbnails = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
+    @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
 
     var body: some View {
         ZStack {
@@ -366,6 +367,12 @@ struct SlideshowView: View {
         }
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
+        }
+        .onChange(of: sortOrder, initial: true) { _, newValue in
+            imageLoader.sortOrder = newValue
+            if !imageLoader.imageURLs.isEmpty {
+                imageLoader.applySort()
+            }
         }
         .onAppear {
             consumePendingOpenIfPossible()

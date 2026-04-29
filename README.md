@@ -144,7 +144,7 @@ Ideas worth implementing — not yet started.
 
 ### Library ergonomics
 - [x] Drag-and-drop a folder onto the window to open it (also dock icon and "Open With…")
-- [ ] Sort options (name, creation, modification, random) — currently locked to creation-date ascending in `ImageLoader.swift`
+- [x] Sort options (name, creation, modification, random) — View → Sort By, with default in Settings
 - [ ] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
 - [ ] Auto-open most recent directory at launch
 - [ ] Image counter (`3 / 47`) alongside the existing filename overlay
