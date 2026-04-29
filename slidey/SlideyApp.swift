@@ -120,6 +120,13 @@ struct FileMenuCommands: Commands {
                     }
                 }
             }
+
+            Divider()
+
+            Button("Save Edited Image") {
+                NotificationCenter.default.post(name: NSNotification.Name("SaveEditedImage"), object: nil)
+            }
+            .keyboardShortcut("s", modifiers: .command)
         }
     }
 

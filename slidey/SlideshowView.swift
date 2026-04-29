@@ -107,6 +107,8 @@ struct SlideshowView: View {
     @State private var isDragOver = false
     @State private var isPlaying = false
     @State private var slideshowTimer: Timer?
+    @State private var savedToast: String?
+    @State private var savedToastIsError: Bool = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
 
     var body: some View {
@@ -207,6 +209,26 @@ struct SlideshowView: View {
                         Spacer()
                     }
                 }
+            }
+
+            // Save confirmation / error toast (lower-right)
+            if let savedToast {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(savedToast)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background((savedToastIsError ? Color.red : Color.green).opacity(0.85))
+                            .cornerRadius(6)
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                    }
+                }
+                .transition(.opacity)
             }
 
             // Progress indicator overlay
@@ -392,6 +414,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
             ifKeyWindow { removeUpscaling() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveEditedImage"))) { _ in
+            ifKeyWindow { saveEditedImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSlideshow"))) { _ in
             // Allow toggle even mid-upscale: pause is always safe; play is
             // gated inside startSlideshow on isProcessing.
@@ -531,6 +556,9 @@ struct SlideshowView: View {
             }
             return .handled
         case "s", "S":
+            // Let cmd+s flow through to the File > Save Edited Image menu
+            // shortcut instead of being absorbed by the native-zoom handler.
+            guard !keyPress.modifiers.contains(.command) else { return .ignored }
             zoomToNativeSize()
             return .handled
         case "f", "F":
@@ -1078,6 +1106,132 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         upscaledImages[url] = nil
         updateDisplayImage()
+    }
+
+    /// Writes the currently-displayed image (with rotation baked in) to a
+    /// sibling PNG named `<basename>_edited.png`. Overwrites if it exists.
+    /// The original file is never touched. If the source volume is read-only
+    /// (e.g. a mounted disk image), falls back to NSSavePanel so the user
+    /// can pick a writable location.
+    private func saveEditedImage() {
+        guard let originalURL = imageLoader.currentImageURL else { return }
+        guard let displayedImage = currentDisplayImage ?? imageLoader.currentImage else { return }
+
+        let outputImage = applyRotationIfNeeded(displayedImage)
+
+        let baseName = originalURL.deletingPathExtension().lastPathComponent
+        let suggestedName = "\(baseName)_edited.png"
+
+        guard let pngData = encodePNG(outputImage) else {
+            showErrorToast("Could not encode image as PNG")
+            return
+        }
+
+        let parentDir = originalURL.deletingLastPathComponent()
+        if isVolumeWritable(parentDir) {
+            let outputURL = parentDir.appendingPathComponent(suggestedName)
+            do {
+                try pngData.write(to: outputURL)
+                showSavedToast(filename: outputURL.lastPathComponent)
+                return
+            } catch {
+                // Volume claimed writable but write still failed (permissions,
+                // disk full, etc.). Fall through to the panel so the user
+                // can pick a different location instead of being stuck.
+                debugOutput += "In-place save failed: \(error.localizedDescription)\n"
+            }
+        }
+
+        promptSaveAs(suggestedName: suggestedName, data: pngData)
+    }
+
+    private func encodePNG(_ image: NSImage) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .png, properties: [:])
+    }
+
+    private func isVolumeWritable(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey])
+        return values?.volumeIsReadOnly != true
+    }
+
+    private func promptSaveAs(suggestedName: String, data: Data) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = suggestedName
+        panel.allowedContentTypes = [.png]
+        panel.message = "The source folder is read-only (mounted disk image or similar). Choose a writable location."
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url)
+                showSavedToast(filename: url.lastPathComponent)
+            } catch {
+                showErrorToast("Save failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Bakes the current rotation angle into a fresh NSImage so the saved
+    /// file matches what the user sees. Returns the input untouched if no
+    /// rotation is applied.
+    private func applyRotationIfNeeded(_ image: NSImage) -> NSImage {
+        let degrees = rotationAngle.degrees.truncatingRemainder(dividingBy: 360)
+        if degrees == 0 { return image }
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
+        let radians = CGFloat(rotationAngle.radians)
+        let originalSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let cosV = abs(cos(radians))
+        let sinV = abs(sin(radians))
+        let newSize = CGSize(
+            width: originalSize.width * cosV + originalSize.height * sinV,
+            height: originalSize.width * sinV + originalSize.height * cosV
+        )
+        let colorSpace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: Int(newSize.width.rounded()),
+            height: Int(newSize.height.rounded()),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return image
+        }
+        context.translateBy(x: newSize.width / 2, y: newSize.height / 2)
+        // SwiftUI .rotationEffect(positive) is clockwise on screen; CGContext
+        // positive rotation is counter-clockwise, so flip the sign.
+        context.rotate(by: -radians)
+        context.draw(cgImage, in: CGRect(
+            x: -originalSize.width / 2,
+            y: -originalSize.height / 2,
+            width: originalSize.width,
+            height: originalSize.height
+        ))
+        guard let rotated = context.makeImage() else { return image }
+        return NSImage(cgImage: rotated, size: newSize)
+    }
+
+    private func showSavedToast(filename: String) {
+        let message = "Saved as \(filename)"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            // Don't clear a newer toast that landed during our delay.
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
+    private func showErrorToast(_ message: String) {
+        savedToast = message
+        savedToastIsError = true
+        // Errors stay up a bit longer so the user can read them.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            if savedToast == message { savedToast = nil }
+        }
     }
 
     private func zoomToNativeSize() {

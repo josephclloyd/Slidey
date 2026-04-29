@@ -152,7 +152,7 @@ Ideas worth implementing — not yet started.
 
 ### Image viewing
 - [x] Continuous zoom/pan via scroll + pinch, beyond the current binary native/fill modes
-- [ ] Save / Export edited images — auto-enhance, smooth, rotate, upscale results currently live only in memory
+- [x] Save / Export edited images — auto-enhance, smooth, rotate, upscale results currently live only in memory
 - [x] Cancel button + progress indicator for AI upscale (4x can be slow with no way to bail)
 - [ ] Thumbnail strip / jump-to-index for large folders
 
