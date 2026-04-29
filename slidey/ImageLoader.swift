@@ -2,6 +2,30 @@ import Foundation
 import AppKit
 import ImageIO
 
+enum AppSortOrder: String, CaseIterable, Identifiable {
+    case creationDateAscending
+    case creationDateDescending
+    case modificationDateAscending
+    case modificationDateDescending
+    case nameAscending
+    case nameDescending
+    case random
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .creationDateAscending: return "Creation Date (Oldest First)"
+        case .creationDateDescending: return "Creation Date (Newest First)"
+        case .modificationDateAscending: return "Modification Date (Oldest First)"
+        case .modificationDateDescending: return "Modification Date (Newest First)"
+        case .nameAscending: return "Name (A → Z)"
+        case .nameDescending: return "Name (Z → A)"
+        case .random: return "Random"
+        }
+    }
+}
+
 class ImageLoader: ObservableObject {
     @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
@@ -19,7 +43,18 @@ class ImageLoader: ObservableObject {
     /// in memory. Bounds resident memory regardless of folder size.
     private let cacheRadius = 1
 
+    /// Coalesce window for filesystem events. A burst of writes (e.g. unzip
+    /// into the directory) collapses into a single rescan after this delay.
+    private let rescanDebounce: DispatchTimeInterval = .milliseconds(500)
+
     private var cache: [Int: NSImage] = [:]
+    private var directoryURL: URL?
+    private var watcherSource: DispatchSourceFileSystemObject?
+    private var rescanWorkItem: DispatchWorkItem?
+
+    /// Sort applied to scan results. Set by SlideshowView from @AppStorage so
+    /// menu and Settings changes flow into the next scan/rescan.
+    var sortOrder: AppSortOrder = .creationDateAscending
 
     var currentImageURL: URL? {
         guard !imageURLs.isEmpty && currentIndex < imageURLs.count else { return nil }
@@ -27,46 +62,82 @@ class ImageLoader: ObservableObject {
     }
 
     func loadImagesFromDirectory(url: URL) {
-        var fileURLs: [(URL, Date)] = []
-
-        guard let enumerator = FileManager.default.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.isRegularFileKey, .creationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
-        ) else {
-            return
-        }
-
-        for case let fileURL as URL in enumerator {
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .creationDateKey]),
-                  let isRegularFile = resourceValues.isRegularFile,
-                  isRegularFile else {
-                continue
-            }
-
-            let fileExtension = fileURL.pathExtension.lowercased()
-            if supportedExtensions.contains(fileExtension) {
-                let creationDate = resourceValues.creationDate ?? Date.distantPast
-                fileURLs.append((fileURL, creationDate))
-            }
-        }
-
-        fileURLs.sort { $0.1 < $1.1 }
-        let urls = fileURLs.map { $0.0 }
+        let urls = scanDirectory(url: url)
 
         DispatchQueue.main.async {
+            self.stopWatching()
+            self.directoryURL = url
             self.cache.removeAll()
             self.imageURLs = urls
             self.currentIndex = 0
             self.currentImage = self.loadImage(at: 0)
             self.preloadNeighbours()
+            self.startWatching(url: url)
         }
+    }
+
+    private func scanDirectory(url: URL) -> [URL] {
+        var entries: [(url: URL, created: Date, modified: Date)] = []
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .creationDateKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        for case let fileURL as URL in enumerator {
+            guard let r = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .creationDateKey, .contentModificationDateKey]),
+                  r.isRegularFile == true else {
+                continue
+            }
+            let ext = fileURL.pathExtension.lowercased()
+            guard supportedExtensions.contains(ext) else { continue }
+            entries.append((
+                url: fileURL,
+                created: r.creationDate ?? Date.distantPast,
+                modified: r.contentModificationDate ?? Date.distantPast
+            ))
+        }
+
+        switch sortOrder {
+        case .creationDateAscending:
+            entries.sort { $0.created < $1.created }
+        case .creationDateDescending:
+            entries.sort { $0.created > $1.created }
+        case .modificationDateAscending:
+            entries.sort { $0.modified < $1.modified }
+        case .modificationDateDescending:
+            entries.sort { $0.modified > $1.modified }
+        case .nameAscending:
+            entries.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
+        case .nameDescending:
+            entries.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedDescending }
+        case .random:
+            entries.shuffle()
+        }
+
+        return entries.map { $0.url }
+    }
+
+    /// Re-runs the scan with the current `sortOrder` and reconciles the
+    /// displayed image's index by URL. Use after changing sortOrder.
+    func applySort() {
+        rescanDirectory()
     }
 
     func nextImage() {
         guard !imageURLs.isEmpty else { return }
         currentIndex = (currentIndex + 1) % imageURLs.count
         currentImage = loadImage(at: currentIndex)
+        preloadNeighbours()
+    }
+
+    func jumpTo(index: Int) {
+        guard imageURLs.indices.contains(index) else { return }
+        currentIndex = index
+        currentImage = loadImage(at: index)
         preloadNeighbours()
     }
 
@@ -147,5 +218,75 @@ class ImageLoader: ObservableObject {
         for k in cache.keys where !keep.contains(k) {
             cache.removeValue(forKey: k)
         }
+    }
+
+    private func startWatching(url: URL) {
+        let fd = open(url.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue.global(qos: .utility)
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleRescan()
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        watcherSource = source
+        source.resume()
+    }
+
+    private func stopWatching() {
+        watcherSource?.cancel()
+        watcherSource = nil
+        rescanWorkItem?.cancel()
+        rescanWorkItem = nil
+    }
+
+    /// Coalesce a burst of filesystem events into a single rescan.
+    private func scheduleRescan() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.rescanWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.rescanDirectory()
+            }
+            self.rescanWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + self.rescanDebounce, execute: work)
+        }
+    }
+
+    private func rescanDirectory() {
+        guard let url = directoryURL else { return }
+        let newURLs = scanDirectory(url: url)
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if newURLs == self.imageURLs { return }
+
+            let previousURL = self.currentImageURL
+            self.cache.removeAll()
+            self.imageURLs = newURLs
+
+            if newURLs.isEmpty {
+                self.currentIndex = 0
+                self.currentImage = nil
+                return
+            }
+
+            if let prev = previousURL, let idx = newURLs.firstIndex(of: prev) {
+                self.currentIndex = idx
+            } else {
+                self.currentIndex = min(self.currentIndex, newURLs.count - 1)
+            }
+            self.currentImage = self.loadImage(at: self.currentIndex)
+            self.preloadNeighbours()
+        }
+    }
+
+    deinit {
+        stopWatching()
     }
 }
