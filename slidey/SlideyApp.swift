@@ -28,12 +28,15 @@ struct SlideyApp: App {
 struct SlideshowMenuCommands: Commands {
     var body: some Commands {
         CommandMenu("Slideshow") {
-            // No keyboard shortcut here. The slideshow view's .onKeyPress
-            // captures Space directly because .focusable() takes priority
-            // over menu key-equivalents — keep menu and key in sync by
-            // labeling the binding here for discoverability only.
+            // No keyboard shortcuts here — the SlideshowView's .onKeyPress
+            // already binds Space and "t" directly because .focusable() takes
+            // priority over menu key-equivalents. Labels show the binding for
+            // discoverability.
             Button("Play / Pause Slideshow (Space)") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleSlideshow"), object: nil)
+            }
+            Button("Toggle Thumbnail Strip (t)") {
+                NotificationCenter.default.post(name: NSNotification.Name("ToggleThumbnails"), object: nil)
             }
         }
     }

@@ -109,6 +109,7 @@ struct SlideshowView: View {
     @State private var slideshowTimer: Timer?
     @State private var savedToast: String?
     @State private var savedToastIsError: Bool = false
+    @State private var showThumbnails = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
 
     var body: some View {
@@ -188,6 +189,17 @@ struct SlideshowView: View {
                         .onChange(of: geometry.size) { oldSize, newSize in
                             windowSize = newSize
                         }
+                    }
+                }
+            }
+
+            // Thumbnail strip overlay (bottom)
+            if showThumbnails && !imageLoader.imageURLs.isEmpty {
+                VStack {
+                    Spacer()
+                    ThumbnailStrip(imageLoader: imageLoader) { index in
+                        guard !isProcessing else { return }
+                        imageLoader.jumpTo(index: index)
                     }
                 }
             }
@@ -352,6 +364,9 @@ struct SlideshowView: View {
         .onChange(of: isFullScreen) { _, _ in
             updateCursorVisibility()
         }
+        .onChange(of: showThumbnails) { _, _ in
+            updateCursorVisibility()
+        }
         .onAppear {
             consumePendingOpenIfPossible()
         }
@@ -422,6 +437,11 @@ struct SlideshowView: View {
             // gated inside startSlideshow on isProcessing.
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 toggleSlideshow()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleThumbnails"))) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                showThumbnails.toggle()
             }
         }
         .onChange(of: slideshowInterval) { _, _ in
@@ -594,6 +614,9 @@ struct SlideshowView: View {
         case "d":
             showDebugWindow.toggle()
             return .handled
+        case "t":
+            showThumbnails.toggle()
+            return .handled
         case " ":
             toggleSlideshow()
             return .handled
@@ -617,7 +640,7 @@ struct SlideshowView: View {
 
     private func updateCursorVisibility() {
         // Hide cursor only if: images are loaded AND fullscreen AND window has focus
-        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus
+        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails
 
         DispatchQueue.main.async {
             if shouldHideCursor {
@@ -1359,6 +1382,135 @@ struct ImageDisplayView: View {
             x: max(0, (displayed.width - containerSize.width) / 2),
             y: max(0, (displayed.height - containerSize.height) / 2)
         )
+    }
+}
+
+final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+    private let cache = NSCache<NSURL, NSImage>()
+
+    private init() {
+        // Hold up to 500 thumbnails; NSCache also evicts under memory pressure.
+        cache.countLimit = 500
+    }
+
+    func get(_ url: URL) -> NSImage? {
+        cache.object(forKey: url as NSURL)
+    }
+
+    func set(_ url: URL, image: NSImage) {
+        cache.setObject(image, forKey: url as NSURL)
+    }
+}
+
+struct ThumbnailCell: View {
+    let url: URL
+    let size: CGFloat
+    let isSelected: Bool
+    let onTap: () -> Void
+
+    @State private var thumbnail: NSImage?
+
+    var body: some View {
+        Button(action: onTap) {
+            ZStack {
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: size, height: size)
+                        .clipped()
+                } else {
+                    Color.gray.opacity(0.2)
+                        .frame(width: size, height: size)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
+            )
+            .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+        .task(id: url) {
+            await loadThumbnail()
+        }
+    }
+
+    @MainActor
+    private func loadThumbnail() async {
+        if let cached = ThumbnailCache.shared.get(url) {
+            self.thumbnail = cached
+            return
+        }
+        let maxPixel = Int(size * 2) // 2x for retina
+        let target = url
+        let thumb = await Task.detached(priority: .utility) {
+            return Self.generate(url: target, maxPixelSize: maxPixel)
+        }.value
+        // Cell may have been recycled to a different URL while we were
+        // generating — only commit if we're still the cell for `target`.
+        guard target == url else { return }
+        if let thumb {
+            ThumbnailCache.shared.set(target, image: thumb)
+            self.thumbnail = thumb
+        }
+    }
+
+    /// Uses ImageIO to read just the embedded/scaled thumbnail rather than
+    /// decoding the full image. Cheap even for very large source files.
+    nonisolated private static func generate(url: URL, maxPixelSize: Int) -> NSImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    }
+}
+
+struct ThumbnailStrip: View {
+    @ObservedObject var imageLoader: ImageLoader
+    let onSelect: (Int) -> Void
+
+    private let thumbSize: CGFloat = 80
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 4) {
+                    ForEach(Array(imageLoader.imageURLs.enumerated()), id: \.element) { pair in
+                        ThumbnailCell(
+                            url: pair.element,
+                            size: thumbSize,
+                            isSelected: pair.offset == imageLoader.currentIndex,
+                            onTap: { onSelect(pair.offset) }
+                        )
+                        .id(pair.element)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 8)
+            }
+            .frame(height: thumbSize + 16)
+            .background(.black.opacity(0.75))
+            .onChange(of: imageLoader.currentIndex) { _, _ in
+                if let url = imageLoader.currentImageURL {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(url, anchor: .center)
+                    }
+                }
+            }
+            .onAppear {
+                if let url = imageLoader.currentImageURL {
+                    proxy.scrollTo(url, anchor: .center)
+                }
+            }
+        }
     }
 }
 

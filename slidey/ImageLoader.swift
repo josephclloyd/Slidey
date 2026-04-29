@@ -84,6 +84,13 @@ class ImageLoader: ObservableObject {
         preloadNeighbours()
     }
 
+    func jumpTo(index: Int) {
+        guard imageURLs.indices.contains(index) else { return }
+        currentIndex = index
+        currentImage = loadImage(at: index)
+        preloadNeighbours()
+    }
+
     func previousImage() {
         guard !imageURLs.isEmpty else { return }
         currentIndex = (currentIndex - 1 + imageURLs.count) % imageURLs.count
