@@ -132,10 +132,10 @@ Ideas worth implementing — not yet started.
 
 ### Slideshow proper
 - [ ] Auto-advance with configurable interval + play/pause
-- [ ] Presentation mode on top of existing fullscreen (hide cursor, true black background)
+- [ ] Prevent display sleep / screensaver while in fullscreen (IOKit power assertion)
 
 ### Library ergonomics
-- [ ] Drag-and-drop a folder onto the window to open it
+- [x] Drag-and-drop a folder onto the window to open it (also dock icon and "Open With…")
 - [ ] Sort options (name, creation, modification, random) — currently locked to creation-date ascending in `ImageLoader.swift`
 - [ ] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
 - [ ] Auto-open most recent directory at launch

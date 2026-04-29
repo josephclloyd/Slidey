@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CoreImage
+import UniformTypeIdentifiers
 
 enum PanDirection {
     case left, right, up, down
@@ -79,6 +80,7 @@ class ClickCatcherView: NSView {
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @EnvironmentObject var recentDirectories: RecentDirectories
+    @EnvironmentObject var pendingOpens: PendingOpens
     @State private var selectedDirectory: URL?
     @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
@@ -102,6 +104,7 @@ struct SlideshowView: View {
     @State private var upscaleProcess: Process?
     @State private var upscaleCancelled = false
     @State private var upscaleProgress: Double = 0
+    @State private var isDragOver = false
 
     var body: some View {
         ZStack {
@@ -271,6 +274,17 @@ struct SlideshowView: View {
                 }
             }
         }
+        .overlay {
+            if isDragOver {
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(Color.accentColor, lineWidth: 4)
+                    .padding(2)
+                    .allowsHitTesting(false)
+            }
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDragOver) { providers in
+            handleDrop(providers: providers)
+        }
         .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
             if !isEmpty {
                 rotationAngle = currentURLRotation()
@@ -307,6 +321,15 @@ struct SlideshowView: View {
         }
         .onChange(of: isFullScreen) { _, _ in
             updateCursorVisibility()
+        }
+        .onAppear {
+            consumePendingOpenIfPossible()
+        }
+        .onChange(of: pendingOpens.pending) { _, _ in
+            consumePendingOpenIfPossible()
+        }
+        .onChange(of: isProcessing) { _, isP in
+            if !isP { consumePendingOpenIfPossible() }
         }
         .focusable()
         .focusEffectDisabled()
@@ -595,6 +618,38 @@ struct SlideshowView: View {
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
+    }
+
+    /// Consumes a URL from `pendingOpens` (set by AppDelegate when Launch
+    /// Services hands us a folder via dock-drop, "Open With…", or `open -a`).
+    /// Only the key window claims the URL, so multi-window apps don't open
+    /// the same folder several times. Skipped while an upscale is in flight;
+    /// re-attempted when isProcessing flips back to false.
+    private func consumePendingOpenIfPossible() {
+        guard let url = pendingOpens.pending else { return }
+        guard !isProcessing else { return }
+        guard myWindow == nil || myWindow?.isKeyWindow == true else { return }
+        pendingOpens.pending = nil
+        openDirectory(url: url, isScoped: false)
+    }
+
+    /// Drop handler. Accepts the first file URL that resolves to a directory
+    /// and opens it. Plain files and drops mid-upscale are ignored.
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        guard !isProcessing else { return false }
+        guard let provider = providers.first else { return false }
+        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+            guard let url else { return }
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                  isDir.boolValue else {
+                return
+            }
+            DispatchQueue.main.async {
+                openDirectory(url: url, isScoped: false)
+            }
+        }
+        return true
     }
 
     private func enterFullScreen() {

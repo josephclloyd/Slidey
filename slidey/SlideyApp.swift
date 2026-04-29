@@ -3,12 +3,14 @@ import AppKit
 
 @main
 struct SlideyApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var recentDirectories = RecentDirectories()
 
     var body: some Scene {
         WindowGroup {
             SlideshowView()
                 .environmentObject(recentDirectories)
+                .environmentObject(appDelegate.pendingOpens)
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -18,6 +20,35 @@ struct SlideyApp: App {
 
         Settings {
             SettingsView()
+        }
+    }
+}
+
+/// Receives folder URLs from Launch Services (drag-onto-dock-icon, "Open With…",
+/// or `open -a Slidey /path/to/folder`) and forwards them to the active
+/// SlideshowView via `pendingOpens`. URLs that arrive before any view is on
+/// screen (cold-launch) are buffered until the first SlideshowView appears.
+class AppDelegate: NSObject, NSApplicationDelegate {
+    let pendingOpens = PendingOpens()
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                  isDir.boolValue else {
+                continue
+            }
+            pendingOpens.send(url)
+        }
+    }
+}
+
+class PendingOpens: ObservableObject {
+    @Published var pending: URL?
+
+    func send(_ url: URL) {
+        DispatchQueue.main.async {
+            self.pending = url
         }
     }
 }
