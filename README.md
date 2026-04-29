@@ -147,7 +147,7 @@ Ideas worth implementing — not yet started.
 - [x] Sort options (name, creation, modification, random) — View → Sort By, with default in Settings
 - [ ] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
 - [ ] Auto-open most recent directory at launch
-- [ ] Image counter (`3 / 47`) alongside the existing filename overlay
+- [x] Image counter (`3 / 47`) alongside the existing filename overlay
 - [x] Watch directory for new/removed files without requiring a reopen (`DispatchSource`)
 
 ### Image viewing

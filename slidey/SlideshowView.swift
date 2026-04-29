@@ -205,20 +205,26 @@ struct SlideshowView: View {
                 }
             }
 
-            // Filename overlay
+            // Filename + counter overlay
             if showFilename, let filename = imageLoader.currentImageURL?.lastPathComponent {
                 VStack {
                     Spacer()
                     HStack {
-                        Text(filename)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(.black.opacity(0.6))
-                            .cornerRadius(6)
-                            .padding(.leading, 20)
-                            .padding(.bottom, 20)
+                        HStack(spacing: 12) {
+                            Text(filename)
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text("\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)")
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                                .monospacedDigit()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.6))
+                        .cornerRadius(6)
+                        .padding(.leading, 20)
+                        .padding(.bottom, 20)
                         Spacer()
                     }
                 }
