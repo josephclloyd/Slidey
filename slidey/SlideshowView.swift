@@ -7,6 +7,18 @@ enum PanDirection {
     case left, right, up, down
 }
 
+/// Axis-aligned bounding box of `size` rotated about its center by `angle`.
+/// Used to compute fit/fill/pan extents that respect the displayed
+/// orientation rather than the image's natural orientation.
+func rotatedBoundingBox(_ size: CGSize, by angle: Angle) -> CGSize {
+    let c = abs(cos(angle.radians))
+    let s = abs(sin(angle.radians))
+    return CGSize(
+        width: size.width * c + size.height * s,
+        height: size.width * s + size.height * c
+    )
+}
+
 /// Routes mouse clicks, trackpad pinch, and scroll-wheel events to separate
 /// callbacks. Implemented as a single NSView so events aren't raced between
 /// the SwiftUI gesture system and an AppKit overlay.
@@ -493,11 +505,12 @@ struct SlideshowView: View {
             return false
         }
 
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let fitScale = min(windowSize.width / imageSize.width, windowSize.height / imageSize.height)
+        let natural = CGSize(width: cgImage.width, height: cgImage.height)
+        let bb = rotatedBoundingBox(natural, by: rotationAngle)
+        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
         let displayedSize = CGSize(
-            width: imageSize.width * fitScale * zoomScale,
-            height: imageSize.height * fitScale * zoomScale
+            width: bb.width * fitScale * zoomScale,
+            height: bb.height * fitScale * zoomScale
         )
 
         let maxOffsetX = max(0, (displayedSize.width - windowSize.width) / 2)
@@ -1276,12 +1289,11 @@ struct SlideshowView: View {
             return
         }
 
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let natural = CGSize(width: cgImage.width, height: cgImage.height)
+        let bb = rotatedBoundingBox(natural, by: rotationAngle)
 
-        // Calculate how much .scaledToFit() scales the image
-        let fitScale = min(windowSize.width / imageSize.width, windowSize.height / imageSize.height)
-
-        // Zoom to counteract the fit scaling to show native size
+        // Fit-scale of the rotated bounding box; invert to land at 1:1 pixels.
+        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
         zoomScale = 1.0 / fitScale
         imageOffset = .zero
     }
@@ -1292,25 +1304,18 @@ struct SlideshowView: View {
             return
         }
 
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let natural = CGSize(width: cgImage.width, height: cgImage.height)
+        let bb = rotatedBoundingBox(natural, by: rotationAngle)
 
-        // Determine if image is portrait or landscape
-        let isPortrait = imageSize.height > imageSize.width
+        // "Portrait" / "landscape" is from the displayed orientation, not the
+        // original — a landscape photo rotated 90° fills as portrait.
+        let isPortrait = bb.height > bb.width
 
-        // Calculate how much .scaledToFit() scales the image
-        let fitScale = min(windowSize.width / imageSize.width, windowSize.height / imageSize.height)
+        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
+        let fillScale: CGFloat = isPortrait
+            ? windowSize.height / bb.height
+            : windowSize.width / bb.width
 
-        // Fill based on orientation
-        let fillScale: CGFloat
-        if isPortrait {
-            // Portrait: fill height
-            fillScale = windowSize.height / imageSize.height
-        } else {
-            // Landscape: fill width
-            fillScale = windowSize.width / imageSize.width
-        }
-
-        // Zoom to fill
         zoomScale = fillScale / fitScale
         imageOffset = .zero
     }
@@ -1330,9 +1335,10 @@ struct ImageDisplayView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                let fitted = fittedNaturalSize()
                 Image(nsImage: image)
                     .resizable()
-                    .scaledToFit()
+                    .frame(width: fitted.width, height: fitted.height)
                     .rotationEffect(rotationAngle)
                     .scaleEffect(zoomScale)
                     .offset(imageOffset)
@@ -1347,6 +1353,24 @@ struct ImageDisplayView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    /// Pre-rotation width/height that, after rotationEffect, makes the
+    /// image's bounding box exactly fit `containerSize`. Replaces
+    /// `.scaledToFit()` which fits the unrotated image and leaves visible
+    /// gaps after a 90°/270° rotation.
+    private func fittedNaturalSize() -> CGSize {
+        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return .zero
+        }
+        let natural = CGSize(width: cg.width, height: cg.height)
+        let bb = rotatedBoundingBox(natural, by: rotationAngle)
+        guard bb.width > 0, bb.height > 0,
+              containerSize.width > 0, containerSize.height > 0 else {
+            return .zero
+        }
+        let fitScale = min(containerSize.width / bb.width, containerSize.height / bb.height)
+        return CGSize(width: natural.width * fitScale, height: natural.height * fitScale)
     }
 
     private func applyZoom(_ factor: CGFloat) {
@@ -1385,11 +1409,12 @@ struct ImageDisplayView: View {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return (0, 0)
         }
-        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
-        let fitScale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+        let natural = CGSize(width: cgImage.width, height: cgImage.height)
+        let bb = rotatedBoundingBox(natural, by: rotationAngle)
+        let fitScale = min(containerSize.width / bb.width, containerSize.height / bb.height)
         let displayed = CGSize(
-            width: imageSize.width * fitScale * zoomScale,
-            height: imageSize.height * fitScale * zoomScale
+            width: bb.width * fitScale * zoomScale,
+            height: bb.height * fitScale * zoomScale
         )
         return (
             x: max(0, (displayed.width - containerSize.width) / 2),
