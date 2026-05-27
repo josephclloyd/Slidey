@@ -29,10 +29,23 @@ cat .claude/sprints/.active 2>/dev/null || echo "no active sprint"
 
 # 8. gh CLI authenticated
 gh auth status
+
+# 9. Main checkout is on main (sessions can leave it on a feature branch)
+git branch --show-current   # must print "main"; if not: git checkout main
 ```
 
 If any check fails, fix it before proceeding. The stale-worktree and phantom-commit
 checks are especially important — corrupted state from a prior run is hard to recover from.
+
+## Checkout guard after impl
+
+After all impl sessions go `idle`, before running review phases, always restore the main
+checkout — sessions can drift it onto a feature branch:
+
+```bash
+git branch --show-current   # if not "main":
+git checkout main
+```
 
 ## Write the sprint sentinel
 
