@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CoreImage
+import IOKit.pwr_mgt
 import UniformTypeIdentifiers
 
 enum PanDirection {
@@ -122,6 +123,8 @@ struct SlideshowView: View {
     @State private var savedToast: String?
     @State private var savedToastIsError: Bool = false
     @State private var showThumbnails = false
+    @State private var displaySleepAssertionID: IOPMAssertionID = 0
+    @State private var hasDisplaySleepAssertion = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
 
@@ -380,8 +383,13 @@ struct SlideshowView: View {
             // auto) so the next tick is always `interval` from now.
             if isPlaying { rescheduleSlideshowTimer() }
         }
-        .onChange(of: isFullScreen) { _, _ in
+        .onChange(of: isFullScreen) { _, fullScreen in
             updateCursorVisibility()
+            if fullScreen {
+                acquireDisplaySleepAssertion()
+            } else {
+                releaseDisplaySleepAssertion()
+            }
         }
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
@@ -397,6 +405,7 @@ struct SlideshowView: View {
         }
         .onDisappear {
             stopSlideshow()
+            releaseDisplaySleepAssertion()
         }
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
@@ -471,6 +480,16 @@ struct SlideshowView: View {
         }
         .onChange(of: slideshowInterval) { _, _ in
             if isPlaying { rescheduleSlideshowTimer() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                isFullScreen = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { notification in
+            if let window = notification.object as? NSWindow, window == myWindow {
+                isFullScreen = false
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
@@ -823,6 +842,25 @@ struct SlideshowView: View {
             isFullScreen.toggle()
             updateCursorVisibility()
         }
+    }
+
+    private func acquireDisplaySleepAssertion() {
+        guard !hasDisplaySleepAssertion else { return }
+        let result = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypeNoDisplaySleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            "Slidey fullscreen slideshow" as CFString,
+            &displaySleepAssertionID
+        )
+        if result == kIOReturnSuccess {
+            hasDisplaySleepAssertion = true
+        }
+    }
+
+    private func releaseDisplaySleepAssertion() {
+        guard hasDisplaySleepAssertion else { return }
+        IOPMAssertionRelease(displaySleepAssertionID)
+        hasDisplaySleepAssertion = false
     }
 
     private func exitFullScreen() {
