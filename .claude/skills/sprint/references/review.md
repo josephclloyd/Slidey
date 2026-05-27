@@ -61,11 +61,21 @@ Released: v1.1.0 — [date]
 
 ## 5. Update MARKETING_VERSION
 
-In `Slidey.xcodeproj/project.pbxproj`, update the four `MARKETING_VERSION` occurrences.
-Do this in the sprint worktree (`.claude/worktrees/sprint-N/`):
+**First, merge main into the sprint worktree** — feature PRs land on main after the sprint
+worktree was branched; the version bump must be applied to the up-to-date `project.pbxproj`:
 
 ```bash
-sed -i '' 's/MARKETING_VERSION = 1\.0;/MARKETING_VERSION = 1.1;/g' \
+cd .claude/worktrees/sprint-N
+git merge origin/main --no-edit
+```
+
+Then bump all MARKETING_VERSION occurrences (use a version-agnostic pattern so it works
+regardless of the current value — the test target may be at a different version than the
+app target):
+
+```bash
+NEW=1.2   # set to the new version
+sed -i '' "s/MARKETING_VERSION = [0-9][0-9.]*;/MARKETING_VERSION = $NEW;/g" \
   Slidey.xcodeproj/project.pbxproj
 ```
 

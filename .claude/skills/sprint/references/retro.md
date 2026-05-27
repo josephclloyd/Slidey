@@ -48,6 +48,13 @@ cp /Users/joe/Projects/xCode/slidey/.claude/memory/* \
 
 ## 3. Audit memory for staleness
 
+**Run from the main checkout** — `mcx memory audit` looks for `.claude/memory/` in the cwd
+and fails if run from the sprint worktree (which won't have that directory until the memory
+copy step above). If the CWD drifted into the worktree, prefix with:
+```bash
+cd /Users/joe/Projects/xCode/slidey
+```
+
 ```bash
 mcx memory audit --json
 ```
