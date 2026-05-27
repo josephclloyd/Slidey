@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "manifestHash": "5381e1c6d3cc078b5e241bc2ccda4047e401f6384fbd3b35f2fbb1fdf49b679a",
+  "phases": [
+    {
+      "name": "done",
+      "resolvedPath": ".claude/phases/done.ts",
+      "contentHash": "e89f5dd2ae13e2b2c07e3ecb28026706a17ee5eff7e01fdcaf5a5cb2e9788930",
+      "schemaHash": "ea27eb17a20718b126e912000b39aef187d26285c763c16c07ac38598175e2b4"
+    },
+    {
+      "name": "impl",
+      "resolvedPath": ".claude/phases/impl.ts",
+      "contentHash": "025efaf938cf5437e945a08d4a70019ccac078868fa03b36185cf9d932699585",
+      "schemaHash": "d9d0cefbad2828c5b63ad369140a5bd3c866f2a15afd1411f2add9fc03a3993d"
+    },
+    {
+      "name": "needs-attention",
+      "resolvedPath": ".claude/phases/needs-attention.ts",
+      "contentHash": "c33846f042cd80e81c35b909da9006719ac9f3b92a3c8a26e0176e6ca5fd3982",
+      "schemaHash": "d554b9b995e0e3f9f1cb45bb6c05b6275ea297a6a5ca2c8e8771db21f0318ef7"
+    },
+    {
+      "name": "repair",
+      "resolvedPath": ".claude/phases/repair.ts",
+      "contentHash": "dae7dd328b8d1e3ddfa2340f28e02eb67252eed854478faf87ab6df0d521b57f",
+      "schemaHash": "a3fb5f84e5f679d087174b6d63c011612f1895199984d7ed499cb6abd7c8efdb"
+    },
+    {
+      "name": "review",
+      "resolvedPath": ".claude/phases/review.ts",
+      "contentHash": "e6ae77fd033650edb75f9d04abdbf530522d970f6ae7d7f8d65df0f167f64895",
+      "schemaHash": "54db330c2759a4727c5bec17a94211af61e8363f02cff3f41d5ffadb802815f9"
+    }
+  ]
+}

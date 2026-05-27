@@ -57,6 +57,9 @@ slidey/
 
 Issues are tracked in GitHub Issues. The backlog comes from the README "Roadmap / TODO" section.
 
+Memory files in `.claude/memory/` must be committed and pushed when changed — they are
+git-tracked and synced across machines via a symlink to `~/.claude/projects/<slug>/memory/`.
+
 Implementation branches follow the pattern `<short-description>` (e.g. `move-to-trash`, `auto-open-recent`).
 
 PRs need:

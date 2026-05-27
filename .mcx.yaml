@@ -1,0 +1,39 @@
+version: 1
+
+# Slidey sprint pipeline.
+# See .claude/skills/sprint/references/run.md for the orchestrator's event loop.
+# See docs/phases.md in mcp-cli for the manifest schema.
+runsOn: main
+
+initial: impl
+
+state:
+  session_id: string?
+  review_session_id: string?
+  repair_session_id: string?
+  worktree_path: string?
+  review_round: number?
+  repair_round: number?
+  previous_phase: string?
+  model: string?
+
+phases:
+  impl:
+    source: ./.claude/phases/impl.ts
+    next: [review]
+
+  review:
+    source: ./.claude/phases/review.ts
+    next: [repair, done, needs-attention]
+
+  repair:
+    source: ./.claude/phases/repair.ts
+    next: [review, done, needs-attention]
+
+  done:
+    source: ./.claude/phases/done.ts
+    next: []
+
+  needs-attention:
+    source: ./.claude/phases/needs-attention.ts
+    next: []
