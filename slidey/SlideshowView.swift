@@ -478,6 +478,12 @@ struct SlideshowView: View {
                 showThumbnails.toggle()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MoveToTrash"))) { _ in
+            ifKeyWindow { moveCurrentImageToTrash() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RevealInFinder"))) { _ in
+            ifKeyWindow { revealCurrentImageInFinder() }
+        }
         .onChange(of: slideshowInterval) { _, _ in
             if isPlaying { rescheduleSlideshowTimer() }
         }
@@ -564,6 +570,11 @@ struct SlideshowView: View {
         // progress overlay.
         if isProcessing { return .handled }
 
+        if key == .delete {
+            moveCurrentImageToTrash()
+            return .handled
+        }
+
         if zoomScale > 1.0 {
             switch key {
             case .leftArrow:
@@ -630,6 +641,7 @@ struct SlideshowView: View {
             zoomToFillScreen()
             return .handled
         case "r":
+            guard !keyPress.modifiers.contains(.command) else { return .ignored }
             rotateClockwise()
             return .handled
         case "R":
@@ -1193,6 +1205,40 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         upscaledImages[url] = nil
         updateDisplayImage()
+    }
+
+    private func moveCurrentImageToTrash() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let filename = url.lastPathComponent
+
+        let alert = NSAlert()
+        alert.messageText = "Move \"\(filename)\" to Trash?"
+        alert.informativeText = "You can restore this file from the Trash."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+
+        if let window = myWindow ?? NSApplication.shared.keyWindow {
+            alert.beginSheetModal(for: window) { response in
+                if response == .alertFirstButtonReturn {
+                    do {
+                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                        self.rotationAngles[url] = nil
+                        self.enhancedImages[url] = nil
+                        self.smoothedImages[url] = nil
+                        self.upscaledImages[url] = nil
+                        self.imageLoader.removeImage(at: url)
+                    } catch {
+                        self.showErrorToast("Failed to trash: \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func revealCurrentImageInFinder() {
+        guard let url = imageLoader.currentImageURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
     /// Writes the currently-displayed image (with rotation baked in) to a
