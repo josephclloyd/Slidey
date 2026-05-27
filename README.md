@@ -140,13 +140,13 @@ Ideas worth implementing — not yet started.
 
 ### Slideshow proper
 - [x] Auto-advance with configurable interval + play/pause
-- [ ] Prevent display sleep / screensaver while in fullscreen (IOKit power assertion)
+- [x] Prevent display sleep / screensaver while in fullscreen (IOKit power assertion)
 
 ### Library ergonomics
 - [x] Drag-and-drop a folder onto the window to open it (also dock icon and "Open With…")
 - [x] Sort options (name, creation, modification, random) — View → Sort By, with default in Settings
-- [ ] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
-- [ ] Auto-open most recent directory at launch
+- [x] Move-to-trash key and "Reveal in Finder" (confirm before trashing)
+- [x] Auto-open most recent directory at launch
 - [x] Image counter (`3 / 47`) alongside the existing filename overlay
 - [x] Watch directory for new/removed files without requiring a reopen (`DispatchSource`)
 
