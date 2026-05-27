@@ -125,8 +125,8 @@ A native macOS slideshow application for viewing images with powerful navigation
 
 ## Requirements
 
-- macOS 26.0 or later
-- Xcode 15.0 or later (for building)
+- macOS 15.0 or later
+- Xcode 16.0 or later (for building)
 
 ## Building
 
