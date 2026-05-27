@@ -127,6 +127,7 @@ struct SlideshowView: View {
     @State private var hasDisplaySleepAssertion = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
+    @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
 
     var body: some View {
         ZStack {
@@ -402,6 +403,7 @@ struct SlideshowView: View {
         }
         .onAppear {
             consumePendingOpenIfPossible()
+            scheduleAutoOpenRecent()
         }
         .onDisappear {
             stopSlideshow()
@@ -792,6 +794,16 @@ struct SlideshowView: View {
         guard myWindow == nil || myWindow?.isKeyWindow == true else { return }
         pendingOpens.pending = nil
         openDirectory(url: url, isScoped: false)
+    }
+
+    private func scheduleAutoOpenRecent() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard autoOpenRecent,
+                  imageLoader.imageURLs.isEmpty,
+                  pendingOpens.pending == nil,
+                  let first = recentDirectories.directories.first else { return }
+            openRecent(first)
+        }
     }
 
     /// Drop handler. Accepts the first file URL that resolves to a directory
