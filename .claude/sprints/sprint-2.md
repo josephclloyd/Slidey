@@ -1,7 +1,7 @@
 # Sprint 2 — 2026-05-27
 
 Started: 2026-05-27T18:00:00Z
-Status: planned
+Status: complete
 
 ## Issues
 
@@ -23,3 +23,19 @@ Status: planned
 - #16 goes first: user-visible feature; #18 after merge so tests cover the completed codebase.
 - #18 is non-trivial: adds a Xcode test target, evaluates what is unit-testable across 4 source files.
 - Author trust filter: both issues by `josephclloyd`. ✓
+
+## Results
+
+Released: v1.2.0 — 2026-05-27
+
+### Shipped
+- #16 Auto-open most recent directory at launch — reopens the last-used folder on startup via security-scoped bookmark; shows welcome message on fresh install
+- #18 Add unit tests where applicable — new SlideyTests target with 29 tests covering `AppSortOrder` enum properties, navigation index math, `removeImage` edge cases, `RecentDirectory` Codable roundtrips, and `PendingOpens` @Published behaviour
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 2 (#24, #25)
+- Total cost: ~$2.82
+- CI wall time per PR: ~57–70s
