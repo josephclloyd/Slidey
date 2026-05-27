@@ -49,6 +49,12 @@ mcx claude spawn \
 - **Cost**: >$15 suggests struggle — intervene
 - **Tokens**: stalled count may indicate a stuck session
 
+### JSON field names (`mcx claude ls --json`)
+- Session ID: `sessionId` (not `id`)
+- Session state: `state` (not `status`) — values: `active`, `idle`, `waiting_permission`, `disconnected`, `ended`
+- Cost: `cost` (float, dollars)
+- Tokens: `tokens` (integer)
+
 ### `disconnected` — treat as immediate bye candidate
 
 A `disconnected` session may continue generating tokens silently. Don't wait for a
@@ -71,6 +77,34 @@ git -C <worktree-path> log origin/<branch> --oneline 2>/dev/null | head -1
 ```
 
 Empty status + commit visible on remote = safe to `git worktree remove <path>`.
+
+## Patch Compatibility
+
+`mcx claude spawn` requires a patched claude binary. If `patch-update` fails:
+
+```bash
+# Check error
+mcx claude patch-update 2>&1
+
+# If "expected N replacement occurrences, found M":
+# The strategy doesn't match the active claude version.
+# Workaround: patch with the last known-good version:
+mcx claude patch-update --source /Users/joe/.local/share/claude/versions/2.1.128
+
+# Downgrade the active symlink to match:
+ln -sf /Users/joe/.local/share/claude/versions/2.1.128 ~/.local/bin/claude
+
+# Restart _claude to pick up the new binary (not the full daemon):
+mcx restart _claude && sleep 5
+
+# Spawn sessions as normal. After all sessions finish, restore latest:
+ln -sf /Users/joe/.local/share/claude/versions/<latest> ~/.local/bin/claude
+# Check available versions: ls ~/.local/share/claude/versions/
+```
+
+**Note:** The daemon caches the resolved binary version at `_claude` connection time.
+Always `mcx restart _claude` after changing the symlink — restarting the full daemon
+is not needed and resets other server connections unnecessarily.
 
 ## Session Scoping
 
