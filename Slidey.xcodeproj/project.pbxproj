@@ -12,8 +12,21 @@
 		A1000005000000000000001 /* ImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000006000000000000001 /* ImageLoader.swift */; };
 		A1000007000000000000001 /* RecentDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008000000000000001 /* RecentDirectories.swift */; };
 		A1000009000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000010000000000000002 /* Assets.xcassets */; };
+		B1000001000000000000001 /* ImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000001 /* ImageLoaderTests.swift */; };
+		B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004000000000000001 /* RecentDirectoriesTests.swift */; };
+		B1000005000000000000001 /* SlideyAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006000000000000001 /* SlideyAppTests.swift */; };
 		D8EF05A32F1189BE00ECB91A /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = D8EF05A22F1189BE00ECB91A /* Resources */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B1000012000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000040000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000030000000000000001;
+			remoteInfo = Slidey;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A1000000000000000000001 /* Slidey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Slidey.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -22,6 +35,10 @@
 		A1000006000000000000001 /* ImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoader.swift; sourceTree = "<group>"; };
 		A1000008000000000000001 /* RecentDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDirectories.swift; sourceTree = "<group>"; };
 		A1000010000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B1000002000000000000001 /* ImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoaderTests.swift; sourceTree = "<group>"; };
+		B1000004000000000000001 /* RecentDirectoriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDirectoriesTests.swift; sourceTree = "<group>"; };
+		B1000006000000000000001 /* SlideyAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideyAppTests.swift; sourceTree = "<group>"; };
+		B1000010000000000000001 /* SlideyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SlideyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D8EF05A22F1189BE00ECB91A /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Resources; path = slidey/Resources; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -37,6 +54,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1000016000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -45,6 +69,7 @@
 			children = (
 				D8EF05A22F1189BE00ECB91A /* Resources */,
 				A1000021000000000000001 /* slidey */,
+				B1000011000000000000001 /* SlideyTests */,
 				A1000022000000000000001 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,8 +91,19 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000001 /* Slidey.app */,
+				B1000010000000000000001 /* SlideyTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B1000011000000000000001 /* SlideyTests */ = {
+			isa = PBXGroup;
+			children = (
+				B1000002000000000000001 /* ImageLoaderTests.swift */,
+				B1000004000000000000001 /* RecentDirectoriesTests.swift */,
+				B1000006000000000000001 /* SlideyAppTests.swift */,
+			);
+			path = SlideyTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -93,6 +129,23 @@
 			productReference = A1000000000000000000001 /* Slidey.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B1000014000000000000001 /* SlideyTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1000019000000000000001 /* Build configuration list for PBXNativeTarget "SlideyTests" */;
+			buildPhases = (
+				B1000015000000000000001 /* Sources */,
+				B1000016000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B1000013000000000000001 /* PBXTargetDependency */,
+			);
+			name = SlideyTests;
+			productName = SlideyTests;
+			productReference = B1000010000000000000001 /* SlideyTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -105,6 +158,10 @@
 				TargetAttributes = {
 					A1000030000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
+					};
+					B1000014000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A1000030000000000000001;
 					};
 				};
 			};
@@ -122,6 +179,7 @@
 			projectRoot = "";
 			targets = (
 				A1000030000000000000001 /* Slidey */,
+				B1000014000000000000001 /* SlideyTests */,
 			);
 		};
 /* End PBXProject section */
@@ -150,7 +208,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1000015000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000001000000000000001 /* ImageLoaderTests.swift in Sources */,
+				B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */,
+				B1000005000000000000001 /* SlideyAppTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B1000013000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000030000000000000001 /* Slidey */;
+			targetProxy = B1000012000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1000050000000000000001 /* Debug */ = {
@@ -336,6 +412,42 @@
 			};
 			name = Release;
 		};
+		B1000017000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slidey.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slidey";
+			};
+			name = Debug;
+		};
+		B1000018000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slidey.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slidey";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -353,6 +465,15 @@
 			buildConfigurations = (
 				A1000050000000000000001 /* Debug */,
 				A1000051000000000000001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1000019000000000000001 /* Build configuration list for PBXNativeTarget "SlideyTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1000017000000000000001 /* Debug */,
+				B1000018000000000000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
