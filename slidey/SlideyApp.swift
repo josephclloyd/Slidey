@@ -91,6 +91,7 @@ struct SettingsView: View {
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
+    @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
 
     var body: some View {
         Form {
@@ -100,6 +101,9 @@ struct SettingsView: View {
                         Text(order.displayName).tag(order)
                     }
                 }
+            }
+            Section("Startup") {
+                Toggle("Reopen last directory on launch", isOn: $autoOpenRecent)
             }
             Section("Slideshow") {
                 Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
