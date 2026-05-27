@@ -154,6 +154,18 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: NSNotification.Name("SaveEditedImage"), object: nil)
             }
             .keyboardShortcut("s", modifiers: .command)
+
+            Divider()
+
+            Button("Reveal in Finder") {
+                NotificationCenter.default.post(name: NSNotification.Name("RevealInFinder"), object: nil)
+            }
+            .keyboardShortcut("r", modifiers: .command)
+
+            Button("Move to Trash") {
+                NotificationCenter.default.post(name: NSNotification.Name("MoveToTrash"), object: nil)
+            }
+            .keyboardShortcut(.delete, modifiers: .command)
         }
     }
 

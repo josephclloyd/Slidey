@@ -148,6 +148,27 @@ class ImageLoader: ObservableObject {
         preloadNeighbours()
     }
 
+    func removeImage(at url: URL) {
+        guard let index = imageURLs.firstIndex(of: url) else { return }
+        imageURLs.remove(at: index)
+        cache.removeAll()
+
+        if imageURLs.isEmpty {
+            currentIndex = 0
+            currentImage = nil
+            return
+        }
+
+        if index < currentIndex {
+            currentIndex -= 1
+        } else if currentIndex >= imageURLs.count {
+            currentIndex = imageURLs.count - 1
+        }
+
+        currentImage = loadImage(at: currentIndex)
+        preloadNeighbours()
+    }
+
     private func loadImage(at index: Int) -> NSImage? {
         guard imageURLs.indices.contains(index) else { return nil }
         if let cached = cache[index] {
