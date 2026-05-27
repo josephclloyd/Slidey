@@ -106,6 +106,16 @@ ln -sf /Users/joe/.local/share/claude/versions/<latest> ~/.local/bin/claude
 Always `mcx restart _claude` after changing the symlink — restarting the full daemon
 is not needed and resets other server connections unnecessarily.
 
+**If `mcx restart _claude` fails** ("server was disconnected and cannot be auto-reconnected",
+observed in Sprints 1 and 2), fall back to killing the daemon process:
+```bash
+pid=$(pgrep -f mcpd | head -1)
+kill $pid
+sleep 2
+mcpd --background
+sleep 5
+```
+
 ## Session Scoping
 
 Sessions are scoped to this repo's git root (`/Users/joe/Projects/xCode/slidey`).
