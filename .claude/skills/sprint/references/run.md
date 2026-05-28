@@ -5,6 +5,11 @@ Pre-flight checks, the orchestrator event loop, stop conditions.
 ## Pre-flight (run before spawning anything)
 
 ```bash
+# 0. claudeBinary config — prevents "claude binary not found on PATH" spawn failure.
+#    Check: /Users/joe/.mcp-cli/bin/mcx config get claude-binary
+#    Set:   /Users/joe/.mcp-cli/bin/mcx config set claude-binary /Users/joe/.mcp-cli/claude-patched/2.1.128.patched
+#    This persists across daemon restarts. Required once; verify it's set before each sprint.
+
 # 1. Daemon health
 mcx status
 
@@ -104,6 +109,16 @@ After tracking, confirm:
 
 ```bash
 mcx tracked --json | jq 'map({id, issueNumber, phase})'
+```
+
+If `prNumber` is null after the impl session opens a PR, the daemon hasn't polled GitHub yet.
+Wait 10s and re-track:
+
+```bash
+mcx untrack <N>
+sleep 10
+mcx track <N>
+mcx tracked --json   # prNumber should now be populated
 ```
 
 ## The main loop
