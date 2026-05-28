@@ -128,57 +128,73 @@ struct SlideshowView: View {
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
+    @State private var isAutoOpening = false
 
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
             if imageLoader.imageURLs.isEmpty {
-                VStack(spacing: 30) {
-                    Text("Welcome to Slidey")
-                        .font(.largeTitle)
-                        .foregroundColor(.white)
+                if isAutoOpening {
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .scaleEffect(1.5)
+                            .tint(.white)
+                        Text("Loading…")
+                            .font(.title3)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .onAppear {
+                        captureWindow()
+                    }
+                } else {
+                    VStack(spacing: 30) {
+                        Text("Welcome to Slidey")
+                            .font(.largeTitle)
+                            .foregroundColor(.white)
 
-                    HStack(spacing: 40) {
-                        VStack(spacing: 20) {
-                            Button("Select Directory") {
-                                selectDirectory()
+                        HStack(spacing: 40) {
+                            VStack(spacing: 20) {
+                                Button("Select Directory") {
+                                    selectDirectory()
+                                }
+                                .buttonStyle(.borderedProminent)
                             }
-                            .buttonStyle(.borderedProminent)
-                        }
 
-                        if !recentDirectories.directories.isEmpty {
-                            VStack(alignment: .leading, spacing: 15) {
-                                Text("Recent Directories")
-                                    .font(.headline)
-                                    .foregroundColor(.white.opacity(0.7))
+                            if !recentDirectories.directories.isEmpty {
+                                VStack(alignment: .leading, spacing: 15) {
+                                    Text("Recent Directories")
+                                        .font(.headline)
+                                        .foregroundColor(.white.opacity(0.7))
 
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(recentDirectories.directories) { entry in
-                                        Button(action: {
-                                            openRecent(entry)
-                                        }) {
-                                            HStack {
-                                                Image(systemName: "folder.fill")
-                                                    .foregroundColor(.blue)
-                                                Text(entry.displayName)
-                                                    .foregroundColor(.white)
-                                                Spacer()
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        ForEach(recentDirectories.directories) { entry in
+                                            Button(action: {
+                                                openRecent(entry)
+                                            }) {
+                                                HStack {
+                                                    Image(systemName: "folder.fill")
+                                                        .foregroundColor(.blue)
+                                                    Text(entry.displayName)
+                                                        .foregroundColor(.white)
+                                                    Spacer()
+                                                }
+                                                .frame(width: 250)
+                                                .padding(8)
+                                                .background(Color.white.opacity(0.1))
+                                                .cornerRadius(6)
                                             }
-                                            .frame(width: 250)
-                                            .padding(8)
-                                            .background(Color.white.opacity(0.1))
-                                            .cornerRadius(6)
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
                         }
                     }
-                }
-                .onAppear {
-                    captureWindow()
+                    .onAppear {
+                        captureWindow()
+                    }
                 }
             } else {
                 GeometryReader { geometry in
@@ -347,6 +363,7 @@ struct SlideshowView: View {
         }
         .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
             if !isEmpty {
+                isAutoOpening = false
                 rotationAngle = currentURLRotation()
                 updateDisplayImage()
                 enterFullScreen()
@@ -797,12 +814,29 @@ struct SlideshowView: View {
     }
 
     private func scheduleAutoOpenRecent() {
+        guard autoOpenRecent,
+              imageLoader.imageURLs.isEmpty,
+              pendingOpens.pending == nil,
+              recentDirectories.directories.first != nil else { return }
+
+        isAutoOpening = true
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            guard autoOpenRecent,
-                  imageLoader.imageURLs.isEmpty,
-                  pendingOpens.pending == nil,
-                  let first = recentDirectories.directories.first else { return }
-            openRecent(first)
+            guard self.imageLoader.imageURLs.isEmpty,
+                  self.pendingOpens.pending == nil,
+                  let first = self.recentDirectories.directories.first else {
+                self.isAutoOpening = false
+                return
+            }
+            self.openRecent(first)
+            // loadImagesFromDirectory dispatches its final update to main.async,
+            // so enqueue after it to catch the case where the directory had no images
+            // or the bookmark couldn't be resolved.
+            DispatchQueue.main.async {
+                if self.imageLoader.imageURLs.isEmpty {
+                    self.isAutoOpening = false
+                }
+            }
         }
     }
 
