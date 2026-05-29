@@ -11,10 +11,12 @@ struct RecentDirectory: Codable, Identifiable, Hashable {
 
 class RecentDirectories: ObservableObject {
     @Published var directories: [RecentDirectory] = []
-    private let maxRecents = 5
-    private let userDefaultsKey = "RecentDirectoryBookmarksV2"
+    let maxRecents: Int
+    private let userDefaultsKey: String
 
-    init() {
+    init(maxRecents: Int = 5, userDefaultsKey: String = "RecentDirectoryBookmarksV2") {
+        self.maxRecents = maxRecents
+        self.userDefaultsKey = userDefaultsKey
         loadRecents()
     }
 
@@ -33,6 +35,10 @@ class RecentDirectories: ObservableObject {
             path: url.path
         )
 
+        insertEntry(entry)
+    }
+
+    func insertEntry(_ entry: RecentDirectory) {
         var updated = directories.filter { $0.path != entry.path }
         updated.insert(entry, at: 0)
         if updated.count > maxRecents {
