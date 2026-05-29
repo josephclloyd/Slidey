@@ -158,7 +158,7 @@ final class MusicManager: ObservableObject {
             }
             try await player.play()
         } catch {
-            // Playback failed
+            print("MusicManager: playback failed – \(error)")
         }
     }
 

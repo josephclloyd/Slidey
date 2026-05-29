@@ -16,7 +16,6 @@
 		B1000001000000000000001 /* ImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000001 /* ImageLoaderTests.swift */; };
 		B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004000000000000001 /* RecentDirectoriesTests.swift */; };
 		B1000005000000000000001 /* SlideyAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006000000000000001 /* SlideyAppTests.swift */; };
-		B1000007000000000000001 /* SlideshowViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000008000000000000001 /* SlideshowViewTests.swift */; };
 		D8EF05A32F1189BE00ECB91A /* Resources in Resources */ = {isa = PBXBuildFile; fileRef = D8EF05A22F1189BE00ECB91A /* Resources */; };
 /* End PBXBuildFile section */
 
@@ -41,7 +40,6 @@
 		B1000002000000000000001 /* ImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoaderTests.swift; sourceTree = "<group>"; };
 		B1000004000000000000001 /* RecentDirectoriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDirectoriesTests.swift; sourceTree = "<group>"; };
 		B1000006000000000000001 /* SlideyAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideyAppTests.swift; sourceTree = "<group>"; };
-		B1000008000000000000001 /* SlideshowViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowViewTests.swift; sourceTree = "<group>"; };
 		B1000010000000000000001 /* SlideyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SlideyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D8EF05A22F1189BE00ECB91A /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Resources; path = slidey/Resources; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -107,7 +105,6 @@
 				B1000002000000000000001 /* ImageLoaderTests.swift */,
 				B1000004000000000000001 /* RecentDirectoriesTests.swift */,
 				B1000006000000000000001 /* SlideyAppTests.swift */,
-				B1000008000000000000001 /* SlideshowViewTests.swift */,
 			);
 			path = SlideyTests;
 			sourceTree = "<group>";
@@ -222,7 +219,6 @@
 				B1000001000000000000001 /* ImageLoaderTests.swift in Sources */,
 				B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */,
 				B1000005000000000000001 /* SlideyAppTests.swift in Sources */,
-				B1000007000000000000001 /* SlideshowViewTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
