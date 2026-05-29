@@ -19,3 +19,6 @@ jobs:
 
       - name: Build
         run: xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO
+
+      - name: Test
+        run: xcodebuild -scheme Slidey -project Slidey.xcodeproj test -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
