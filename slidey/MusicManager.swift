@@ -85,6 +85,7 @@ final class MusicManager: ObservableObject {
     }
 
     func activate() {
+        guard !isActive else { return }
         isActive = true
         guard musicMode != .off else { return }
         Task { await startPlayback() }
