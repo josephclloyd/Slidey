@@ -183,6 +183,13 @@ Every PR must have a green "Build" CI check before it can merge. The done phase 
 The CI check runs `xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO`
 and takes ~76 seconds. Do not attempt to merge before CI finishes.
 
+**If GitHub Actions stops triggering** (check-suites returns 0 for the PR's HEAD commit):
+- Empty commit and close/reopen PR do NOT reliably re-arm webhooks.
+- Pushing a **real merge commit** (e.g. `git merge origin/main`) does — the merge creates a fresh SHA that always triggers a new run.
+- Last resort: wait for the next organic push (repair, fix, etc.) which will also trigger.
+
+**Ensure every PR has `Closes #N` in the body.** Without it, `mcx tracked` shows `prNumber: null` and the review phase blocks waiting for a PR that already exists. If missing, add it with `gh pr edit <N> --body "$(gh pr view <N> --json body -q '.body')\n\nCloses #ISSUE"`.
+
 ## Comment surfaces to check before done
 
 Before transitioning any item to `done`, verify all four PR comment surfaces are clean:
