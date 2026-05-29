@@ -1317,7 +1317,7 @@ struct SlideshowView: View {
     /// Scans `text` for the last "DDD.DD%" token and returns its numeric value
     /// (without the % sign). Used to drive the upscale progress bar from the
     /// realesrgan-ncnn-vulkan binary's stderr stream.
-    private static func parseLastPercentage(in text: String) -> Double? {
+    static func parseLastPercentage(in text: String) -> Double? {
         guard let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)%"#) else { return nil }
         let nsText = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
@@ -1639,8 +1639,8 @@ final class ThumbnailCache {
     static let shared = ThumbnailCache()
     private let cache = NSCache<NSURL, NSImage>()
 
-    private init() {
-        cache.countLimit = 500
+    init(countLimit: Int = 500) {
+        cache.countLimit = countLimit
     }
 
     func get(_ url: URL) -> NSImage? {

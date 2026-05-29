@@ -31,7 +31,7 @@ class ImageLoader: ObservableObject {
     @Published var currentIndex: Int = 0
     @Published var currentImage: NSImage?
 
-    private let supportedExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
+    let supportedExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
 
     /// Maximum decoded pixel count we will accept. Guards against
     /// decompression bombs - small files that decode to enormous bitmaps and
@@ -101,7 +101,13 @@ class ImageLoader: ObservableObject {
             ))
         }
 
-        switch sortOrder {
+        Self.sortEntries(&entries, by: sortOrder)
+
+        return entries.map { $0.url }
+    }
+
+    static func sortEntries(_ entries: inout [(url: URL, created: Date, modified: Date)], by order: AppSortOrder) {
+        switch order {
         case .creationDateAscending:
             entries.sort { $0.created < $1.created }
         case .creationDateDescending:
@@ -117,8 +123,6 @@ class ImageLoader: ObservableObject {
         case .random:
             entries.shuffle()
         }
-
-        return entries.map { $0.url }
     }
 
     /// Re-runs the scan with the current `sortOrder` and reconciles the
