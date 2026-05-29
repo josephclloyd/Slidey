@@ -18,6 +18,7 @@ struct SlideyApp: App {
             EditMenuCommands()
             ViewMenuCommands()
             SlideshowMenuCommands()
+            MusicMenuCommands()
         }
 
         Settings {
@@ -58,7 +59,49 @@ struct SlideshowMenuCommands: Commands {
     }
 }
 
-/// Receives folder URLs from Launch Services (drag-onto-dock-icon, "Open With…",
+struct MusicMenuCommands: Commands {
+    @AppStorage("musicMode") private var musicMode: String = "off"
+    @AppStorage("musicSongTitle") private var songTitle: String = ""
+    @AppStorage("musicPlaylistName") private var playlistName: String = ""
+
+    private var statusLabel: String {
+        switch musicMode {
+        case "song" where !songTitle.isEmpty: return "Now Playing: \(songTitle)"
+        case "playlist" where !playlistName.isEmpty: return "Now Playing: \(playlistName)"
+        case "random": return "Now Playing: Shuffle"
+        default: return "Not Playing"
+        }
+    }
+
+    var body: some Commands {
+        CommandMenu("Music") {
+            Text(statusLabel)
+
+            Divider()
+
+            Button("Stop Music") {
+                NotificationCenter.default.post(name: NSNotification.Name("MusicOff"), object: nil)
+            }
+            .disabled(musicMode == "off")
+
+            Divider()
+
+            Button("Play Song\u{2026}") {
+                NotificationCenter.default.post(name: NSNotification.Name("MusicChooseSong"), object: nil)
+            }
+
+            Button("Play Playlist\u{2026}") {
+                NotificationCenter.default.post(name: NSNotification.Name("MusicChoosePlaylist"), object: nil)
+            }
+
+            Button("Shuffle Library") {
+                NotificationCenter.default.post(name: NSNotification.Name("MusicShuffle"), object: nil)
+            }
+        }
+    }
+}
+
+/// Receives folder URLs from Launch Services (drag-onto-dock-icon, "Open With\u{2026}",
 /// or `open -a Slidey /path/to/folder`) and forwards them to the active
 /// SlideshowView via `pendingOpens`. URLs that arrive before any view is on
 /// screen (cold-launch) are buffered until the first SlideshowView appears.

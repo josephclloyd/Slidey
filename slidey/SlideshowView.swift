@@ -92,8 +92,13 @@ class ClickCatcherView: NSView {
 
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
+    @StateObject private var musicManager = MusicManager()
+
     @EnvironmentObject var recentDirectories: RecentDirectories
     @EnvironmentObject var pendingOpens: PendingOpens
+    @State private var showSongPicker = false
+    @State private var showPlaylistPicker = false
+
     @State private var selectedDirectory: URL?
     @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
@@ -282,6 +287,33 @@ struct SlideshowView: View {
                 .transition(.opacity)
             }
 
+            // Track info overlay (top-right, shown briefly on track change)
+            if musicManager.showTrackOverlay, let title = musicManager.currentTrackTitle {
+                VStack {
+                    HStack {
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(title)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundColor(.white)
+                            if let artist = musicManager.currentTrackArtist {
+                                Text(artist)
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.black.opacity(0.6))
+                        .cornerRadius(8)
+                        .padding(.trailing, 20)
+                        .padding(.top, 20)
+                    }
+                    Spacer()
+                }
+                .transition(.opacity)
+            }
+
             // Progress indicator overlay
             if isProcessing {
                 VStack {
@@ -367,8 +399,11 @@ struct SlideshowView: View {
                 rotationAngle = currentURLRotation()
                 updateDisplayImage()
                 enterFullScreen()
+                musicManager.activate()
+
             } else {
                 stopSlideshow()
+                musicManager.deactivate()
             }
             updateCursorVisibility()
         }
@@ -407,6 +442,8 @@ struct SlideshowView: View {
                 acquireDisplaySleepAssertion()
             } else {
                 releaseDisplaySleepAssertion()
+            musicManager.deactivate()
+
             }
         }
         .onChange(of: showThumbnails) { _, _ in
@@ -425,6 +462,9 @@ struct SlideshowView: View {
         .onDisappear {
             stopSlideshow()
             releaseDisplaySleepAssertion()
+            musicManager.deactivate()
+
+            musicManager.deactivate()
         }
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
@@ -527,6 +567,50 @@ struct SlideshowView: View {
                 windowHasFocus = false
                 updateCursorVisibility()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicOff"))) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                musicManager.setOff()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicChooseSong"))) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                Task {
+                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
+                    showSongPicker = true
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicChoosePlaylist"))) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                Task {
+                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
+                    showPlaylistPicker = true
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicShuffle"))) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                Task {
+                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
+                    musicManager.setShuffle()
+                }
+            }
+        }
+        .sheet(isPresented: $showSongPicker) {
+            SongPickerView(musicManager: musicManager) { song in
+                musicManager.selectSong(song)
+            }
+        }
+        .sheet(isPresented: $showPlaylistPicker) {
+            PlaylistPickerView(musicManager: musicManager) { playlist in
+                musicManager.selectPlaylist(playlist)
+            }
+        }
+        .alert("Music Access Required", isPresented: $musicManager.authorizationDenied) {
+            Button("OK") {}
+        } message: {
+            Text("Slidey needs access to your Music library to play background music. You can grant access in System Settings > Privacy & Security > Media & Apple Music.")
         }
     }
 
@@ -1235,7 +1319,7 @@ struct SlideshowView: View {
     /// Scans `text` for the last "DDD.DD%" token and returns its numeric value
     /// (without the % sign). Used to drive the upscale progress bar from the
     /// realesrgan-ncnn-vulkan binary's stderr stream.
-    private static func parseLastPercentage(in text: String) -> Double? {
+    static func parseLastPercentage(in text: String) -> Double? {
         guard let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)%"#) else { return nil }
         let nsText = text as NSString
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
@@ -1557,9 +1641,8 @@ final class ThumbnailCache {
     static let shared = ThumbnailCache()
     private let cache = NSCache<NSURL, NSImage>()
 
-    private init() {
-        // Hold up to 500 thumbnails; NSCache also evicts under memory pressure.
-        cache.countLimit = 500
+    init(countLimit: Int = 500) {
+        cache.countLimit = countLimit
     }
 
     func get(_ url: URL) -> NSImage? {
