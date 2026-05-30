@@ -173,7 +173,7 @@ struct SettingsView: View {
                 }
             }
             Section("Music") {
-                Toggle("Auto-play music with slideshow", isOn: $autoPlayMusic)
+                Toggle("Resume music when starting slideshow", isOn: $autoPlayMusic)
                 Text(musicSelectionText)
                     .font(.caption)
                     .foregroundColor(.secondary)
