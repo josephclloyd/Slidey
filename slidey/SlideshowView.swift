@@ -133,6 +133,7 @@ struct SlideshowView: View {
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
+    @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
     @State private var isAutoOpening = false
 
     var body: some View {
@@ -867,6 +868,9 @@ struct SlideshowView: View {
               imageLoader.imageURLs.count > 1 else { return }
         isPlaying = true
         rescheduleSlideshowTimer()
+        if autoPlayMusic {
+            musicManager.resumeIfConfigured()
+        }
     }
 
     private func stopSlideshow() {

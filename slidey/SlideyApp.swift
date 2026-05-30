@@ -135,6 +135,25 @@ struct SettingsView: View {
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
+    @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
+    @AppStorage("musicMode") private var musicMode: String = "off"
+    @AppStorage("lastMusicMode") private var lastMusicMode: String = "off"
+    @AppStorage("musicSongTitle") private var musicSongTitle: String = ""
+    @AppStorage("musicPlaylistName") private var musicPlaylistName: String = ""
+
+    private var musicSelectionText: String {
+        let mode = musicMode != "off" ? musicMode : lastMusicMode
+        switch mode {
+        case "song" where !musicSongTitle.isEmpty:
+            return "Selection: \(musicSongTitle)\(musicMode == "off" ? " (stopped)" : "")"
+        case "playlist" where !musicPlaylistName.isEmpty:
+            return "Selection: \(musicPlaylistName)\(musicMode == "off" ? " (stopped)" : "")"
+        case "random":
+            return "Selection: Shuffle Library\(musicMode == "off" ? " (stopped)" : "")"
+        default:
+            return "No music selected. Use the Music menu to choose a song or playlist."
+        }
+    }
 
     var body: some View {
         Form {
@@ -152,6 +171,13 @@ struct SettingsView: View {
                 Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
                     Text("Interval: \(Int(slideshowInterval)) second\(Int(slideshowInterval) == 1 ? "" : "s")")
                 }
+            }
+            Section("Music") {
+                Toggle("Auto-play music with slideshow", isOn: $autoPlayMusic)
+                Text(musicSelectionText)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("Input") {
                 Toggle("Natural scroll pan", isOn: $naturalScrollPan)
