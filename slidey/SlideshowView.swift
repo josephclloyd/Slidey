@@ -8,6 +8,14 @@ enum PanDirection {
     case left, right, up, down
 }
 
+struct ImageInfo {
+    let width: Int
+    let height: Int
+    let fileSizeText: String
+    let dateTakenText: String
+    let cameraText: String?
+}
+
 /// Axis-aligned bounding box of `size` rotated about its center by `angle`.
 /// Used to compute fit/fill/pan extents that respect the displayed
 /// orientation rather than the image's natural orientation.
@@ -128,11 +136,14 @@ struct SlideshowView: View {
     @State private var savedToast: String?
     @State private var savedToastIsError: Bool = false
     @State private var showThumbnails = false
+    @State private var infoOverlayURLs: Set<URL> = []
+    @State private var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
     @State private var hasDisplaySleepAssertion = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
+    @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
     @State private var isAutoOpening = false
 
     var body: some View {
@@ -264,6 +275,34 @@ struct SlideshowView: View {
                         .padding(.bottom, 20)
                         Spacer()
                     }
+                }
+            }
+
+            // Image info overlay (top-left)
+            if let url = imageLoader.currentImageURL,
+               infoOverlayURLs.contains(url),
+               let info = imageInfoCache[url] {
+                VStack {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("\(info.width) \u{00d7} \(info.height) px")
+                            Text(info.fileSizeText)
+                            Text(info.dateTakenText)
+                            if let camera = info.cameraText {
+                                Text(camera)
+                            }
+                        }
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.black.opacity(0.6))
+                        .cornerRadius(6)
+                        .padding(.leading, 20)
+                        .padding(.top, 20)
+                        Spacer()
+                    }
+                    Spacer()
                 }
             }
 
@@ -415,6 +454,8 @@ struct SlideshowView: View {
             enhancedImages = enhancedImages.filter { valid.contains($0.key) }
             smoothedImages = smoothedImages.filter { valid.contains($0.key) }
             upscaledImages = upscaledImages.filter { valid.contains($0.key) }
+            infoOverlayURLs = infoOverlayURLs.intersection(valid)
+            imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
 
             rotationAngle = currentURLRotation()
             if !newURLs.isEmpty {
@@ -534,6 +575,9 @@ struct SlideshowView: View {
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 showThumbnails.toggle()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleImageInfo"))) { _ in
+            ifKeyWindow { toggleInfoOverlay() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MoveToTrash"))) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
@@ -766,6 +810,9 @@ struct SlideshowView: View {
         case "U":
             removeUpscaling()
             return .handled
+        case "i":
+            toggleInfoOverlay()
+            return .handled
         case "n":
             showFilename.toggle()
             return .handled
@@ -850,6 +897,8 @@ struct SlideshowView: View {
         enhancedImages = [:]
         smoothedImages = [:]
         upscaledImages = [:]
+        infoOverlayURLs = []
+        imageInfoCache = [:]
         resetZoomAndPan()
 
         imageLoader.loadImagesFromDirectory(url: url)
@@ -867,6 +916,9 @@ struct SlideshowView: View {
               imageLoader.imageURLs.count > 1 else { return }
         isPlaying = true
         rescheduleSlideshowTimer()
+        if autoPlayMusic {
+            musicManager.resumeIfConfigured()
+        }
     }
 
     private func stopSlideshow() {
@@ -1335,6 +1387,72 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
+    private func toggleInfoOverlay() {
+        guard let url = imageLoader.currentImageURL else { return }
+        if infoOverlayURLs.contains(url) {
+            infoOverlayURLs.remove(url)
+        } else {
+            if imageInfoCache[url] == nil {
+                imageInfoCache[url] = Self.loadImageInfo(for: url)
+            }
+            infoOverlayURLs.insert(url)
+        }
+    }
+
+    private static func loadImageInfo(for url: URL) -> ImageInfo? {
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: url.path) else { return nil }
+        let fileSize = attrs[.size] as? Int64 ?? 0
+        let fileSizeText = ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] else {
+            return nil
+        }
+
+        let width = properties[kCGImagePropertyPixelWidth as String] as? Int ?? 0
+        let height = properties[kCGImagePropertyPixelHeight as String] as? Int ?? 0
+
+        let exif = properties[kCGImagePropertyExifDictionary as String] as? [String: Any]
+        let tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any]
+
+        let dateTakenText: String
+        if let exifDateStr = exif?[kCGImagePropertyExifDateTimeOriginal as String] as? String {
+            let parser = DateFormatter()
+            parser.dateFormat = "yyyy:MM:dd HH:mm:ss"
+            if let date = parser.date(from: exifDateStr) {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                dateTakenText = formatter.string(from: date)
+            } else {
+                dateTakenText = exifDateStr
+            }
+        } else if let modDate = attrs[.modificationDate] as? Date {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .short
+            dateTakenText = formatter.string(from: modDate)
+        } else {
+            dateTakenText = "Unknown"
+        }
+
+        let make = tiff?[kCGImagePropertyTIFFMake as String] as? String
+        let model = tiff?[kCGImagePropertyTIFFModel as String] as? String
+        let cameraText: String?
+        if let make, let model {
+            if model.localizedCaseInsensitiveContains(make) {
+                cameraText = model
+            } else {
+                cameraText = "\(make) \(model)"
+            }
+        } else {
+            cameraText = model ?? make
+        }
+
+        return ImageInfo(width: width, height: height, fileSizeText: fileSizeText, dateTakenText: dateTakenText, cameraText: cameraText)
+    }
+
     private func moveCurrentImageToTrash() {
         guard let url = imageLoader.currentImageURL else { return }
         let filename = url.lastPathComponent
@@ -1355,6 +1473,8 @@ struct SlideshowView: View {
                         self.enhancedImages[url] = nil
                         self.smoothedImages[url] = nil
                         self.upscaledImages[url] = nil
+                        self.infoOverlayURLs.remove(url)
+                        self.imageInfoCache[url] = nil
                         self.imageLoader.removeImage(at: url)
                     } catch {
                         self.showErrorToast("Failed to trash: \(error.localizedDescription)")
