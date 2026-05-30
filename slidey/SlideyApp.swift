@@ -55,6 +55,9 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Thumbnail Strip (t)") {
                 NotificationCenter.default.post(name: NSNotification.Name("ToggleThumbnails"), object: nil)
             }
+            Button("Toggle Image Info (i)") {
+                NotificationCenter.default.post(name: NSNotification.Name("ToggleImageInfo"), object: nil)
+            }
         }
     }
 }
