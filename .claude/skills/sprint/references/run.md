@@ -39,6 +39,10 @@ gh auth status
 git branch --show-current   # must print "main"; if not: git checkout main
 ```
 
+**Important ordering:** run check #9 BEFORE check #4. A working directory that has drifted
+into a sprint worktree (e.g. from a prior `cd .claude/worktrees/sprint-N`) will make the
+phantom-commit check (#4) report false positives. Always assert `main` first.
+
 If any check fails, fix it before proceeding. The stale-worktree and phantom-commit
 checks are especially important — corrupted state from a prior run is hard to recover from.
 
@@ -189,6 +193,13 @@ and takes ~76 seconds. Do not attempt to merge before CI finishes.
 - Last resort: wait for the next organic push (repair, fix, etc.) which will also trigger.
 
 **Ensure every PR has `Closes #N` in the body.** Without it, `mcx tracked` shows `prNumber: null` and the review phase blocks waiting for a PR that already exists. If missing, add it with `gh pr edit <N> --body "$(gh pr view <N> --json body -q '.body')\n\nCloses #ISSUE"`.
+
+**After every impl session goes idle, verify `Closes #N` before running review:**
+```bash
+gh pr view <prNumber> --json body -q '.body' | grep -i closes
+# If empty: add it (see above) before proceeding to review phase
+```
+Impl sessions reliably omit this — make the check a routine step, not a recovery action.
 
 ## Comment surfaces to check before done
 
