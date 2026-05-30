@@ -23,6 +23,7 @@ final class MusicManager: ObservableObject {
 
     private var selectedSongID: String?
     private var selectedPlaylistID: String?
+    private var lastConfiguredMode: MusicMode = .off
     private let player = ApplicationMusicPlayer.shared
     private var isActive = false
     private var overlayTask: Task<Void, Never>?
@@ -36,6 +37,14 @@ final class MusicManager: ObservableObject {
         selectedSongTitle = UserDefaults.standard.string(forKey: "musicSongTitle")
         selectedPlaylistName = UserDefaults.standard.string(forKey: "musicPlaylistName")
         isAuthorized = MusicAuthorization.currentStatus == .authorized
+
+        if let lastStr = UserDefaults.standard.string(forKey: "lastMusicMode"),
+           let mode = MusicMode(rawValue: lastStr) {
+            lastConfiguredMode = mode
+        } else if musicMode != .off {
+            lastConfiguredMode = musicMode
+            UserDefaults.standard.set(musicMode.rawValue, forKey: "lastMusicMode")
+        }
 
         queueObserver = player.queue.objectWillChange.sink { [weak self] in
             Task { @MainActor [weak self] in
@@ -62,7 +71,9 @@ final class MusicManager: ObservableObject {
         selectedSongID = song.id.rawValue
         selectedSongTitle = song.title
         musicMode = .song
+        lastConfiguredMode = .song
         UserDefaults.standard.set("song", forKey: "musicMode")
+        UserDefaults.standard.set("song", forKey: "lastMusicMode")
         UserDefaults.standard.set(song.id.rawValue, forKey: "musicSongID")
         UserDefaults.standard.set(song.title, forKey: "musicSongTitle")
         if isActive { Task { await startPlayback() } }
@@ -72,7 +83,9 @@ final class MusicManager: ObservableObject {
         selectedPlaylistID = playlist.id.rawValue
         selectedPlaylistName = playlist.name
         musicMode = .playlist
+        lastConfiguredMode = .playlist
         UserDefaults.standard.set("playlist", forKey: "musicMode")
+        UserDefaults.standard.set("playlist", forKey: "lastMusicMode")
         UserDefaults.standard.set(playlist.id.rawValue, forKey: "musicPlaylistID")
         UserDefaults.standard.set(playlist.name, forKey: "musicPlaylistName")
         if isActive { Task { await startPlayback() } }
@@ -80,8 +93,27 @@ final class MusicManager: ObservableObject {
 
     func setShuffle() {
         musicMode = .random
+        lastConfiguredMode = .random
         UserDefaults.standard.set("random", forKey: "musicMode")
+        UserDefaults.standard.set("random", forKey: "lastMusicMode")
         if isActive { Task { await startPlayback() } }
+    }
+
+    func resumeIfConfigured() {
+        if musicMode != .off && isActive && player.state.playbackStatus == .playing {
+            return
+        }
+
+        var modeToPlay = musicMode
+        if modeToPlay == .off {
+            guard lastConfiguredMode != .off else { return }
+            modeToPlay = lastConfiguredMode
+            musicMode = modeToPlay
+            UserDefaults.standard.set(modeToPlay.rawValue, forKey: "musicMode")
+        }
+
+        if !isActive { isActive = true }
+        Task { await startPlayback() }
     }
 
     func activate() {
