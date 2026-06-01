@@ -143,6 +143,8 @@ struct SettingsView: View {
     @AppStorage("lastMusicMode") private var lastMusicMode: String = "off"
     @AppStorage("musicSongTitle") private var musicSongTitle: String = ""
     @AppStorage("musicPlaylistName") private var musicPlaylistName: String = ""
+    @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
+    @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
 
     private var musicSelectionText: String {
         let mode = musicMode != "off" ? musicMode : lastMusicMode
@@ -173,6 +175,14 @@ struct SettingsView: View {
             Section("Slideshow") {
                 Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
                     Text("Interval: \(Int(slideshowInterval)) second\(Int(slideshowInterval) == 1 ? "" : "s")")
+                }
+            }
+            Section("Transitions") {
+                Toggle("Crossfade between images", isOn: $transitionsEnabled)
+                if transitionsEnabled {
+                    Stepper(value: $transitionDuration, in: 0.1...2.0, step: 0.1) {
+                        Text("Duration: \(String(format: "%.1f", transitionDuration))s")
+                    }
                 }
             }
             Section("Music") {
@@ -252,6 +262,13 @@ struct FileMenuCommands: Commands {
 
 struct EditMenuCommands: Commands {
     var body: some Commands {
+        CommandGroup(replacing: .pasteboard) {
+            Button("Copy Image") {
+                NotificationCenter.default.post(name: NSNotification.Name("CopyImage"), object: nil)
+            }
+            .keyboardShortcut("c", modifiers: .command)
+        }
+
         CommandGroup(after: .pasteboard) {
             Divider()
 

@@ -144,6 +144,8 @@ struct SlideshowView: View {
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
+    @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
+    @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @State private var isAutoOpening = false
 
     var body: some View {
@@ -230,6 +232,8 @@ struct SlideshowView: View {
                                 imageLoader.previousImage()
                             }
                         )
+                        .id(imageLoader.currentImageURL)
+                        .transition(.opacity)
                         .onAppear {
                             windowSize = geometry.size
                             updateDisplayImage()
@@ -240,6 +244,7 @@ struct SlideshowView: View {
                         }
                     }
                 }
+                .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
             }
 
             // Thumbnail strip overlay (bottom)
@@ -581,6 +586,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MoveToTrash"))) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CopyImage"))) { _ in
+            ifKeyWindow { copyImageToClipboard() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RevealInFinder"))) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
@@ -1481,6 +1489,20 @@ struct SlideshowView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func copyImageToClipboard() {
+        guard let displayedImage = currentDisplayImage ?? imageLoader.currentImage else { return }
+        let outputImage = applyRotationIfNeeded(displayedImage)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([outputImage])
+        let message = "Copied to clipboard"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if savedToast == message { savedToast = nil }
         }
     }
 
