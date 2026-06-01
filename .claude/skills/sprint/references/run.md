@@ -46,15 +46,28 @@ phantom-commit check (#4) report false positives. Always assert `main` first.
 If any check fails, fix it before proceeding. The stale-worktree and phantom-commit
 checks are especially important — corrupted state from a prior run is hard to recover from.
 
-## Checkout guard after impl
+## Post-impl routine (run after EVERY impl session goes idle)
 
-After all impl sessions go `idle`, before running review phases, always restore the main
-checkout — sessions can drift it onto a feature branch:
+Do these three steps in order before running the review phase. All three are required
+every sprint — impl sessions consistently skip them:
 
 ```bash
+# 1. Verify Closes #N is in the PR body (impl sessions reliably omit it)
+gh pr view <prNumber> --json body -q '.body' | grep -i closes
+# If empty: gh pr edit <PR> --body "$(gh pr view <PR> --json body -q '.body')\n\nCloses #N"
+
+# 2. Restore main checkout (sessions branch in the main worktree, leaving HEAD on feature branch)
 git branch --show-current   # if not "main":
 git checkout main
+
+# 3. Re-pair tracked work item so prNumber populates (daemon doesn't auto-link)
+mcx untrack N
+sleep 10
+mcx track N
+mcx tracked --json   # prNumber should now be non-null
 ```
+
+Only then: `mcx phase run review --work-item "#N"`
 
 ## Write the sprint sentinel
 
