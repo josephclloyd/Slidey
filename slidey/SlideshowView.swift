@@ -582,6 +582,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MoveToTrash"))) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CopyImage"))) { _ in
+            ifKeyWindow { copyImageToClipboard() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RevealInFinder"))) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
         }
@@ -1481,6 +1484,20 @@ struct SlideshowView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func copyImageToClipboard() {
+        guard let displayedImage = currentDisplayImage ?? imageLoader.currentImage else { return }
+        let outputImage = applyRotationIfNeeded(displayedImage)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([outputImage])
+        let message = "Copied to clipboard"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if savedToast == message { savedToast = nil }
         }
     }
 

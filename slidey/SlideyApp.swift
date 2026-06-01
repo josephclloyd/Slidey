@@ -252,6 +252,13 @@ struct FileMenuCommands: Commands {
 
 struct EditMenuCommands: Commands {
     var body: some Commands {
+        CommandGroup(replacing: .pasteboard) {
+            Button("Copy Image") {
+                NotificationCenter.default.post(name: NSNotification.Name("CopyImage"), object: nil)
+            }
+            .keyboardShortcut("c", modifiers: .command)
+        }
+
         CommandGroup(after: .pasteboard) {
             Divider()
 
