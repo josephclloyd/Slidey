@@ -144,6 +144,8 @@ struct SlideshowView: View {
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
+    @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
+    @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @State private var isAutoOpening = false
 
     var body: some View {
@@ -230,6 +232,8 @@ struct SlideshowView: View {
                                 imageLoader.previousImage()
                             }
                         )
+                        .id(imageLoader.currentImageURL)
+                        .transition(.opacity)
                         .onAppear {
                             windowSize = geometry.size
                             updateDisplayImage()
@@ -240,6 +244,7 @@ struct SlideshowView: View {
                         }
                     }
                 }
+                .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
             }
 
             // Thumbnail strip overlay (bottom)
