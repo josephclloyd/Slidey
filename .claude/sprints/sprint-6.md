@@ -24,6 +24,8 @@ Status: complete
 
 ## Results
 
+Released: v1.6 — 2026-06-01
+
 ### Shipped
 - #39 Copy image to clipboard — PR #44, merged 2026-06-01T19:15:51Z. Cmd+C copies the processed/enhanced image (upscaled > smoothed > enhanced > original priority chain, rotation baked in) to NSPasteboard. Edit > Copy Image menu item. Brief "Copied to clipboard" toast. NotificationCenter pattern followed.
 - #38 Slideshow transitions — PR #45, merged 2026-06-01T19:34:36Z. Crossfade between images using `.id()` + `.transition(.opacity)` + `.animation(_:value:)`. Off by default, 0.3s duration, Settings toggle persisted via `@AppStorage`. Keyboard input non-blocking mid-fade.
