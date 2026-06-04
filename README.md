@@ -17,6 +17,10 @@ A native macOS slideshow application for viewing images with powerful navigation
 - **Filename overlay** - Toggle display of the current image filename
 - **Session memory** - Remembers rotations, enhancements, smoothing, and upscaling per session
 - **Auto-advance slideshow** - Play / pause with Space; interval configurable in Settings
+- **EXIF / image info overlay** - Toggle detailed image metadata (dimensions, file size, date taken, camera) with `i`
+- **Copy to clipboard** - Copy current image to clipboard with Cmd+C
+- **Background music** - Apple Music integration via MusicKit (single song, playlist, or shuffle library)
+- **Crossfade transitions** - Optional smooth crossfade between images, with configurable duration
 
 ## Keyboard Shortcuts
 
@@ -44,10 +48,14 @@ A native macOS slideshow application for viewing images with powerful navigation
 
 ### Overlay
 - **n** - Toggle filename overlay (lower-left corner)
+- **i** - Toggle EXIF / image info overlay (dimensions, file size, date, camera)
 - **d** - Toggle debug output window
 
 ### Slideshow
 - **Space** - Play / Pause auto-advance (interval set in Settings)
+
+### Clipboard
+- **Command+C** - Copy current image to clipboard
 
 ### Window
 - **Escape** - Toggle fullscreen (or cancel an in-progress upscale)
@@ -98,6 +106,12 @@ A native macOS slideshow application for viewing images with powerful navigation
 ### Slideshow Menu
 - **Play / Pause Slideshow** (Space) - Toggle auto-advance through images
 
+### Music Menu
+- **Stop Music** - Stop playback
+- **Play Song…** - Pick a song from Apple Music
+- **Play Playlist…** - Pick a playlist from Apple Music
+- **Shuffle Library** - Shuffle the entire Apple Music library
+
 ## Technical Details
 
 ### Built With
@@ -119,6 +133,7 @@ A native macOS slideshow application for viewing images with powerful navigation
 - `SlideyApp.swift` - Main app entry point and menu commands
 - `SlideshowView.swift` - Main slideshow interface and controls
 - `ImageLoader.swift` - Directory scanning and image loading
+- `MusicManager.swift` - Background music playback via MusicKit
 - `RecentDirectories.swift` - Recent directory management
 - `Resources/realesrgan-ncnn-vulkan` - Bundled AI upscaling binary
 - `Resources/models/` - Real-ESRGAN model files
