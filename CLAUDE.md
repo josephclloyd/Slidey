@@ -21,14 +21,16 @@ Build is fast (~1–2s incremental, ~15s clean). There is no `am-i-done` gate �
 
 ## Architecture
 
-Four source files; there is no test target:
+Five source files (~3,000 LOC); test target in `SlideyTests/`:
 
 ```
 slidey/
   SlideyApp.swift         App entry, AppDelegate, menus, Settings scene
-  SlideshowView.swift     Main UI (~1500 lines): image display, zoom/pan, key handling,
-                          thumbnails, upscale progress, all @State + @StateObject
+  SlideshowView.swift     Main UI (~1900 lines): image display, zoom/pan, key handling,
+                          thumbnails, upscale progress, crossfade transitions,
+                          EXIF/info overlay, clipboard copy — all @State + @StateObject
   ImageLoader.swift       Directory scan, sort, decode, cache, DispatchSource watcher
+  MusicManager.swift      Background music via MusicKit (song, playlist, shuffle modes)
   RecentDirectories.swift Security-scoped bookmark persistence for recent folders
   Resources/
     realesrgan-ncnn-vulkan  Pre-built AI upscaling binary (26 MB, committed directly)
@@ -44,6 +46,8 @@ slidey/
 - **Security-scoped bookmarks** are required to reopen recent directories across launches (App Sandbox). `RecentDirectories` manages start/stop access.
 - **AI upscaling** spawns `realesrgan-ncnn-vulkan` as a subprocess; stderr lines are parsed for percentage progress. The process can be terminated on Cancel/Escape.
 - **Thumbnail cache** is `NSCache` (500-entry LRU). Thumbnails generated via `CGImageSourceCreateThumbnailAtIndex` — uses embedded EXIF thumbnails when available, never decodes the full bitmap.
+- **Background music** via `MusicManager` (@MainActor ObservableObject). Uses MusicKit `ApplicationMusicPlayer`. Modes: single song, playlist, shuffle. Persists selection in `@AppStorage`. Controlled via Music menu commands fired through `NotificationCenter`.
+- **Crossfade transitions** between images are optional (`@AppStorage("transitionsEnabled")`), with configurable duration.
 
 ## Gotchas
 

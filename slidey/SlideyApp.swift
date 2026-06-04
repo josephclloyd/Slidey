@@ -50,13 +50,13 @@ struct SlideshowMenuCommands: Commands {
             // priority over menu key-equivalents. Labels show the binding for
             // discoverability.
             Button("Play / Pause Slideshow (Space)") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleSlideshow"), object: nil)
+                NotificationCenter.default.post(name: .toggleSlideshow, object: nil)
             }
             Button("Toggle Thumbnail Strip (t)") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleThumbnails"), object: nil)
+                NotificationCenter.default.post(name: .toggleThumbnails, object: nil)
             }
             Button("Toggle Image Info (i)") {
-                NotificationCenter.default.post(name: NSNotification.Name("ToggleImageInfo"), object: nil)
+                NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
         }
     }
@@ -83,22 +83,22 @@ struct MusicMenuCommands: Commands {
             Divider()
 
             Button("Stop Music") {
-                NotificationCenter.default.post(name: NSNotification.Name("MusicOff"), object: nil)
+                NotificationCenter.default.post(name: .musicOff, object: nil)
             }
             .disabled(musicMode == "off")
 
             Divider()
 
             Button("Play Song\u{2026}") {
-                NotificationCenter.default.post(name: NSNotification.Name("MusicChooseSong"), object: nil)
+                NotificationCenter.default.post(name: .musicChooseSong, object: nil)
             }
 
             Button("Play Playlist\u{2026}") {
-                NotificationCenter.default.post(name: NSNotification.Name("MusicChoosePlaylist"), object: nil)
+                NotificationCenter.default.post(name: .musicChoosePlaylist, object: nil)
             }
 
             Button("Shuffle Library") {
-                NotificationCenter.default.post(name: NSNotification.Name("MusicShuffle"), object: nil)
+                NotificationCenter.default.post(name: .musicShuffle, object: nil)
             }
         }
     }
@@ -110,6 +110,24 @@ struct MusicMenuCommands: Commands {
 /// screen (cold-launch) are buffered until the first SlideshowView appears.
 class AppDelegate: NSObject, NSApplicationDelegate {
     let pendingOpens = PendingOpens()
+    private var frameObserver: Any?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self = self,
+                  let window = note.object as? NSWindow,
+                  window.frameAutosaveName.isEmpty else { return }
+            window.setFrameAutosaveName("MainWindow")
+            if let obs = self.frameObserver {
+                NotificationCenter.default.removeObserver(obs)
+                self.frameObserver = nil
+            }
+        }
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
@@ -226,7 +244,7 @@ struct FileMenuCommands: Commands {
                     ForEach(recentDirectories.directories) { entry in
                         Button(entry.displayName) {
                             NotificationCenter.default.post(
-                                name: NSNotification.Name("OpenDirectory"),
+                                name: .openDirectory,
                                 object: entry
                             )
                         }
@@ -237,26 +255,26 @@ struct FileMenuCommands: Commands {
             Divider()
 
             Button("Save Edited Image") {
-                NotificationCenter.default.post(name: NSNotification.Name("SaveEditedImage"), object: nil)
+                NotificationCenter.default.post(name: .saveEditedImage, object: nil)
             }
             .keyboardShortcut("s", modifiers: .command)
 
             Divider()
 
             Button("Reveal in Finder") {
-                NotificationCenter.default.post(name: NSNotification.Name("RevealInFinder"), object: nil)
+                NotificationCenter.default.post(name: .revealInFinder, object: nil)
             }
             .keyboardShortcut("r", modifiers: .command)
 
             Button("Move to Trash") {
-                NotificationCenter.default.post(name: NSNotification.Name("MoveToTrash"), object: nil)
+                NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }
             .keyboardShortcut(.delete, modifiers: .command)
         }
     }
 
     private func openDirectory() {
-        NotificationCenter.default.post(name: NSNotification.Name("SelectDirectory"), object: nil)
+        NotificationCenter.default.post(name: .selectDirectory, object: nil)
     }
 }
 
@@ -264,7 +282,7 @@ struct EditMenuCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .pasteboard) {
             Button("Copy Image") {
-                NotificationCenter.default.post(name: NSNotification.Name("CopyImage"), object: nil)
+                NotificationCenter.default.post(name: .copyImage, object: nil)
             }
             .keyboardShortcut("c", modifiers: .command)
         }
@@ -273,60 +291,60 @@ struct EditMenuCommands: Commands {
             Divider()
 
             Button("Auto-Enhance Image") {
-                NotificationCenter.default.post(name: NSNotification.Name("EnhanceImage"), object: nil)
+                NotificationCenter.default.post(name: .enhanceImage, object: nil)
             }
             .keyboardShortcut("a", modifiers: [])
 
             Button("Remove Enhancement") {
-                NotificationCenter.default.post(name: NSNotification.Name("RemoveEnhancement"), object: nil)
+                NotificationCenter.default.post(name: .removeEnhancement, object: nil)
             }
             .keyboardShortcut("a", modifiers: .shift)
 
             Divider()
 
             Button("Smooth Image") {
-                NotificationCenter.default.post(name: NSNotification.Name("SmoothImage"), object: nil)
+                NotificationCenter.default.post(name: .smoothImage, object: nil)
             }
             .keyboardShortcut("m", modifiers: [])
 
             Button("Remove Smoothing") {
-                NotificationCenter.default.post(name: NSNotification.Name("RemoveSmoothing"), object: nil)
+                NotificationCenter.default.post(name: .removeSmoothing, object: nil)
             }
             .keyboardShortcut("m", modifiers: .shift)
 
             Divider()
 
             Button("AI Upscale Image (4x)") {
-                NotificationCenter.default.post(name: NSNotification.Name("UpscaleImage"), object: nil)
+                NotificationCenter.default.post(name: .upscaleImage, object: nil)
             }
             .keyboardShortcut("u", modifiers: [])
 
             Button("Remove Upscaling") {
-                NotificationCenter.default.post(name: NSNotification.Name("RemoveUpscaling"), object: nil)
+                NotificationCenter.default.post(name: .removeUpscaling, object: nil)
             }
             .keyboardShortcut("u", modifiers: .shift)
 
             Divider()
 
             Button("Scale to Native Size") {
-                NotificationCenter.default.post(name: NSNotification.Name("ScaleToNative"), object: nil)
+                NotificationCenter.default.post(name: .scaleToNative, object: nil)
             }
             .keyboardShortcut("s", modifiers: [])
 
             Button("Scale to Fill Screen") {
-                NotificationCenter.default.post(name: NSNotification.Name("ScaleToFill"), object: nil)
+                NotificationCenter.default.post(name: .scaleToFill, object: nil)
             }
             .keyboardShortcut("f", modifiers: [])
 
             Divider()
 
             Button("Rotate Clockwise") {
-                NotificationCenter.default.post(name: NSNotification.Name("RotateClockwise"), object: nil)
+                NotificationCenter.default.post(name: .rotateClockwise, object: nil)
             }
             .keyboardShortcut("r", modifiers: [])
 
             Button("Rotate Counter-Clockwise") {
-                NotificationCenter.default.post(name: NSNotification.Name("RotateCounterClockwise"), object: nil)
+                NotificationCenter.default.post(name: .rotateCounterClockwise, object: nil)
             }
             .keyboardShortcut("r", modifiers: .shift)
 
