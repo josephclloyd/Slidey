@@ -110,6 +110,24 @@ struct MusicMenuCommands: Commands {
 /// screen (cold-launch) are buffered until the first SlideshowView appears.
 class AppDelegate: NSObject, NSApplicationDelegate {
     let pendingOpens = PendingOpens()
+    private var frameObserver: Any?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        frameObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self = self,
+                  let window = note.object as? NSWindow,
+                  window.frameAutosaveName.isEmpty else { return }
+            window.setFrameAutosaveName("MainWindow")
+            if let obs = self.frameObserver {
+                NotificationCenter.default.removeObserver(obs)
+                self.frameObserver = nil
+            }
+        }
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
