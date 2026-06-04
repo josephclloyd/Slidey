@@ -525,10 +525,10 @@ struct SlideshowView: View {
         .onKeyPress { keyPress in
             handleKeyPress(keyPress)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SelectDirectory"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.selectDirectory)) { _ in
             ifKeyWindow { selectDirectory() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenDirectory"))) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openDirectory)) { notification in
             if let entry = notification.object as? RecentDirectory {
                 ifKeyWindow { openRecent(entry) }
             }
@@ -536,61 +536,61 @@ struct SlideshowView: View {
         .onChange(of: windowTitle) { _, newTitle in
             updateWindowTitle(newTitle)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("EnhanceImage"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.enhanceImage)) { _ in
             ifKeyWindow { enhanceCurrentImage() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveEnhancement"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeEnhancement)) { _ in
             ifKeyWindow { removeEnhancement() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToNative"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToNative)) { _ in
             ifKeyWindow { zoomToNativeSize() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ScaleToFill"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToFill)) { _ in
             ifKeyWindow { zoomToFillScreen() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateClockwise"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.rotateClockwise)) { _ in
             ifKeyWindow { rotateClockwise() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RotateCounterClockwise"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.rotateCounterClockwise)) { _ in
             ifKeyWindow { rotateCounterClockwise() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SmoothImage"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.smoothImage)) { _ in
             ifKeyWindow { smoothCurrentImage() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveSmoothing"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSmoothing)) { _ in
             ifKeyWindow { removeSmoothing() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UpscaleImage"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage)) { _ in
             ifKeyWindow { upscaleCurrentImage() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RemoveUpscaling"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeUpscaling)) { _ in
             ifKeyWindow { removeUpscaling() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SaveEditedImage"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.saveEditedImage)) { _ in
             ifKeyWindow { saveEditedImage() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleSlideshow"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSlideshow)) { _ in
             // Allow toggle even mid-upscale: pause is always safe; play is
             // gated inside startSlideshow on isProcessing.
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 toggleSlideshow()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleThumbnails"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleThumbnails)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 showThumbnails.toggle()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleImageInfo"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
             ifKeyWindow { toggleInfoOverlay() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MoveToTrash"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToTrash)) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CopyImage"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RevealInFinder"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
         }
         .onChange(of: slideshowInterval) { _, _ in
@@ -618,12 +618,12 @@ struct SlideshowView: View {
                 updateCursorVisibility()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicOff"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicOff)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 musicManager.setOff()
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicChooseSong"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicChooseSong)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 Task {
                     guard await musicManager.requestAuthorizationIfNeeded() else { return }
@@ -631,7 +631,7 @@ struct SlideshowView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicChoosePlaylist"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicChoosePlaylist)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 Task {
                     guard await musicManager.requestAuthorizationIfNeeded() else { return }
@@ -639,7 +639,7 @@ struct SlideshowView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("MusicShuffle"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicShuffle)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 Task {
                     guard await musicManager.requestAuthorizationIfNeeded() else { return }
