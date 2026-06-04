@@ -1410,10 +1410,15 @@ struct SlideshowView: View {
         if infoOverlayURLs.contains(url) {
             infoOverlayURLs.remove(url)
         } else {
-            if imageInfoCache[url] == nil {
-                imageInfoCache[url] = Self.loadImageInfo(for: url)
-            }
             infoOverlayURLs.insert(url)
+            if imageInfoCache[url] == nil {
+                Task.detached(priority: .userInitiated) {
+                    let info = Self.loadImageInfo(for: url)
+                    await MainActor.run {
+                        self.imageInfoCache[url] = info
+                    }
+                }
+            }
         }
     }
 
