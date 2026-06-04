@@ -69,6 +69,23 @@ mcx tracked --json   # prNumber should now be non-null
 
 Only then: `mcx phase run review --work-item "#N"`
 
+**If `mcx phase run` fails with "phases only run from branch main"** — the main worktree
+drifted while another impl session was still active. Do NOT switch to main while that session
+is running (it may be mid-commit). Wait for that session's `session.result`, THEN:
+
+```bash
+git checkout main
+mcx phase run review --work-item "#N"
+```
+
+If the review was already spawned manually before you could restore main, advance the
+work item with `--no-execute` + `--from` to unblock the done phase:
+
+```bash
+mcx phase run review --work-item "#N" --no-execute   # log the transition, don't re-spawn
+mcx phase run done   --work-item "#N" --from review   # then proceed normally
+```
+
 ## Write the sprint sentinel
 
 ```bash
