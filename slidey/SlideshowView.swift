@@ -728,6 +728,16 @@ struct SlideshowView: View {
             return .handled
         }
 
+        if key == .home {
+            imageLoader.jumpTo(index: 0)
+            return .handled
+        }
+
+        if key == .end {
+            imageLoader.jumpTo(index: imageLoader.imageURLs.count - 1)
+            return .handled
+        }
+
         if zoomScale > 1.0 {
             switch key {
             case .leftArrow:
