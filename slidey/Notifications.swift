@@ -29,4 +29,6 @@ extension NSNotification.Name {
     static let musicChooseSong = NSNotification.Name("MusicChooseSong")
     static let musicChoosePlaylist = NSNotification.Name("MusicChoosePlaylist")
     static let musicShuffle = NSNotification.Name("MusicShuffle")
+
+    static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
 }
