@@ -505,6 +505,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyFilePath)) { _ in
+            ifKeyWindow { copyFilePathToClipboard() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
         }
@@ -1376,6 +1379,19 @@ struct SlideshowView: View {
         pasteboard.clearContents()
         pasteboard.writeObjects([outputImage])
         let message = "Copied to clipboard"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
+    private func copyFilePathToClipboard() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
+        let message = "Path copied to clipboard"
         savedToast = message
         savedToastIsError = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {

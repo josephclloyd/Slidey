@@ -39,6 +39,7 @@ struct KeyboardShortcutsView: View {
             ("⌘O", "Open directory"),
             ("⌘S", "Save edited image"),
             ("⌘C", "Copy image to clipboard"),
+            ("⇧⌘C", "Copy file path to clipboard"),
             ("⌘R", "Reveal in Finder"),
             ("⌘⌫", "Move to Trash"),
         ]),

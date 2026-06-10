@@ -297,6 +297,11 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyImage, object: nil)
             }
             .keyboardShortcut("c", modifiers: .command)
+
+            Button("Copy File Path") {
+                NotificationCenter.default.post(name: .copyFilePath, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
         }
 
         CommandGroup(after: .pasteboard) {
