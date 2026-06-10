@@ -193,6 +193,44 @@ TaskCreate "Issue #16: auto-open recent"
 **Never run #15 and #16 in parallel** — they both modify `SlideshowView.swift` and will
 conflict. The `addBlockedBy` edge ensures #16 waits for #15 to merge.
 
+## Quota-hit recovery (session exits with "You're out of extra usage")
+
+When a session hits the usage quota mid-work, the branch may not exist yet and changes are
+uncommitted in the main worktree. Do not discard — the work is usually complete.
+
+```bash
+# 1. Check what the session left behind
+git status --short
+# Look for: new untracked source files, modified SlideshowView.swift / project.pbxproj, etc.
+
+# 2. Verify the build passes with the uncommitted changes
+xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -3
+
+# 3. If build passes, salvage the work:
+#    Stash only the relevant files (not files from other sessions' branches)
+git stash push -u -m "recovery" -- <file1> <file2> ...
+
+#    Create the correct branch from main
+git checkout main
+git checkout -b <branch-name>
+
+#    Apply the stash (resolve any project.pbxproj conflicts — keep both sides)
+git stash pop
+
+#    Commit, push, and create the PR manually
+git add -A
+git commit -m "<description>\n\nCloses #N"
+git push -u origin <branch-name>
+gh pr create --title "..." --body "..."
+
+# 4. Note: the stash may include project.pbxproj entries from ANOTHER session's branch
+#    if the main worktree was on that branch when the quota hit. Strip those entries
+#    from project.pbxproj before committing (keep only entries for THIS issue's new files).
+```
+
+The quota resets at the time shown in the error message. If the build does NOT pass, wait for
+the reset and re-spawn the session to complete the work.
+
 ## Per-session bookkeeping
 
 After a `spawn` action:
@@ -213,9 +251,17 @@ Unpushed work is unrecoverable after a daemon restart.
 
 ## Build verification
 
-Every PR must have a green "Build" CI check before it can merge. The done phase checks this.
-The CI check runs `xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO`
-and takes ~76 seconds. Do not attempt to merge before CI finishes.
+Every PR must have green **Build** and **Test** CI checks before it can merge (as of sprint 8,
+`xcodebuild test` runs in a separate `Test` job). The done phase checks this.
+CI takes ~2.5 minutes (Build + Test run in parallel). Do not attempt to merge before both finish.
+
+**`mcx pr merge --auto` is broken for this repo** (GitHub auto-merge is disabled). Always use:
+```bash
+# Wait for CI, then:
+mcx pr merge <PR> --squash
+```
+Never pass `--auto`. If the done phase returns `merged: false` with a merge error, check CI
+status first, then retry `mcx phase run done --work-item "#N" --from review`.
 
 **If GitHub Actions stops triggering** (check-suites returns 0 for the PR's HEAD commit):
 - Empty commit and close/reopen PR do NOT reliably re-arm webhooks.
