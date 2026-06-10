@@ -19,6 +19,7 @@ struct SlideyApp: App {
             ViewMenuCommands()
             SlideshowMenuCommands()
             MusicMenuCommands()
+            HelpMenuCommands()
         }
 
         Settings {
@@ -275,6 +276,17 @@ struct FileMenuCommands: Commands {
 
     private func openDirectory() {
         NotificationCenter.default.post(name: .selectDirectory, object: nil)
+    }
+}
+
+struct HelpMenuCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") {
+                NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
+            }
+            .keyboardShortcut("/", modifiers: .command)
+        }
     }
 }
 
