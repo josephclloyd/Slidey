@@ -19,6 +19,7 @@ struct SlideyApp: App {
             ViewMenuCommands()
             SlideshowMenuCommands()
             MusicMenuCommands()
+            HelpMenuCommands()
         }
 
         Settings {
@@ -278,6 +279,17 @@ struct FileMenuCommands: Commands {
     }
 }
 
+struct HelpMenuCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .help) {
+            Button("Keyboard Shortcuts") {
+                NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
+            }
+            .keyboardShortcut("/", modifiers: .command)
+        }
+    }
+}
+
 struct EditMenuCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .pasteboard) {
@@ -285,6 +297,11 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyImage, object: nil)
             }
             .keyboardShortcut("c", modifiers: .command)
+
+            Button("Copy File Path") {
+                NotificationCenter.default.post(name: .copyFilePath, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
         }
 
         CommandGroup(after: .pasteboard) {

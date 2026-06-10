@@ -20,6 +20,7 @@ extension NSNotification.Name {
     static let revealInFinder = NSNotification.Name("RevealInFinder")
     static let moveToTrash = NSNotification.Name("MoveToTrash")
     static let copyImage = NSNotification.Name("CopyImage")
+    static let copyFilePath = NSNotification.Name("CopyFilePath")
 
     static let toggleSlideshow = NSNotification.Name("ToggleSlideshow")
     static let toggleThumbnails = NSNotification.Name("ToggleThumbnails")
@@ -29,4 +30,6 @@ extension NSNotification.Name {
     static let musicChooseSong = NSNotification.Name("MusicChooseSong")
     static let musicChoosePlaylist = NSNotification.Name("MusicChoosePlaylist")
     static let musicShuffle = NSNotification.Name("MusicShuffle")
+
+    static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
 }

@@ -4,98 +4,12 @@ import CoreImage
 import IOKit.pwr_mgt
 import UniformTypeIdentifiers
 
-enum PanDirection {
-    case left, right, up, down
-}
-
 struct ImageInfo {
     let width: Int
     let height: Int
     let fileSizeText: String
     let dateTakenText: String
     let cameraText: String?
-}
-
-/// Axis-aligned bounding box of `size` rotated about its center by `angle`.
-/// Used to compute fit/fill/pan extents that respect the displayed
-/// orientation rather than the image's natural orientation.
-func rotatedBoundingBox(_ size: CGSize, by angle: Angle) -> CGSize {
-    let c = abs(cos(angle.radians))
-    let s = abs(sin(angle.radians))
-    return CGSize(
-        width: size.width * c + size.height * s,
-        height: size.width * s + size.height * c
-    )
-}
-
-/// Routes mouse clicks, trackpad pinch, and scroll-wheel events to separate
-/// callbacks. Implemented as a single NSView so events aren't raced between
-/// the SwiftUI gesture system and an AppKit overlay.
-struct ClickCatcher: NSViewRepresentable {
-    let onLeftClick: () -> Void
-    let onRightClick: () -> Void
-    /// Multiplier (e.g. 1.05 means zoom in by 5%).
-    let onZoom: (CGFloat) -> Void
-    /// Pan deltas in points; sign matches NSEvent.scrollingDeltaX/Y.
-    let onScroll: (CGFloat, CGFloat) -> Void
-
-    func makeNSView(context: Context) -> ClickCatcherView {
-        let view = ClickCatcherView()
-        view.onLeftClick = onLeftClick
-        view.onRightClick = onRightClick
-        view.onZoom = onZoom
-        view.onScroll = onScroll
-        return view
-    }
-
-    func updateNSView(_ nsView: ClickCatcherView, context: Context) {
-        nsView.onLeftClick = onLeftClick
-        nsView.onRightClick = onRightClick
-        nsView.onZoom = onZoom
-        nsView.onScroll = onScroll
-    }
-}
-
-class ClickCatcherView: NSView {
-    var onLeftClick: (() -> Void)?
-    var onRightClick: (() -> Void)?
-    var onZoom: ((CGFloat) -> Void)?
-    var onScroll: ((CGFloat, CGFloat) -> Void)?
-
-    override func mouseDown(with event: NSEvent) {
-        // Treat ctrl+left-click as right-click, matching AppKit menu conventions.
-        if event.modifierFlags.contains(.control) {
-            onRightClick?()
-        } else {
-            onLeftClick?()
-        }
-    }
-
-    override func rightMouseDown(with event: NSEvent) {
-        onRightClick?()
-    }
-
-    override func magnify(with event: NSEvent) {
-        // event.magnification is a per-tick delta multiplier (e.g. 0.05 ≈ +5%).
-        onZoom?(1.0 + event.magnification)
-    }
-
-    override func scrollWheel(with event: NSEvent) {
-        if event.modifierFlags.contains(.command) {
-            // Cmd+scroll → zoom. 0.005 makes a typical wheel click ~5%.
-            onZoom?(1.0 + event.scrollingDeltaY * 0.005)
-        } else {
-            onScroll?(event.scrollingDeltaX, event.scrollingDeltaY)
-        }
-    }
-
-    // Receive clicks even when the window isn't yet key, so the first click
-    // navigates instead of just activating the window.
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    // Stay out of the responder chain so the parent SwiftUI view keeps
-    // receiving key presses.
-    override var acceptsFirstResponder: Bool { false }
 }
 
 struct SlideshowView: View {
@@ -110,9 +24,7 @@ struct SlideshowView: View {
     @State private var selectedDirectory: URL?
     @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
-    @State private var zoomScale: CGFloat = 1.0
-    @State private var imageOffset: CGSize = .zero
-    @State private var windowSize: CGSize = .zero
+    @State private var zoomPan = ZoomPanController()
     @State private var rotationAngle: Angle = .zero
     @State private var rotationAngles: [URL: Angle] = [:]
     @State private var lastDisplayedURL: URL?
@@ -131,8 +43,7 @@ struct SlideshowView: View {
     @State private var upscaleCancelled = false
     @State private var upscaleProgress: Double = 0
     @State private var isDragOver = false
-    @State private var isPlaying = false
-    @State private var slideshowTimer: Timer?
+    @State private var slideshow = SlideshowController()
     @State private var savedToast: String?
     @State private var savedToastIsError: Bool = false
     @State private var showThumbnails = false
@@ -147,8 +58,14 @@ struct SlideshowView: View {
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @State private var isAutoOpening = false
+    @State private var showKeyboardShortcuts = false
+
+    private var effectiveDisplayImage: NSImage? {
+        currentDisplayImage ?? imageLoader.currentImage
+    }
 
     var body: some View {
+        @Bindable var zoomPan = zoomPan
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
@@ -219,8 +136,8 @@ struct SlideshowView: View {
                     if let image = currentDisplayImage {
                         ImageDisplayView(
                             image: image,
-                            zoomScale: $zoomScale,
-                            imageOffset: $imageOffset,
+                            zoomScale: $zoomPan.zoomScale,
+                            imageOffset: $zoomPan.imageOffset,
                             containerSize: geometry.size,
                             rotationAngle: $rotationAngle,
                             onLeftClick: {
@@ -235,12 +152,12 @@ struct SlideshowView: View {
                         .id(imageLoader.currentImageURL)
                         .transition(.opacity)
                         .onAppear {
-                            windowSize = geometry.size
+                            zoomPan.windowSize = geometry.size
                             updateDisplayImage()
                             captureWindow()
                         }
                         .onChange(of: geometry.size) { oldSize, newSize in
-                            windowSize = newSize
+                            zoomPan.windowSize = newSize
                         }
                     }
                 }
@@ -446,7 +363,7 @@ struct SlideshowView: View {
                 musicManager.activate()
 
             } else {
-                stopSlideshow()
+                slideshow.stop()
                 musicManager.deactivate()
             }
             updateCursorVisibility()
@@ -473,14 +390,14 @@ struct SlideshowView: View {
             // cursor; that shouldn't yank the user out of their zoom.
             let newURL = imageLoader.currentImageURL
             if newURL != lastDisplayedURL {
-                resetZoomAndPan()
+                zoomPan.reset()
                 lastDisplayedURL = newURL
             }
             rotationAngle = currentURLRotation()
             updateDisplayImage()
             // Reset the auto-advance clock on every navigation (manual or
             // auto) so the next tick is always `interval` from now.
-            if isPlaying { rescheduleSlideshowTimer() }
+            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
         }
         .onChange(of: isFullScreen) { _, fullScreen in
             updateCursorVisibility()
@@ -506,7 +423,7 @@ struct SlideshowView: View {
             scheduleAutoOpenRecent()
         }
         .onDisappear {
-            stopSlideshow()
+            slideshow.stop()
             releaseDisplaySleepAssertion()
             musicManager.deactivate()
         }
@@ -515,7 +432,7 @@ struct SlideshowView: View {
         }
         .onChange(of: isProcessing) { _, isP in
             if isP {
-                stopSlideshow()
+                slideshow.stop()
             } else {
                 consumePendingOpenIfPossible()
             }
@@ -543,10 +460,10 @@ struct SlideshowView: View {
             ifKeyWindow { removeEnhancement() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToNative)) { _ in
-            ifKeyWindow { zoomToNativeSize() }
+            ifKeyWindow { zoomPan.zoomToNativeSize(image: effectiveDisplayImage, rotationAngle: rotationAngle) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToFill)) { _ in
-            ifKeyWindow { zoomToFillScreen() }
+            ifKeyWindow { zoomPan.zoomToFillScreen(image: effectiveDisplayImage, rotationAngle: rotationAngle) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.rotateClockwise)) { _ in
             ifKeyWindow { rotateClockwise() }
@@ -570,8 +487,6 @@ struct SlideshowView: View {
             ifKeyWindow { saveEditedImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSlideshow)) { _ in
-            // Allow toggle even mid-upscale: pause is always safe; play is
-            // gated inside startSlideshow on isProcessing.
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 toggleSlideshow()
             }
@@ -590,11 +505,20 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyFilePath)) { _ in
+            ifKeyWindow { copyFilePathToClipboard() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showKeyboardShortcuts)) { _ in
+            showKeyboardShortcuts = true
+        }
+        .sheet(isPresented: $showKeyboardShortcuts) {
+            KeyboardShortcutsView()
+        }
         .onChange(of: slideshowInterval) { _, _ in
-            if isPlaying { rescheduleSlideshowTimer() }
+            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
@@ -676,36 +600,6 @@ struct SlideshowView: View {
         }
     }
 
-    private func canPan(direction: PanDirection) -> Bool {
-        guard zoomScale > 1.0,
-              let image = currentDisplayImage ?? imageLoader.currentImage,
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return false
-        }
-
-        let natural = CGSize(width: cgImage.width, height: cgImage.height)
-        let bb = rotatedBoundingBox(natural, by: rotationAngle)
-        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
-        let displayedSize = CGSize(
-            width: bb.width * fitScale * zoomScale,
-            height: bb.height * fitScale * zoomScale
-        )
-
-        let maxOffsetX = max(0, (displayedSize.width - windowSize.width) / 2)
-        let maxOffsetY = max(0, (displayedSize.height - windowSize.height) / 2)
-
-        switch direction {
-        case .left:
-            return imageOffset.width < maxOffsetX - 10
-        case .right:
-            return imageOffset.width > -maxOffsetX + 10
-        case .up:
-            return imageOffset.height < maxOffsetY - 10
-        case .down:
-            return imageOffset.height > -maxOffsetY + 10
-        }
-    }
-
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
 
@@ -738,34 +632,30 @@ struct SlideshowView: View {
             return .handled
         }
 
-        if zoomScale > 1.0 {
+        if zoomPan.zoomScale > 1.0 {
             switch key {
             case .leftArrow:
-                if canPan(direction: .left) {
-                    imageOffset.width += 50
+                if zoomPan.canPan(direction: .left, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                    zoomPan.imageOffset.width += 50
                 } else {
                     imageLoader.previousImage()
                 }
                 return .handled
             case .rightArrow:
-                if canPan(direction: .right) {
-                    imageOffset.width -= 50
+                if zoomPan.canPan(direction: .right, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                    zoomPan.imageOffset.width -= 50
                 } else {
                     imageLoader.nextImage()
                 }
                 return .handled
             case .upArrow:
-                if canPan(direction: .up) {
-                    imageOffset.height += 50
-                } else {
-                    // Optional: could navigate images here too
+                if zoomPan.canPan(direction: .up, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                    zoomPan.imageOffset.height += 50
                 }
                 return .handled
             case .downArrow:
-                if canPan(direction: .down) {
-                    imageOffset.height -= 50
-                } else {
-                    // Optional: could navigate images here too
+                if zoomPan.canPan(direction: .down, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                    zoomPan.imageOffset.height -= 50
                 }
                 return .handled
             default:
@@ -786,22 +676,20 @@ struct SlideshowView: View {
 
         switch keyPress.characters {
         case "+", "=":
-            zoomScale = min(zoomScale * 1.2, 10.0)
+            zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
             return .handled
         case "-", "_":
-            zoomScale = max(zoomScale / 1.2, 0.1)
-            if zoomScale <= 1.0 {
-                resetZoomAndPan()
+            zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
+            if zoomPan.zoomScale <= 1.0 {
+                zoomPan.reset()
             }
             return .handled
         case "s", "S":
-            // Let cmd+s flow through to the File > Save Edited Image menu
-            // shortcut instead of being absorbed by the native-zoom handler.
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
-            zoomToNativeSize()
+            zoomPan.zoomToNativeSize(image: effectiveDisplayImage, rotationAngle: rotationAngle)
             return .handled
         case "f", "F":
-            zoomToFillScreen()
+            zoomPan.zoomToFillScreen(image: effectiveDisplayImage, rotationAngle: rotationAngle)
             return .handled
         case "r":
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
@@ -844,7 +732,7 @@ struct SlideshowView: View {
             toggleSlideshow()
             return .handled
         default:
-            if zoomScale <= 1.0 {
+            if zoomPan.zoomScale <= 1.0 {
                 imageLoader.nextImage()
                 return .handled
             }
@@ -917,7 +805,7 @@ struct SlideshowView: View {
         upscaledImages = [:]
         infoOverlayURLs = []
         imageInfoCache = [:]
-        resetZoomAndPan()
+        zoomPan.reset()
 
         imageLoader.loadImagesFromDirectory(url: url)
         windowTitle = url.lastPathComponent
@@ -925,31 +813,13 @@ struct SlideshowView: View {
     }
 
     private func toggleSlideshow() {
-        if isPlaying { stopSlideshow() } else { startSlideshow() }
-    }
-
-    private func startSlideshow() {
-        guard !isProcessing,
-              !imageLoader.imageURLs.isEmpty,
-              imageLoader.imageURLs.count > 1 else { return }
-        isPlaying = true
-        rescheduleSlideshowTimer()
-        if autoPlayMusic {
-            musicManager.resumeIfConfigured()
-        }
-    }
-
-    private func stopSlideshow() {
-        isPlaying = false
-        slideshowTimer?.invalidate()
-        slideshowTimer = nil
-    }
-
-    private func rescheduleSlideshowTimer() {
-        slideshowTimer?.invalidate()
-        slideshowTimer = Timer.scheduledTimer(withTimeInterval: slideshowInterval, repeats: true) { _ in
-            imageLoader.nextImage()
-        }
+        slideshow.toggle(
+            isProcessing: isProcessing,
+            imageCount: imageLoader.imageURLs.count,
+            interval: slideshowInterval,
+            advance: { [imageLoader] in imageLoader.nextImage() },
+            onStart: autoPlayMusic ? { [musicManager] in musicManager.resumeIfConfigured() } : nil
+        )
     }
 
     /// Consumes a URL from `pendingOpens` (set by AppDelegate when Launch
@@ -1020,11 +890,6 @@ struct SlideshowView: View {
                 }
             }
         }
-    }
-
-    private func resetZoomAndPan() {
-        zoomScale = 1.0
-        imageOffset = .zero
     }
 
     private func currentURLRotation() -> Angle {
@@ -1521,6 +1386,19 @@ struct SlideshowView: View {
         }
     }
 
+    private func copyFilePathToClipboard() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(url.path, forType: .string)
+        let message = "Path copied to clipboard"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
     private func revealCurrentImageInFinder() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -1652,144 +1530,6 @@ struct SlideshowView: View {
         }
     }
 
-    private func zoomToNativeSize() {
-        guard let image = currentDisplayImage ?? imageLoader.currentImage,
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return
-        }
-
-        let natural = CGSize(width: cgImage.width, height: cgImage.height)
-        let bb = rotatedBoundingBox(natural, by: rotationAngle)
-
-        // Fit-scale of the rotated bounding box; invert to land at 1:1 pixels.
-        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
-        zoomScale = 1.0 / fitScale
-        imageOffset = .zero
-    }
-
-    private func zoomToFillScreen() {
-        guard let image = currentDisplayImage ?? imageLoader.currentImage,
-              let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return
-        }
-
-        let natural = CGSize(width: cgImage.width, height: cgImage.height)
-        let bb = rotatedBoundingBox(natural, by: rotationAngle)
-
-        // "Portrait" / "landscape" is from the displayed orientation, not the
-        // original — a landscape photo rotated 90° fills as portrait.
-        let isPortrait = bb.height > bb.width
-
-        let fitScale = min(windowSize.width / bb.width, windowSize.height / bb.height)
-        let fillScale: CGFloat = isPortrait
-            ? windowSize.height / bb.height
-            : windowSize.width / bb.width
-
-        zoomScale = fillScale / fitScale
-        imageOffset = .zero
-    }
-}
-
-struct ImageDisplayView: View {
-    let image: NSImage
-    @Binding var zoomScale: CGFloat
-    @Binding var imageOffset: CGSize
-    let containerSize: CGSize
-    @Binding var rotationAngle: Angle
-    let onLeftClick: () -> Void
-    let onRightClick: () -> Void
-
-    @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                let fitted = fittedNaturalSize()
-                Image(nsImage: image)
-                    .resizable()
-                    .frame(width: fitted.width, height: fitted.height)
-                    .rotationEffect(rotationAngle)
-                    .scaleEffect(zoomScale)
-                    .offset(imageOffset)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                ClickCatcher(
-                    onLeftClick: onLeftClick,
-                    onRightClick: onRightClick,
-                    onZoom: { factor in applyZoom(factor) },
-                    onScroll: { dx, dy in applyPan(dx: dx, dy: dy) }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-    }
-
-    /// Pre-rotation width/height that, after rotationEffect, makes the
-    /// image's bounding box exactly fit `containerSize`. Replaces
-    /// `.scaledToFit()` which fits the unrotated image and leaves visible
-    /// gaps after a 90°/270° rotation.
-    private func fittedNaturalSize() -> CGSize {
-        guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return .zero
-        }
-        let natural = CGSize(width: cg.width, height: cg.height)
-        let bb = rotatedBoundingBox(natural, by: rotationAngle)
-        guard bb.width > 0, bb.height > 0,
-              containerSize.width > 0, containerSize.height > 0 else {
-            return .zero
-        }
-        let fitScale = min(containerSize.width / bb.width, containerSize.height / bb.height)
-        return CGSize(width: natural.width * fitScale, height: natural.height * fitScale)
-    }
-
-    private func applyZoom(_ factor: CGFloat) {
-        let oldScale = zoomScale
-        let newScale = max(0.1, min(10.0, oldScale * factor))
-        if newScale == oldScale { return }
-        // Scale the existing offset so the same image point stays under the
-        // view center as we zoom in or out.
-        let actual = newScale / oldScale
-        zoomScale = newScale
-        imageOffset = CGSize(
-            width: imageOffset.width * actual,
-            height: imageOffset.height * actual
-        )
-        clampOffset()
-    }
-
-    private func applyPan(dx: CGFloat, dy: CGFloat) {
-        let bounds = panBounds()
-        // Don't pan when the image fits the container — there's nowhere to go,
-        // and we don't want plain trackpad scroll to do anything in fit-mode.
-        guard bounds.x > 0 || bounds.y > 0 else { return }
-        let sign: CGFloat = naturalScrollPan ? 1 : -1
-        imageOffset.width += sign * dx
-        imageOffset.height -= sign * dy
-        clampOffset()
-    }
-
-    private func clampOffset() {
-        let bounds = panBounds()
-        imageOffset.width = max(-bounds.x, min(bounds.x, imageOffset.width))
-        imageOffset.height = max(-bounds.y, min(bounds.y, imageOffset.height))
-    }
-
-    private func panBounds() -> (x: CGFloat, y: CGFloat) {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return (0, 0)
-        }
-        let natural = CGSize(width: cgImage.width, height: cgImage.height)
-        let bb = rotatedBoundingBox(natural, by: rotationAngle)
-        let fitScale = min(containerSize.width / bb.width, containerSize.height / bb.height)
-        let displayed = CGSize(
-            width: bb.width * fitScale * zoomScale,
-            height: bb.height * fitScale * zoomScale
-        )
-        return (
-            x: max(0, (displayed.width - containerSize.width) / 2),
-            y: max(0, (displayed.height - containerSize.height) / 2)
-        )
-    }
 }
 
 final class ThumbnailCache {

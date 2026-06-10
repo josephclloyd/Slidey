@@ -1,0 +1,95 @@
+import SwiftUI
+
+struct KeyboardShortcutsView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private static let sections: [(String, [(String, String)])] = [
+        ("Navigation", [
+            ("← / Right-click", "Previous image"),
+            ("→ / Click", "Next image"),
+            ("Home", "First image"),
+            ("End", "Last image"),
+            ("↑ ↓ ← →", "Pan (when zoomed)"),
+        ]),
+        ("Display", [
+            ("+ / =", "Zoom in"),
+            ("- / _", "Zoom out"),
+            ("s", "Scale to native size (1:1)"),
+            ("f", "Scale to fill screen"),
+            ("r", "Rotate clockwise"),
+            ("⇧R", "Rotate counter-clockwise"),
+            ("n", "Toggle filename overlay"),
+            ("i", "Toggle image info overlay"),
+            ("d", "Toggle debug window"),
+        ]),
+        ("Enhancement", [
+            ("a", "Auto-enhance image"),
+            ("⇧A", "Remove enhancement"),
+            ("m", "Smooth image"),
+            ("⇧M", "Remove smoothing"),
+            ("u", "AI upscale (4\u{00d7})"),
+            ("⇧U", "Remove upscaling"),
+        ]),
+        ("Slideshow", [
+            ("Space", "Play / pause slideshow"),
+            ("t", "Toggle thumbnail strip"),
+            ("Escape", "Toggle fullscreen"),
+        ]),
+        ("File", [
+            ("⌘O", "Open directory"),
+            ("⌘S", "Save edited image"),
+            ("⌘C", "Copy image to clipboard"),
+            ("⇧⌘C", "Copy file path to clipboard"),
+            ("⌘R", "Reveal in Finder"),
+            ("⌘⌫", "Move to Trash"),
+        ]),
+        ("Window", [
+            ("⌘,", "Settings"),
+        ]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Keyboard Shortcuts")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(Self.sections, id: \.0) { section in
+                        shortcutGroup(section.0, shortcuts: section.1)
+                    }
+                }
+                .padding()
+            }
+        }
+        .frame(width: 420, height: 560)
+    }
+
+    private func shortcutGroup(_ title: String, shortcuts: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.secondary)
+                .padding(.bottom, 2)
+
+            ForEach(shortcuts, id: \.0) { key, label in
+                HStack(alignment: .firstTextBaseline) {
+                    Text(key)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(width: 140, alignment: .trailing)
+                    Text(label)
+                    Spacer()
+                }
+            }
+        }
+    }
+}

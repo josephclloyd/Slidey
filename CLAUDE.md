@@ -12,7 +12,7 @@ xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=N
 open ~/Library/Developer/Xcode/DerivedData/Slidey-*/Build/Products/Debug/Slidey.app
 ```
 
-Build is fast (~1–2s incremental, ~15s clean). There is no `am-i-done` gate — a successful build is the only automated check. All functional validation is manual (launch the app, exercise the feature).
+Build is fast (~1–2s incremental, ~15s clean). CI runs both `xcodebuild build` and `xcodebuild test`. Functional validation beyond what the test suite covers is manual (launch the app, exercise the feature).
 
 ## Requirements
 
@@ -71,4 +71,4 @@ PRs need:
 2. A description listing what changed and a manual test checklist
 3. Joe's review and merge
 
-There are no automated tests. The PR description's test checklist is the test plan — it exists for Joe to follow when reviewing.
+`SlideyTests/` contains unit tests across 4 test files. CI runs `xcodebuild test` on every push and PR. The PR description's manual test checklist supplements the automated tests — it covers UI behaviour and edge cases that the test suite doesn't reach.
