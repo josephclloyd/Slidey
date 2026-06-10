@@ -13,6 +13,8 @@
 		A1000007000000000000001 /* RecentDirectories.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008000000000000001 /* RecentDirectories.swift */; };
 		C1000002000000000000001 /* MusicManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000001000000000000001 /* MusicManager.swift */; };
 		D1000002000000000000001 /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1000001000000000000001 /* Notifications.swift */; };
+		F1000002000000000000001 /* ZoomPanController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001000000000000001 /* ZoomPanController.swift */; };
+		F1000004000000000000001 /* SlideshowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000003000000000000001 /* SlideshowController.swift */; };
 		A1000009000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000010000000000000002 /* Assets.xcassets */; };
 		B1000001000000000000001 /* ImageLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000001 /* ImageLoaderTests.swift */; };
 		B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004000000000000001 /* RecentDirectoriesTests.swift */; };
@@ -39,6 +41,8 @@
 		A1000008000000000000001 /* RecentDirectories.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDirectories.swift; sourceTree = "<group>"; };
 		C1000001000000000000001 /* MusicManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicManager.swift; sourceTree = "<group>"; };
 		D1000001000000000000001 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		F1000001000000000000001 /* ZoomPanController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomPanController.swift; sourceTree = "<group>"; };
+		F1000003000000000000001 /* SlideshowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowController.swift; sourceTree = "<group>"; };
 		A1000010000000000000002 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000002000000000000001 /* ImageLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoaderTests.swift; sourceTree = "<group>"; };
 		B1000004000000000000001 /* RecentDirectoriesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentDirectoriesTests.swift; sourceTree = "<group>"; };
@@ -90,6 +94,8 @@
 				A1000008000000000000001 /* RecentDirectories.swift */,
 				C1000001000000000000001 /* MusicManager.swift */,
 				D1000001000000000000001 /* Notifications.swift */,
+				F1000001000000000000001 /* ZoomPanController.swift */,
+				F1000003000000000000001 /* SlideshowController.swift */,
 				A1000010000000000000002 /* Assets.xcassets */,
 			);
 			path = slidey;
@@ -216,6 +222,8 @@
 				A1000007000000000000001 /* RecentDirectories.swift in Sources */,
 				C1000002000000000000001 /* MusicManager.swift in Sources */,
 				D1000002000000000000001 /* Notifications.swift in Sources */,
+				F1000002000000000000001 /* ZoomPanController.swift in Sources */,
+				F1000004000000000000001 /* SlideshowController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
