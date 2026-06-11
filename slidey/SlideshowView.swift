@@ -32,6 +32,8 @@ struct SlideshowView: View {
     @State private var enhancedImages: [URL: NSImage] = [:]
     @State private var smoothedImages: [URL: NSImage] = [:]
     @State private var upscaledImages: [URL: NSImage] = [:]
+    @State private var savedZoomScales: [URL: CGFloat] = [:]
+    @State private var savedPanOffsets: [URL: CGSize] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
@@ -376,6 +378,8 @@ struct SlideshowView: View {
             enhancedImages = enhancedImages.filter { valid.contains($0.key) }
             smoothedImages = smoothedImages.filter { valid.contains($0.key) }
             upscaledImages = upscaledImages.filter { valid.contains($0.key) }
+            savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
+            savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
             infoOverlayURLs = infoOverlayURLs.intersection(valid)
             imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
 
@@ -385,12 +389,21 @@ struct SlideshowView: View {
             }
         }
         .onChange(of: imageLoader.currentIndex) { _, _ in
-            // Only reset zoom/pan when the displayed *file* changes. A rescan
+            // Only change zoom/pan when the displayed *file* changes. A rescan
             // can shift currentIndex while keeping the same file under the
             // cursor; that shouldn't yank the user out of their zoom.
             let newURL = imageLoader.currentImageURL
             if newURL != lastDisplayedURL {
-                zoomPan.reset()
+                if let departingURL = lastDisplayedURL {
+                    savedZoomScales[departingURL] = zoomPan.zoomScale
+                    savedPanOffsets[departingURL] = zoomPan.imageOffset
+                }
+                if let newURL, let savedZoom = savedZoomScales[newURL] {
+                    zoomPan.zoomScale = savedZoom
+                    zoomPan.imageOffset = savedPanOffsets[newURL] ?? .zero
+                } else {
+                    zoomPan.reset()
+                }
                 lastDisplayedURL = newURL
             }
             rotationAngle = currentURLRotation()
@@ -803,6 +816,8 @@ struct SlideshowView: View {
         enhancedImages = [:]
         smoothedImages = [:]
         upscaledImages = [:]
+        savedZoomScales = [:]
+        savedPanOffsets = [:]
         infoOverlayURLs = []
         imageInfoCache = [:]
         zoomPan.reset()
@@ -1361,6 +1376,8 @@ struct SlideshowView: View {
                         self.enhancedImages[url] = nil
                         self.smoothedImages[url] = nil
                         self.upscaledImages[url] = nil
+                        self.savedZoomScales[url] = nil
+                        self.savedPanOffsets[url] = nil
                         self.infoOverlayURLs.remove(url)
                         self.imageInfoCache[url] = nil
                         self.imageLoader.removeImage(at: url)
