@@ -61,6 +61,8 @@ struct SlideshowView: View {
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
+    @State private var favouriteURLStrings: Set<String> = []
+    @State private var showFavouritesOnly: Bool = false
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -81,6 +83,21 @@ struct SlideshowView: View {
                         Text("Loading…")
                             .font(.title3)
                             .foregroundColor(.white.opacity(0.7))
+                    }
+                    .onAppear {
+                        captureWindow()
+                    }
+                } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
+                    VStack(spacing: 20) {
+                        Text("★")
+                            .font(.system(size: 48))
+                            .foregroundColor(.white.opacity(0.5))
+                        Text("No favourites in this directory")
+                            .font(.title2)
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("Press x to favourite images, then v to filter")
+                            .font(.body)
+                            .foregroundColor(.white.opacity(0.5))
                     }
                     .onAppear {
                         captureWindow()
@@ -170,7 +187,7 @@ struct SlideshowView: View {
             if showThumbnails && !imageLoader.imageURLs.isEmpty {
                 VStack {
                     Spacer()
-                    ThumbnailStrip(imageLoader: imageLoader) { index in
+                    ThumbnailStrip(imageLoader: imageLoader, favouriteURLStrings: favouriteURLStrings) { index in
                         guard !isProcessing else { return }
                         imageLoader.jumpTo(index: index)
                     }
@@ -178,15 +195,15 @@ struct SlideshowView: View {
             }
 
             // Filename + counter overlay
-            if showFilename, let filename = imageLoader.currentImageURL?.lastPathComponent {
+            if showFilename, let url = imageLoader.currentImageURL {
                 VStack {
                     Spacer()
                     HStack {
                         HStack(spacing: 12) {
-                            Text(filename)
+                            Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundColor(.white)
-                            Text("\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)")
+                            Text(showFavouritesOnly ? "★ \(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)" : "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)")
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.7))
                                 .monospacedDigit()
@@ -373,7 +390,8 @@ struct SlideshowView: View {
         .onChange(of: imageLoader.imageURLs) { _, newURLs in
             // Drop any per-URL session state for files that no longer exist
             // in the directory (deleted on disk, or we switched folders).
-            let valid = Set(newURLs)
+            // Use allImageURLs so filtering doesn't discard state for hidden images.
+            let valid = imageLoader.allImageURLs.isEmpty ? Set(newURLs) : Set(imageLoader.allImageURLs)
             rotationAngles = rotationAngles.filter { valid.contains($0.key) }
             enhancedImages = enhancedImages.filter { valid.contains($0.key) }
             smoothedImages = smoothedImages.filter { valid.contains($0.key) }
@@ -432,6 +450,7 @@ struct SlideshowView: View {
             }
         }
         .onAppear {
+            loadFavourites()
             consumePendingOpenIfPossible()
             scheduleAutoOpenRecent()
         }
@@ -523,6 +542,14 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
+            ifKeyWindow { toggleFavourite() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavouritesOnly)) { _ in
+            if myWindow == nil || myWindow?.isKeyWindow == true {
+                toggleShowFavouritesOnly()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showKeyboardShortcuts)) { _ in
             showKeyboardShortcuts = true
@@ -740,6 +767,12 @@ struct SlideshowView: View {
             return .handled
         case "t":
             showThumbnails.toggle()
+            return .handled
+        case "x":
+            toggleFavourite()
+            return .handled
+        case "v":
+            toggleShowFavouritesOnly()
             return .handled
         case " ":
             toggleSlideshow()
@@ -1547,6 +1580,59 @@ struct SlideshowView: View {
         }
     }
 
+    private func toggleFavourite() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let key = url.absoluteString
+        let wasFavourite = favouriteURLStrings.contains(key)
+        if wasFavourite {
+            favouriteURLStrings.remove(key)
+        } else {
+            favouriteURLStrings.insert(key)
+        }
+        saveFavourites()
+        if showFavouritesOnly {
+            updateFavouritesFilter()
+        }
+        let message = wasFavourite ? "Unfavourited" : "★ Favourited"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
+    private func toggleShowFavouritesOnly() {
+        showFavouritesOnly.toggle()
+        updateFavouritesFilter()
+        let message = showFavouritesOnly ? "★ Favourites only" : "Showing all images"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
+    private func updateFavouritesFilter() {
+        if showFavouritesOnly {
+            let favs = favouriteURLStrings
+            imageLoader.urlFilter = { url in
+                favs.contains(url.absoluteString)
+            }
+        } else {
+            imageLoader.urlFilter = nil
+        }
+    }
+
+    private func loadFavourites() {
+        if let saved = UserDefaults.standard.stringArray(forKey: "favouriteImages") {
+            favouriteURLStrings = Set(saved)
+        }
+    }
+
+    private func saveFavourites() {
+        UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
+    }
+
 }
 
 final class ThumbnailCache {
@@ -1570,6 +1656,7 @@ struct ThumbnailCell: View {
     let url: URL
     let size: CGFloat
     let isSelected: Bool
+    let isFavourite: Bool
     let onTap: () -> Void
 
     @State private var thumbnail: NSImage?
@@ -1586,6 +1673,20 @@ struct ThumbnailCell: View {
                 } else {
                     Color.gray.opacity(0.2)
                         .frame(width: size, height: size)
+                }
+
+                if isFavourite {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Text("★")
+                                .font(.system(size: 14))
+                                .foregroundColor(.yellow)
+                                .shadow(color: .black, radius: 2)
+                                .padding(2)
+                        }
+                        Spacer()
+                    }
                 }
             }
             .overlay(
@@ -1638,6 +1739,7 @@ struct ThumbnailCell: View {
 
 struct ThumbnailStrip: View {
     @ObservedObject var imageLoader: ImageLoader
+    var favouriteURLStrings: Set<String> = []
     let onSelect: (Int) -> Void
 
     private let thumbSize: CGFloat = 80
@@ -1651,6 +1753,7 @@ struct ThumbnailStrip: View {
                             url: pair.element,
                             size: thumbSize,
                             isSelected: pair.offset == imageLoader.currentIndex,
+                            isFavourite: favouriteURLStrings.contains(pair.element.absoluteString),
                             onTap: { onSelect(pair.offset) }
                         )
                         .id(pair.element)
