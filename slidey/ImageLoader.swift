@@ -31,6 +31,12 @@ class ImageLoader: ObservableObject {
     @Published var currentIndex: Int = 0
     @Published var currentImage: NSImage?
 
+    private(set) var allImageURLs: [URL] = []
+    var urlFilter: ((URL) -> Bool)? {
+        didSet { reapplyFilter() }
+    }
+    var hasUnfilteredImages: Bool { !allImageURLs.isEmpty }
+
     let supportedExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
 
     /// Maximum decoded pixel count we will accept. Guards against
@@ -68,7 +74,9 @@ class ImageLoader: ObservableObject {
             self.stopWatching()
             self.directoryURL = url
             self.cache.removeAll()
-            self.imageURLs = urls
+            self.allImageURLs = urls
+            let filtered = self.urlFilter.map { filter in urls.filter(filter) } ?? urls
+            self.imageURLs = filtered
             self.currentIndex = 0
             self.currentImage = self.loadImage(at: 0)
             self.preloadNeighbours()
@@ -153,6 +161,7 @@ class ImageLoader: ObservableObject {
     }
 
     func removeImage(at url: URL) {
+        allImageURLs.removeAll { $0 == url }
         guard let index = imageURLs.firstIndex(of: url) else { return }
         imageURLs.remove(at: index)
         cache.removeAll()
@@ -289,26 +298,48 @@ class ImageLoader: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if newURLs == self.imageURLs { return }
+            if newURLs == self.allImageURLs { return }
 
             let previousURL = self.currentImageURL
             self.cache.removeAll()
-            self.imageURLs = newURLs
+            self.allImageURLs = newURLs
+            let filtered = self.urlFilter.map { filter in newURLs.filter(filter) } ?? newURLs
+            self.imageURLs = filtered
 
-            if newURLs.isEmpty {
+            if filtered.isEmpty {
                 self.currentIndex = 0
                 self.currentImage = nil
                 return
             }
 
-            if let prev = previousURL, let idx = newURLs.firstIndex(of: prev) {
+            if let prev = previousURL, let idx = filtered.firstIndex(of: prev) {
                 self.currentIndex = idx
             } else {
-                self.currentIndex = min(self.currentIndex, newURLs.count - 1)
+                self.currentIndex = min(self.currentIndex, filtered.count - 1)
             }
             self.currentImage = self.loadImage(at: self.currentIndex)
             self.preloadNeighbours()
         }
+    }
+
+    private func reapplyFilter() {
+        let filtered = urlFilter.map { filter in allImageURLs.filter(filter) } ?? allImageURLs
+        if filtered == imageURLs { return }
+        let previousURL = currentImageURL
+        cache.removeAll()
+        imageURLs = filtered
+        if filtered.isEmpty {
+            currentIndex = 0
+            currentImage = nil
+            return
+        }
+        if let prev = previousURL, let idx = filtered.firstIndex(of: prev) {
+            currentIndex = idx
+        } else {
+            currentIndex = min(currentIndex, filtered.count - 1)
+        }
+        currentImage = loadImage(at: currentIndex)
+        preloadNeighbours()
     }
 
     deinit {

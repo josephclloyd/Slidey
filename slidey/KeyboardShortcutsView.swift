@@ -30,6 +30,10 @@ struct KeyboardShortcutsView: View {
             ("u", "AI upscale (4\u{00d7})"),
             ("⇧U", "Remove upscaling"),
         ]),
+        ("Favourites", [
+            ("x", "Toggle favourite"),
+            ("v", "Show favourites only"),
+        ]),
         ("Slideshow", [
             ("Space", "Play / pause slideshow"),
             ("t", "Toggle thumbnail strip"),
