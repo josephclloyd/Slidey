@@ -27,18 +27,16 @@ Status: complete
 
 ## Results
 
-### Shipped
+Released: v1.9 — 2026-06-12
 
-| # | Title | PR | Cost |
-|---|-------|----|------|
-| 72 | Remove Roadmap / TODO from README | #74 | $0.52 |
-| 59 | Expand SlideyApp test coverage (27 new tests) | #76 | $1.06 |
-| 63 | Persist zoom level and pan offset per image | #75 | $0.98 |
-| 65 | Star/favourite images (persistent, UserDefaults) | #77 | $2.33 |
-| 58 | Expand SlideshowView test coverage (37 new tests) | #78 | $2.02 |
+### Shipped
+- #72 Remove Roadmap / TODO from README (#74)
+- #59 Expand SlideyApp test coverage — 27 new tests (Settings round-trips, Music menu wiring) (#76)
+- #63 Persist zoom level and pan offset per image across navigation (#75)
+- #65 Star/favourite images with 'x' key — persistent via UserDefaults, filter mode, ★ overlay (#77)
+- #58 Expand SlideshowView test coverage — 37 new tests (zoom/pan, rotation, navigation, per-URL state) (#78)
 
 ### Stats
-
 - PRs merged: 5 (#74–#78)
 - Total cost: ~$6.91
 - CI wall time: ~2.5m per PR (Build + Test in parallel)
