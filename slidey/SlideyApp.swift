@@ -59,6 +59,15 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
+
+            Divider()
+
+            Button("Toggle Favourite (x)") {
+                NotificationCenter.default.post(name: .toggleFavourite, object: nil)
+            }
+            Button("Show Favourites Only (v)") {
+                NotificationCenter.default.post(name: .toggleFavouritesOnly, object: nil)
+            }
         }
     }
 }
