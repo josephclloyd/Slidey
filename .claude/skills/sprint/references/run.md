@@ -39,6 +39,12 @@ gh auth status
 git branch --show-current   # must print "main"; if not: git checkout main
 ```
 
+**Note:** `--worktree` on `mcx claude spawn` does NOT create a separate git worktree.
+Sessions branch in the main checkout. After every impl session completes, `git branch
+--show-current` will show the feature branch. Do NOT switch to main until `mcx claude ls`
+confirms that session is idle — switching while the session is mid-commit corrupts the
+working tree. The post-impl routine handles this correctly; don't shortcut it.
+
 **Important ordering:** run check #9 BEFORE check #4. A working directory that has drifted
 into a sprint worktree (e.g. from a prior `cd .claude/worktrees/sprint-N`) will make the
 phantom-commit check (#4) report false positives. Always assert `main` first.
@@ -100,8 +106,14 @@ This prevents the pre-commit hook from blocking commits in the main checkout dur
 receives completion events without polling:
 
 ```bash
-mcx monitor --subscribe session,work_item --json
+mcx monitor --subscribe session,work_item --json 2>&1 \
+  | grep --line-buffered -E '"event":"(session\.result|ci\.finished|pr\.merge_state_changed|work_item\.phase_changed)"'
 ```
+
+**Use the grep filter.** The unfiltered `--subscribe session,work_item` stream emits a
+`session.tool_use` event for every tool call in every session — it hits the Monitor
+tool's rate-limit suppression within seconds and starts dropping events. The grep filter
+passes only the four events the orchestrator actually acts on.
 
 Leave this running as a background `Monitor` tool. Each ndjson line is a push notification.
 Do NOT use `mcx claude wait` as the main loop mechanism — it's one-at-a-time polling.

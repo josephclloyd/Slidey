@@ -113,9 +113,13 @@ gh pr create \
 ## Notes
 
 <anything Joe should know before reviewing>
+
+Closes #<N>
 BODY
 )"
 ```
+
+`Closes #<N>` in the PR body is **required** — the orchestrator checks for it. Without it `mcx tracked` shows `prNumber: null` and the review phase blocks.
 
 The manual test checklist replaces automated tests. Be specific — Joe will follow it
 when reviewing the PR. "It works" is not a test item; "Press 'd' key in fullscreen and
