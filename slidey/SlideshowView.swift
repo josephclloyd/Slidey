@@ -175,7 +175,7 @@ struct SlideshowView: View {
                             updateDisplayImage()
                             captureWindow()
                         }
-                        .onChange(of: geometry.size) { oldSize, newSize in
+                        .onChange(of: geometry.size) { _, newSize in
                             zoomPan.windowSize = newSize
                         }
                     }
@@ -203,7 +203,8 @@ struct SlideshowView: View {
                             Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundColor(.white)
-                            Text(showFavouritesOnly ? "★ \(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)" : "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)")
+                            let counter = "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)"
+                            Text(showFavouritesOnly ? "★ \(counter)" : counter)
                                 .font(.system(.body, design: .monospaced))
                                 .foregroundColor(.white.opacity(0.7))
                                 .monospacedDigit()
@@ -624,7 +625,10 @@ struct SlideshowView: View {
         .alert("Music Access Required", isPresented: $musicManager.authorizationDenied) {
             Button("OK") {}
         } message: {
-            Text("Slidey needs access to your Music library to play background music. You can grant access in System Settings > Privacy & Security > Media & Apple Music.")
+            Text("""
+            Slidey needs access to your Music library to play background music. \
+            You can grant access in System Settings > Privacy & Security > Media & Apple Music.
+            """)
         }
     }
 
