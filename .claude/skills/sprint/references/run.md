@@ -143,6 +143,20 @@ Terminal phases (done, needs-attention) return domain outputs; special-case them
 - `done`: `{ merged, prNumber, error? }` — if `error`, surface to Joe, don't retry blindly
 - `needs-attention`: record the item's `reason`, surface to Joe
 
+## Daemon restart recovery
+
+If the daemon restarts mid-sprint (check `mcx status` — uptime near 0s), work items are wiped
+from in-memory state. Re-track every sprint issue before resuming:
+
+```bash
+mcx track N   # one call per issue
+sleep 12      # wait a poll cycle for prNumber to populate
+mcx tracked --json
+```
+
+Then re-open the monitor stream and resume where you left off. Branch state in git is unaffected
+by daemon restarts — only the in-memory tracking state is lost.
+
 ## Tracking issues
 
 Before spawning, track the issue:
@@ -213,12 +227,22 @@ uncommitted in the main worktree. Do not discard — the work is usually complet
 ```bash
 # 1. Check what the session left behind
 git status --short
+git branch --show-current
 # Look for: new untracked source files, modified SlideshowView.swift / project.pbxproj, etc.
 
 # 2. Verify the build passes with the uncommitted changes
 xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -3
 
-# 3. If build passes, salvage the work:
+# 3a. If the branch already exists (session branched but didn't commit):
+#     Switch to it (changes carry over since branch is at same SHA as main)
+git checkout <branch-name>
+git add <file1> <file2> ...
+git commit -m "<description>
+
+Closes #N"
+git push -u origin <branch-name>
+
+# 3b. If the branch does NOT exist yet:
 #    Stash only the relevant files (not files from other sessions' branches)
 git stash push -u -m "recovery" -- <file1> <file2> ...
 
