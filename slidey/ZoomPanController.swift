@@ -160,7 +160,7 @@ struct ImageDisplayView: View {
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
     var body: some View {
-        GeometryReader { geometry in
+        GeometryReader { _ in
             ZStack {
                 let fitted = fittedNaturalSize()
                 Image(nsImage: image)
@@ -174,8 +174,8 @@ struct ImageDisplayView: View {
                 ClickCatcher(
                     onLeftClick: onLeftClick,
                     onRightClick: onRightClick,
-                    onZoom: { factor in applyZoom(factor) },
-                    onScroll: { dx, dy in applyPan(dx: dx, dy: dy) }
+                    onZoom: { applyZoom($0) },
+                    onScroll: { applyPan(dx: $0, dy: $1) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
