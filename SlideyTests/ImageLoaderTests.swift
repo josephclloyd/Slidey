@@ -290,4 +290,158 @@ final class ImageLoaderNavigationTests: XCTestCase {
         XCTAssertEqual(loader.imageURLs.count, 5)
         XCTAssertEqual(loader.currentIndex, 0)
     }
+
+    func testNextImageSingleElement() {
+        loader.imageURLs = [dummyURLs[0]]
+        loader.currentIndex = 0
+        loader.nextImage()
+        XCTAssertEqual(loader.currentIndex, 0)
+    }
+
+    func testPreviousImageSingleElement() {
+        loader.imageURLs = [dummyURLs[0]]
+        loader.currentIndex = 0
+        loader.previousImage()
+        XCTAssertEqual(loader.currentIndex, 0)
+    }
+}
+
+final class ImageLoaderFilterTests: XCTestCase {
+    var loader: ImageLoader!
+    var tempDir: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        loader = ImageLoader()
+        loader.sortOrder = .nameAscending
+
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ImageLoaderFilterTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        for name in ["alpha.jpg", "bravo.jpg", "charlie.jpg", "delta.jpg", "echo.jpg"] {
+            FileManager.default.createFile(
+                atPath: tempDir.appendingPathComponent(name).path,
+                contents: Data()
+            )
+        }
+    }
+
+    override func tearDown() {
+        loader = nil
+        if let tempDir {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+        super.tearDown()
+    }
+
+    private func loadAndWait() {
+        loader.loadImagesFromDirectory(url: tempDir)
+        let exp = expectation(description: "Directory loaded")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+    }
+
+    func testLoadPopulatesBothURLArrays() {
+        loadAndWait()
+        XCTAssertEqual(loader.imageURLs.count, 5)
+        XCTAssertEqual(loader.allImageURLs.count, 5)
+        XCTAssertEqual(loader.imageURLs, loader.allImageURLs)
+    }
+
+    func testFilterReducesVisibleURLs() {
+        loadAndWait()
+        let kept = Set(["alpha.jpg", "charlie.jpg", "echo.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+        XCTAssertEqual(loader.imageURLs.count, 3)
+        XCTAssertEqual(
+            loader.imageURLs.map { $0.lastPathComponent },
+            ["alpha.jpg", "charlie.jpg", "echo.jpg"]
+        )
+    }
+
+    func testFilterPreservesAllImageURLs() {
+        loadAndWait()
+        loader.urlFilter = { $0.lastPathComponent == "alpha.jpg" }
+        XCTAssertEqual(loader.allImageURLs.count, 5)
+    }
+
+    func testHasUnfilteredImagesAfterFilterToEmpty() {
+        loadAndWait()
+        loader.urlFilter = { _ in false }
+        XCTAssertTrue(loader.hasUnfilteredImages)
+    }
+
+    func testHasUnfilteredImagesWhenNoLoad() {
+        XCTAssertFalse(loader.hasUnfilteredImages)
+    }
+
+    func testRemoveFilterRestoresAllURLs() {
+        loadAndWait()
+        loader.urlFilter = { $0.lastPathComponent == "alpha.jpg" }
+        XCTAssertEqual(loader.imageURLs.count, 1)
+        loader.urlFilter = nil
+        XCTAssertEqual(loader.imageURLs.count, 5)
+    }
+
+    func testFilterPreservesCurrentImagePosition() {
+        loadAndWait()
+        loader.jumpTo(index: 2)
+        let currentName = loader.currentImageURL?.lastPathComponent
+        XCTAssertEqual(currentName, "charlie.jpg")
+
+        let kept = Set(["bravo.jpg", "charlie.jpg", "delta.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+        XCTAssertEqual(loader.currentIndex, 1)
+        XCTAssertEqual(loader.currentImageURL?.lastPathComponent, "charlie.jpg")
+    }
+
+    func testFilterAdjustsIndexWhenCurrentFilteredOut() {
+        loadAndWait()
+        loader.jumpTo(index: 4)
+        XCTAssertEqual(loader.currentImageURL?.lastPathComponent, "echo.jpg")
+
+        let kept = Set(["alpha.jpg", "bravo.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+        XCTAssertEqual(loader.currentIndex, 1)
+        XCTAssertTrue(loader.imageURLs.indices.contains(loader.currentIndex))
+    }
+
+    func testFilterToEmptySetsNilImage() {
+        loadAndWait()
+        loader.urlFilter = { _ in false }
+        XCTAssertTrue(loader.imageURLs.isEmpty)
+        XCTAssertEqual(loader.currentIndex, 0)
+        XCTAssertNil(loader.currentImage)
+    }
+
+    func testRemoveImageDuringFilterUpdatesBothArrays() throws {
+        loadAndWait()
+        let kept = Set(["alpha.jpg", "charlie.jpg", "echo.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+
+        let charlieURL = try XCTUnwrap(
+            loader.allImageURLs.first { $0.lastPathComponent == "charlie.jpg" }
+        )
+        loader.removeImage(at: charlieURL)
+
+        XCTAssertEqual(loader.imageURLs.count, 2)
+        XCTAssertEqual(loader.allImageURLs.count, 4)
+        XCTAssertFalse(loader.allImageURLs.contains(charlieURL))
+    }
+
+    func testRemoveFilteredOutImageFromAllURLs() throws {
+        loadAndWait()
+        loader.urlFilter = { $0.lastPathComponent != "bravo.jpg" }
+        XCTAssertEqual(loader.imageURLs.count, 4)
+
+        let bravoURL = try XCTUnwrap(
+            loader.allImageURLs.first { $0.lastPathComponent == "bravo.jpg" }
+        )
+        loader.removeImage(at: bravoURL)
+
+        XCTAssertEqual(loader.allImageURLs.count, 4)
+        XCTAssertFalse(loader.allImageURLs.contains(bravoURL))
+        XCTAssertEqual(loader.imageURLs.count, 4)
+    }
 }
