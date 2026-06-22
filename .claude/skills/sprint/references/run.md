@@ -267,6 +267,14 @@ gh pr create --title "..." --body "..."
 The quota resets at the time shown in the error message. If the build does NOT pass, wait for
 the reset and re-spawn the session to complete the work.
 
+**After a long quota wait (>1h), the gh auth token may expire.** `gh pr view --json` will
+return HTTP 401. Fall back to the REST API:
+```bash
+gh api repos/josephclloyd/Slidey/pulls/N --jq '{state: .state, merged: .merged, merged_at: .merged_at}'
+```
+If that also fails, prompt Joe: `! gh auth refresh -h github.com` (requires interactive
+browser flow — cannot be automated).
+
 ## Per-session bookkeeping
 
 After a `spawn` action:
