@@ -820,15 +820,23 @@ struct SlideshowView: View {
     private func selectDirectory() {
         DispatchQueue.main.async {
             let panel = NSOpenPanel()
-            panel.canChooseFiles = false
+            panel.canChooseFiles = true
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = false
+            panel.allowedContentTypes = [
+                .jpeg, .png, .heic, .gif, .bmp, .tiff, .webP
+            ]
 
-            // Show panel as a sheet on this view's window (or the key window if we haven't captured it yet)
             if let window = self.myWindow ?? NSApplication.shared.keyWindow {
                 panel.beginSheetModal(for: window) { response in
                     if response == .OK, let url = panel.url {
-                        self.openDirectory(url: url)
+                        var isDir: ObjCBool = false
+                        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                        if isDir.boolValue {
+                            self.openDirectory(url: url)
+                        } else {
+                            self.openDirectory(url: url.deletingLastPathComponent(), jumpTo: url)
+                        }
                     }
                 }
             }
@@ -842,7 +850,7 @@ struct SlideshowView: View {
         openDirectory(url: url, isScoped: true)
     }
 
-    private func openDirectory(url: URL, isScoped: Bool = false) {
+    private func openDirectory(url: URL, isScoped: Bool = false, jumpTo targetURL: URL? = nil) {
         // Release any prior security-scoped access before switching.
         if let prior = scopedDirectory {
             prior.stopAccessingSecurityScopedResource()
@@ -864,7 +872,7 @@ struct SlideshowView: View {
         imageInfoCache = [:]
         zoomPan.reset()
 
-        imageLoader.loadImagesFromDirectory(url: url)
+        imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
         windowTitle = url.lastPathComponent
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
