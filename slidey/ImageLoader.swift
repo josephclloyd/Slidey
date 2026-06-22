@@ -67,7 +67,7 @@ class ImageLoader: ObservableObject {
         return imageURLs[currentIndex]
     }
 
-    func loadImagesFromDirectory(url: URL) {
+    func loadImagesFromDirectory(url: URL, jumpTo targetURL: URL? = nil) {
         let urls = scanDirectory(url: url)
 
         DispatchQueue.main.async {
@@ -77,11 +77,20 @@ class ImageLoader: ObservableObject {
             self.allImageURLs = urls
             let filtered = self.urlFilter.map { filter in urls.filter(filter) } ?? urls
             self.imageURLs = filtered
-            self.currentIndex = 0
-            self.currentImage = self.loadImage(at: 0)
+            if let target = targetURL, let idx = filtered.firstIndex(of: target) {
+                self.currentIndex = idx
+            } else {
+                self.currentIndex = 0
+            }
+            self.currentImage = self.loadImage(at: self.currentIndex)
             self.preloadNeighbours()
             self.startWatching(url: url)
         }
+    }
+
+    func jumpTo(url: URL) {
+        guard let index = imageURLs.firstIndex(of: url) else { return }
+        jumpTo(index: index)
     }
 
     private func scanDirectory(url: URL) -> [URL] {
