@@ -93,6 +93,7 @@ defineAlias({
       `- Is per-image session state keyed by URL, not index?`,
       `- No force-unwraps or silent error swallowing?`,
       `- Is the manual test checklist in the PR body specific enough for Joe to follow?`,
+      `- Does the PR include tests for new logic? ImageLoader and SlideshowController changes are unit-testable and must have tests. If no tests are present and the logic is testable, flag as has-issues. If the logic is genuinely untestable (pure SwiftUI wiring), the PR description must say so explicitly.`,
       ``,
       `If the PR looks good: post a brief "LGTM" comment and output exactly: VERDICT: clean`,
       `If there are issues: post a review comment on the PR describing each issue clearly.`,
