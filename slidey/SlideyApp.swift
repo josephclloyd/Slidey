@@ -278,6 +278,11 @@ struct FileMenuCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: .command)
 
+            Button("Rename\u{2026}") {
+                NotificationCenter.default.post(name: .renameImage, object: nil)
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+
             Button("Move to Trash") {
                 NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }

@@ -169,6 +169,15 @@ class ImageLoader: ObservableObject {
         preloadNeighbours()
     }
 
+    func renameImage(from oldURL: URL, to newURL: URL) {
+        if let idx = allImageURLs.firstIndex(of: oldURL) {
+            allImageURLs[idx] = newURL
+        }
+        if let idx = imageURLs.firstIndex(of: oldURL) {
+            imageURLs[idx] = newURL
+        }
+    }
+
     func removeImage(at url: URL) {
         allImageURLs.removeAll { $0 == url }
         guard let index = imageURLs.firstIndex(of: url) else { return }

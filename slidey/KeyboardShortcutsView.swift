@@ -46,6 +46,7 @@ struct KeyboardShortcutsView: View {
             ("⌘C", "Copy image to clipboard"),
             ("⇧⌘C", "Copy file path to clipboard"),
             ("⌘R", "Reveal in Finder"),
+            ("⇧⌘R", "Rename image"),
             ("⌘⌫", "Move to Trash"),
         ]),
         ("Window", [
