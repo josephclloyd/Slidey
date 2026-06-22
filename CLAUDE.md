@@ -72,3 +72,9 @@ PRs need:
 3. Joe's review and merge
 
 `SlideyTests/` contains unit tests across 4 test files. CI runs `xcodebuild test` on every push and PR. The PR description's manual test checklist supplements the automated tests — it covers UI behaviour and edge cases that the test suite doesn't reach.
+
+**New features must include tests where possible.** When implementing an issue:
+- Logic in `ImageLoader.swift` and `SlideshowController.swift` is unit-testable — add tests in the corresponding test file.
+- Pure model/state changes (enum cases, AppStorage defaults, notification names) are testable — add them to `SlideyAppTests.swift`.
+- SwiftUI view state in `SlideshowView.swift` is harder to test directly — cover the underlying controller/loader logic instead, and rely on the manual test checklist for UI behaviour.
+- If a feature is genuinely untestable (pure UI wiring with no extractable logic), note that explicitly in the PR description rather than skipping silently.
