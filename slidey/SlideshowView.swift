@@ -778,6 +778,11 @@ struct SlideshowView: View {
         case "v":
             toggleShowFavouritesOnly()
             return .handled
+        case "j":
+            if !imageLoader.imageURLs.isEmpty {
+                imageLoader.jumpTo(index: Int.random(in: 0..<imageLoader.imageURLs.count))
+            }
+            return .handled
         case " ":
             toggleSlideshow()
             return .handled

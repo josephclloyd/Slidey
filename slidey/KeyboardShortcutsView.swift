@@ -9,6 +9,7 @@ struct KeyboardShortcutsView: View {
             ("→ / Click", "Next image"),
             ("Home", "First image"),
             ("End", "Last image"),
+            ("j", "Jump to random image"),
             ("↑ ↓ ← →", "Pan (when zoomed)"),
         ]),
         ("Display", [
