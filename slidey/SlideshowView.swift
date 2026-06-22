@@ -59,6 +59,7 @@ struct SlideshowView: View {
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
+    @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
@@ -532,6 +533,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
             ifKeyWindow { toggleInfoOverlay() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.renameImage)) { _ in
+            ifKeyWindow { renameCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToTrash)) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
         }
@@ -778,6 +782,11 @@ struct SlideshowView: View {
         case "v":
             toggleShowFavouritesOnly()
             return .handled
+        case "j":
+            if !imageLoader.imageURLs.isEmpty {
+                imageLoader.jumpTo(index: Int.random(in: 0..<imageLoader.imageURLs.count))
+            }
+            return .handled
         case " ":
             toggleSlideshow()
             return .handled
@@ -815,15 +824,23 @@ struct SlideshowView: View {
     private func selectDirectory() {
         DispatchQueue.main.async {
             let panel = NSOpenPanel()
-            panel.canChooseFiles = false
+            panel.canChooseFiles = true
             panel.canChooseDirectories = true
             panel.allowsMultipleSelection = false
+            panel.allowedContentTypes = [
+                .jpeg, .png, .heic, .gif, .bmp, .tiff, .webP
+            ]
 
-            // Show panel as a sheet on this view's window (or the key window if we haven't captured it yet)
             if let window = self.myWindow ?? NSApplication.shared.keyWindow {
                 panel.beginSheetModal(for: window) { response in
                     if response == .OK, let url = panel.url {
-                        self.openDirectory(url: url)
+                        var isDir: ObjCBool = false
+                        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+                        if isDir.boolValue {
+                            self.openDirectory(url: url)
+                        } else {
+                            self.openDirectory(url: url.deletingLastPathComponent(), jumpTo: url)
+                        }
                     }
                 }
             }
@@ -837,7 +854,7 @@ struct SlideshowView: View {
         openDirectory(url: url, isScoped: true)
     }
 
-    private func openDirectory(url: URL, isScoped: Bool = false) {
+    private func openDirectory(url: URL, isScoped: Bool = false, jumpTo targetURL: URL? = nil) {
         // Release any prior security-scoped access before switching.
         if let prior = scopedDirectory {
             prior.stopAccessingSecurityScopedResource()
@@ -859,7 +876,7 @@ struct SlideshowView: View {
         imageInfoCache = [:]
         zoomPan.reset()
 
-        imageLoader.loadImagesFromDirectory(url: url)
+        imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
         windowTitle = url.lastPathComponent
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
@@ -870,6 +887,10 @@ struct SlideshowView: View {
             imageCount: imageLoader.imageURLs.count,
             interval: slideshowInterval,
             advance: { [imageLoader] in imageLoader.nextImage() },
+            shouldStop: { [imageLoader] in
+                let loopEnabled = UserDefaults.standard.object(forKey: "slideshowLoop") as? Bool ?? true
+                return !loopEnabled && imageLoader.currentIndex >= imageLoader.imageURLs.count - 1
+            },
             onStart: autoPlayMusic ? { [musicManager] in musicManager.resumeIfConfigured() } : nil
         )
     }
@@ -1391,6 +1412,72 @@ struct SlideshowView: View {
         }
 
         return ImageInfo(width: width, height: height, fileSizeText: fileSizeText, dateTakenText: dateTakenText, cameraText: cameraText)
+    }
+
+    private func renameCurrentImage() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let ext = url.pathExtension
+        let basename = url.deletingPathExtension().lastPathComponent
+
+        let alert = NSAlert()
+        alert.messageText = "Rename Image"
+        alert.informativeText = "Enter a new name for \"\(url.lastPathComponent)\":"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        textField.stringValue = basename
+        alert.accessoryView = textField
+
+        guard let window = myWindow ?? NSApplication.shared.keyWindow else { return }
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let newName = textField.stringValue.trimmingCharacters(in: .whitespaces)
+            guard !newName.isEmpty else { return }
+
+            let newURL = url.deletingLastPathComponent().appendingPathComponent("\(newName).\(ext)")
+            guard newURL != url else { return }
+
+            do {
+                try FileManager.default.moveItem(at: url, to: newURL)
+
+                if let val = self.rotationAngles.removeValue(forKey: url) { self.rotationAngles[newURL] = val }
+                if let val = self.enhancedImages.removeValue(forKey: url) { self.enhancedImages[newURL] = val }
+                if let val = self.smoothedImages.removeValue(forKey: url) { self.smoothedImages[newURL] = val }
+                if let val = self.upscaledImages.removeValue(forKey: url) { self.upscaledImages[newURL] = val }
+                if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
+                if let val = self.savedPanOffsets.removeValue(forKey: url) { self.savedPanOffsets[newURL] = val }
+                if self.infoOverlayURLs.remove(url) != nil { self.infoOverlayURLs.insert(newURL) }
+                if let val = self.imageInfoCache.removeValue(forKey: url) { self.imageInfoCache[newURL] = val }
+
+                let oldKey = url.absoluteString
+                if self.favouriteURLStrings.remove(oldKey) != nil {
+                    self.favouriteURLStrings.insert(newURL.absoluteString)
+                    self.saveFavourites()
+                    if self.showFavouritesOnly {
+                        self.updateFavouritesFilter()
+                    }
+                }
+
+                if self.lastDisplayedURL == url {
+                    self.lastDisplayedURL = newURL
+                }
+
+                self.imageLoader.renameImage(from: url, to: newURL)
+                self.windowTitle = newURL.lastPathComponent
+
+                let message = "Renamed to \"\(newURL.lastPathComponent)\""
+                self.savedToast = message
+                self.savedToastIsError = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if self.savedToast == message { self.savedToast = nil }
+                }
+            } catch {
+                self.showErrorToast("Rename failed: \(error.localizedDescription)")
+            }
+        }
+        textField.selectText(nil)
     }
 
     private func moveCurrentImageToTrash() {

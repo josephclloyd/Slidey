@@ -9,6 +9,7 @@ struct KeyboardShortcutsView: View {
             ("→ / Click", "Next image"),
             ("Home", "First image"),
             ("End", "Last image"),
+            ("j", "Jump to random image"),
             ("↑ ↓ ← →", "Pan (when zoomed)"),
         ]),
         ("Display", [
@@ -45,6 +46,7 @@ struct KeyboardShortcutsView: View {
             ("⌘C", "Copy image to clipboard"),
             ("⇧⌘C", "Copy file path to clipboard"),
             ("⌘R", "Reveal in Finder"),
+            ("⇧⌘R", "Rename image"),
             ("⌘⌫", "Move to Trash"),
         ]),
         ("Window", [
