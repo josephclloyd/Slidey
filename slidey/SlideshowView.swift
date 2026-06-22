@@ -59,6 +59,7 @@ struct SlideshowView: View {
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
+    @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
@@ -875,6 +876,10 @@ struct SlideshowView: View {
             imageCount: imageLoader.imageURLs.count,
             interval: slideshowInterval,
             advance: { [imageLoader] in imageLoader.nextImage() },
+            shouldStop: { [imageLoader] in
+                let loopEnabled = UserDefaults.standard.object(forKey: "slideshowLoop") as? Bool ?? true
+                return !loopEnabled && imageLoader.currentIndex >= imageLoader.imageURLs.count - 1
+            },
             onStart: autoPlayMusic ? { [musicManager] in musicManager.resumeIfConfigured() } : nil
         )
     }

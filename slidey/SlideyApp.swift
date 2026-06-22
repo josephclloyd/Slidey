@@ -164,6 +164,7 @@ class PendingOpens: ObservableObject {
 struct SettingsView: View {
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
+    @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
@@ -201,6 +202,7 @@ struct SettingsView: View {
                 Toggle("Reopen last directory on launch", isOn: $autoOpenRecent)
             }
             Section("Slideshow") {
+                Toggle("Loop slideshow", isOn: $slideshowLoop)
                 Stepper(value: $slideshowInterval, in: 1...60, step: 1) {
                     Text("Interval: \(Int(slideshowInterval)) second\(Int(slideshowInterval) == 1 ? "" : "s")")
                 }
