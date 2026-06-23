@@ -189,6 +189,156 @@ final class SlideshowControllerTests: XCTestCase {
         controller.start(isProcessing: true, imageCount: 5, interval: 3.0, advance: {}, onStart: { called = true })
         XCTAssertFalse(called)
     }
+
+    func testShouldStopTrueStopsSlideshow() {
+        let controller = SlideshowController()
+        let stopped = expectation(description: "slideshow stopped")
+        var advanceCount = 0
+        controller.start(
+            isProcessing: false, imageCount: 5, interval: 0.05,
+            advance: { advanceCount += 1 },
+            shouldStop: { true }
+        )
+        XCTAssertTrue(controller.isPlaying)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            stopped.fulfill()
+        }
+        wait(for: [stopped], timeout: 2.0)
+        XCTAssertFalse(controller.isPlaying)
+        XCTAssertEqual(advanceCount, 0)
+    }
+
+    func testShouldStopFalseAdvancesNormally() {
+        let controller = SlideshowController()
+        let advanced = expectation(description: "advanced at least once")
+        var fulfilled = false
+        controller.start(
+            isProcessing: false, imageCount: 5, interval: 0.05,
+            advance: {
+                if !fulfilled { fulfilled = true; advanced.fulfill() }
+            },
+            shouldStop: { false }
+        )
+        wait(for: [advanced], timeout: 2.0)
+        XCTAssertTrue(controller.isPlaying)
+        controller.stop()
+    }
+
+    func testNilShouldStopAdvancesNormally() {
+        let controller = SlideshowController()
+        let advanced = expectation(description: "advanced at least once")
+        var fulfilled = false
+        controller.start(
+            isProcessing: false, imageCount: 5, interval: 0.05,
+            advance: {
+                if !fulfilled { fulfilled = true; advanced.fulfill() }
+            }
+        )
+        wait(for: [advanced], timeout: 2.0)
+        XCTAssertTrue(controller.isPlaying)
+        controller.stop()
+    }
+
+    func testLoopDisabledStopsAtLastImage() {
+        let controller = SlideshowController()
+        let stopped = expectation(description: "slideshow stopped")
+        let currentIndex = 4
+        let imageCount = 5
+        var advanceCount = 0
+        controller.start(
+            isProcessing: false, imageCount: imageCount, interval: 0.05,
+            advance: { advanceCount += 1 },
+            shouldStop: { currentIndex >= imageCount - 1 }
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            stopped.fulfill()
+        }
+        wait(for: [stopped], timeout: 2.0)
+        XCTAssertFalse(controller.isPlaying)
+        XCTAssertEqual(advanceCount, 0)
+    }
+
+    func testLoopEnabledWrapsFromLastImage() {
+        let controller = SlideshowController()
+        let advanced = expectation(description: "advanced at least once")
+        var currentIndex = 4
+        let imageCount = 5
+        var fulfilled = false
+        controller.start(
+            isProcessing: false, imageCount: imageCount, interval: 0.05,
+            advance: {
+                currentIndex = (currentIndex + 1) % imageCount
+                if !fulfilled { fulfilled = true; advanced.fulfill() }
+            },
+            shouldStop: { false }
+        )
+        wait(for: [advanced], timeout: 2.0)
+        XCTAssertTrue(controller.isPlaying)
+        controller.stop()
+    }
+
+    func testShouldStopCheckedEachTick() {
+        let controller = SlideshowController()
+        let stopped = expectation(description: "slideshow stopped after advancing")
+        var currentIndex = 0
+        let imageCount = 3
+        var advanceCount = 0
+        controller.start(
+            isProcessing: false, imageCount: imageCount, interval: 0.05,
+            advance: {
+                advanceCount += 1
+                currentIndex += 1
+            },
+            shouldStop: {
+                let shouldStop = currentIndex >= imageCount - 1
+                if shouldStop { stopped.fulfill() }
+                return shouldStop
+            }
+        )
+        wait(for: [stopped], timeout: 2.0)
+        XCTAssertFalse(controller.isPlaying)
+        XCTAssertEqual(advanceCount, 2)
+    }
+}
+
+// MARK: - Manual Navigation Always Wraps
+
+final class ManualNavigationWrapTests: XCTestCase {
+    func testNextImageWrapsFromLastToFirst() {
+        let loader = ImageLoader()
+        loader.imageURLs = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        loader.currentIndex = 4
+        loader.nextImage()
+        XCTAssertEqual(loader.currentIndex, 0)
+    }
+
+    func testPreviousImageWrapsFromFirstToLast() {
+        let loader = ImageLoader()
+        loader.imageURLs = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        loader.currentIndex = 0
+        loader.previousImage()
+        XCTAssertEqual(loader.currentIndex, 4)
+    }
+
+    func testNextImageWrapsRegardlessOfLoopSetting() {
+        UserDefaults.standard.set(false, forKey: "slideshowLoop")
+        defer { UserDefaults.standard.removeObject(forKey: "slideshowLoop") }
+        let loader = ImageLoader()
+        loader.imageURLs = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        loader.currentIndex = 4
+        loader.nextImage()
+        XCTAssertEqual(loader.currentIndex, 0)
+    }
+
+    func testPreviousImageWrapsRegardlessOfLoopSetting() {
+        UserDefaults.standard.set(false, forKey: "slideshowLoop")
+        defer { UserDefaults.standard.removeObject(forKey: "slideshowLoop") }
+        let loader = ImageLoader()
+        loader.imageURLs = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        loader.currentIndex = 0
+        loader.previousImage()
+        XCTAssertEqual(loader.currentIndex, 4)
+    }
 }
 
 // MARK: - rotatedBoundingBox Tests
