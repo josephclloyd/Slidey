@@ -30,6 +30,7 @@ class ImageLoader: ObservableObject {
     @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
     @Published var currentImage: NSImage?
+    @Published var directoryUnavailable: Bool = false
 
     private(set) var allImageURLs: [URL] = []
     var urlFilter: ((URL) -> Bool)? {
