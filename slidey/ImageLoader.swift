@@ -30,6 +30,7 @@ class ImageLoader: ObservableObject {
     @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
     @Published var currentImage: NSImage?
+    @Published var directoryMissing: Bool = false
 
     private(set) var allImageURLs: [URL] = []
     var urlFilter: ((URL) -> Bool)? {
@@ -57,6 +58,7 @@ class ImageLoader: ObservableObject {
     private var directoryURL: URL?
     private var watcherSource: DispatchSourceFileSystemObject?
     private var rescanWorkItem: DispatchWorkItem?
+    private var recoveryTimer: DispatchSourceTimer?
 
     /// Sort applied to scan results. Set by SlideshowView from @AppStorage so
     /// menu and Settings changes flow into the next scan/rescan.
@@ -281,7 +283,13 @@ class ImageLoader: ObservableObject {
             queue: DispatchQueue.global(qos: .utility)
         )
         source.setEventHandler { [weak self] in
-            self?.scheduleRescan()
+            guard let self else { return }
+            let flags = source.data
+            if flags.contains(.delete) || flags.contains(.rename) {
+                self.handleDirectoryGone()
+            } else {
+                self.scheduleRescan()
+            }
         }
         source.setCancelHandler {
             close(fd)
@@ -290,11 +298,54 @@ class ImageLoader: ObservableObject {
         source.resume()
     }
 
+    private func handleDirectoryGone() {
+        guard let url = directoryURL else { return }
+        var isDir: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+        if exists && isDir.boolValue {
+            scheduleRescan()
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.stopWatching()
+            self.directoryMissing = true
+            self.startRecoveryPolling()
+        }
+    }
+
+    private func startRecoveryPolling() {
+        stopRecoveryPolling()
+        guard let url = directoryURL else { return }
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 2, repeating: 2)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            var isDir: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+            if exists && isDir.boolValue {
+                DispatchQueue.main.async {
+                    self.stopRecoveryPolling()
+                    self.directoryMissing = false
+                    self.loadImagesFromDirectory(url: url)
+                }
+            }
+        }
+        recoveryTimer = timer
+        timer.resume()
+    }
+
+    private func stopRecoveryPolling() {
+        recoveryTimer?.cancel()
+        recoveryTimer = nil
+    }
+
     private func stopWatching() {
         watcherSource?.cancel()
         watcherSource = nil
         rescanWorkItem?.cancel()
         rescanWorkItem = nil
+        stopRecoveryPolling()
     }
 
     /// Coalesce a burst of filesystem events into a single rescan.
