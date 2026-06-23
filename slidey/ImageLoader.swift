@@ -74,6 +74,7 @@ class ImageLoader: ObservableObject {
 
         DispatchQueue.main.async {
             self.stopWatching()
+            self.directoryMissing = false
             self.directoryURL = url
             self.cache.removeAll()
             self.allImageURLs = urls
