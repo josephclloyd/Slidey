@@ -69,88 +69,276 @@ struct SlideshowView: View {
         currentDisplayImage ?? imageLoader.currentImage
     }
 
+    @ViewBuilder
+    private var emptyStateContent: some View {
+        if isAutoOpening {
+            VStack(spacing: 20) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(1.5)
+                    .tint(.white)
+                Text("Loading…")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .onAppear {
+                captureWindow()
+            }
+        } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
+            VStack(spacing: 20) {
+                Text("★")
+                    .font(.system(size: 48))
+                    .foregroundColor(.white.opacity(0.5))
+                Text("No favourites in this directory")
+                    .font(.title2)
+                    .foregroundColor(.white.opacity(0.7))
+                Text("Press x to favourite images, then v to filter")
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .onAppear {
+                captureWindow()
+            }
+        } else {
+            VStack(spacing: 30) {
+                Text("Welcome to Slidey")
+                    .font(.largeTitle)
+                    .foregroundColor(.white)
+
+                HStack(spacing: 40) {
+                    VStack(spacing: 20) {
+                        Button("Select Directory") {
+                            selectDirectory()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+
+                    if !recentDirectories.directories.isEmpty {
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("Recent Directories")
+                                .font(.headline)
+                                .foregroundColor(.white.opacity(0.7))
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(recentDirectories.directories) { entry in
+                                    Button(action: {
+                                        openRecent(entry)
+                                    }) {
+                                        HStack {
+                                            Image(systemName: "folder.fill")
+                                                .foregroundColor(.blue)
+                                            Text(entry.displayName)
+                                                .foregroundColor(.white)
+                                            Spacer()
+                                        }
+                                        .frame(width: 250)
+                                        .padding(8)
+                                        .background(Color.white.opacity(0.1))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                captureWindow()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var overlayViews: some View {
+        // Thumbnail strip overlay (bottom)
+        if showThumbnails && !imageLoader.imageURLs.isEmpty {
+            VStack {
+                Spacer()
+                ThumbnailStrip(imageLoader: imageLoader, favouriteURLStrings: favouriteURLStrings) { index in
+                    guard !isProcessing else { return }
+                    imageLoader.jumpTo(index: index)
+                }
+            }
+        }
+
+        // Filename + counter overlay
+        if showFilename, let url = imageLoader.currentImageURL {
+            VStack {
+                Spacer()
+                HStack {
+                    HStack(spacing: 12) {
+                        Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                        let counter = "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)"
+                        Text(showFavouritesOnly ? "★ \(counter)" : counter)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.7))
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.leading, 20)
+                    .padding(.bottom, 20)
+                    Spacer()
+                }
+            }
+        }
+
+        // Image info overlay (top-left)
+        if let url = imageLoader.currentImageURL,
+           infoOverlayURLs.contains(url),
+           let info = imageInfoCache[url] {
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(info.width) \u{00d7} \(info.height) px")
+                        Text(info.fileSizeText)
+                        Text(info.dateTakenText)
+                        if let camera = info.cameraText {
+                            Text(camera)
+                        }
+                    }
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.leading, 20)
+                    .padding(.top, 20)
+                    Spacer()
+                }
+                Spacer()
+            }
+        }
+
+        // Save confirmation / error toast (lower-right)
+        if let savedToast {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text(savedToast)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background((savedToastIsError ? Color.red : Color.green).opacity(0.85))
+                        .cornerRadius(6)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
+                }
+            }
+            .transition(.opacity)
+        }
+
+        // Track info overlay (top-right, shown briefly on track change)
+        if musicManager.showTrackOverlay, let title = musicManager.currentTrackTitle {
+            VStack {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(title)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundColor(.white)
+                        if let artist = musicManager.currentTrackArtist {
+                            Text(artist)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(8)
+                    .padding(.trailing, 20)
+                    .padding(.top, 20)
+                }
+                Spacer()
+            }
+            .transition(.opacity)
+        }
+
+        // Progress indicator overlay
+        if isProcessing {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("AI Upscaling Image (4x)…")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    ProgressView(value: upscaleProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+
+                    Text("\(Int(upscaleProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+
+                    Button("Cancel", action: cancelUpscale)
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
+        // Debug window overlay (toggle with 'd' key)
+        if showDebugWindow {
+            VStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Upscaling Debug Output")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button("Close") {
+                            showDebugWindow = false
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    ScrollView {
+                        Text(debugOutput)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(height: 300)
+
+                    if isProcessing {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                            .tint(.white)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.9))
+                .cornerRadius(12)
+                .frame(width: 700)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
     var body: some View {
         @Bindable var zoomPan = zoomPan
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
             if imageLoader.imageURLs.isEmpty {
-                if isAutoOpening {
-                    VStack(spacing: 20) {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .scaleEffect(1.5)
-                            .tint(.white)
-                        Text("Loading…")
-                            .font(.title3)
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .onAppear {
-                        captureWindow()
-                    }
-                } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
-                    VStack(spacing: 20) {
-                        Text("★")
-                            .font(.system(size: 48))
-                            .foregroundColor(.white.opacity(0.5))
-                        Text("No favourites in this directory")
-                            .font(.title2)
-                            .foregroundColor(.white.opacity(0.7))
-                        Text("Press x to favourite images, then v to filter")
-                            .font(.body)
-                            .foregroundColor(.white.opacity(0.5))
-                    }
-                    .onAppear {
-                        captureWindow()
-                    }
-                } else {
-                    VStack(spacing: 30) {
-                        Text("Welcome to Slidey")
-                            .font(.largeTitle)
-                            .foregroundColor(.white)
-
-                        HStack(spacing: 40) {
-                            VStack(spacing: 20) {
-                                Button("Select Directory") {
-                                    selectDirectory()
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-
-                            if !recentDirectories.directories.isEmpty {
-                                VStack(alignment: .leading, spacing: 15) {
-                                    Text("Recent Directories")
-                                        .font(.headline)
-                                        .foregroundColor(.white.opacity(0.7))
-
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        ForEach(recentDirectories.directories) { entry in
-                                            Button(action: {
-                                                openRecent(entry)
-                                            }) {
-                                                HStack {
-                                                    Image(systemName: "folder.fill")
-                                                        .foregroundColor(.blue)
-                                                    Text(entry.displayName)
-                                                        .foregroundColor(.white)
-                                                    Spacer()
-                                                }
-                                                .frame(width: 250)
-                                                .padding(8)
-                                                .background(Color.white.opacity(0.1))
-                                                .cornerRadius(6)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .onAppear {
-                        captureWindow()
-                    }
-                }
+                emptyStateContent
             } else {
                 GeometryReader { geometry in
                     if let image = currentDisplayImage {
@@ -184,185 +372,7 @@ struct SlideshowView: View {
                 .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
             }
 
-            // Thumbnail strip overlay (bottom)
-            if showThumbnails && !imageLoader.imageURLs.isEmpty {
-                VStack {
-                    Spacer()
-                    ThumbnailStrip(imageLoader: imageLoader, favouriteURLStrings: favouriteURLStrings) { index in
-                        guard !isProcessing else { return }
-                        imageLoader.jumpTo(index: index)
-                    }
-                }
-            }
-
-            // Filename + counter overlay
-            if showFilename, let url = imageLoader.currentImageURL {
-                VStack {
-                    Spacer()
-                    HStack {
-                        HStack(spacing: 12) {
-                            Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.white)
-                            let counter = "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)"
-                            Text(showFavouritesOnly ? "★ \(counter)" : counter)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.7))
-                                .monospacedDigit()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.6))
-                        .cornerRadius(6)
-                        .padding(.leading, 20)
-                        .padding(.bottom, 20)
-                        Spacer()
-                    }
-                }
-            }
-
-            // Image info overlay (top-left)
-            if let url = imageLoader.currentImageURL,
-               infoOverlayURLs.contains(url),
-               let info = imageInfoCache[url] {
-                VStack {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("\(info.width) \u{00d7} \(info.height) px")
-                            Text(info.fileSizeText)
-                            Text(info.dateTakenText)
-                            if let camera = info.cameraText {
-                                Text(camera)
-                            }
-                        }
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.6))
-                        .cornerRadius(6)
-                        .padding(.leading, 20)
-                        .padding(.top, 20)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-            }
-
-            // Save confirmation / error toast (lower-right)
-            if let savedToast {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text(savedToast)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background((savedToastIsError ? Color.red : Color.green).opacity(0.85))
-                            .cornerRadius(6)
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 20)
-                    }
-                }
-                .transition(.opacity)
-            }
-
-            // Track info overlay (top-right, shown briefly on track change)
-            if musicManager.showTrackOverlay, let title = musicManager.currentTrackTitle {
-                VStack {
-                    HStack {
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(title)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundColor(.white)
-                            if let artist = musicManager.currentTrackArtist {
-                                Text(artist)
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.7))
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.black.opacity(0.6))
-                        .cornerRadius(8)
-                        .padding(.trailing, 20)
-                        .padding(.top, 20)
-                    }
-                    Spacer()
-                }
-                .transition(.opacity)
-            }
-
-            // Progress indicator overlay
-            if isProcessing {
-                VStack {
-                    Spacer()
-                    VStack(spacing: 15) {
-                        Text("AI Upscaling Image (4x)…")
-                            .font(.headline)
-                            .foregroundColor(.white)
-
-                        ProgressView(value: upscaleProgress)
-                            .progressViewStyle(.linear)
-                            .tint(.white)
-                            .frame(width: 220)
-
-                        Text("\(Int(upscaleProgress * 100))%")
-                            .font(.system(.subheadline, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.8))
-
-                        Button("Cancel", action: cancelUpscale)
-                            .buttonStyle(.bordered)
-                            .tint(.white)
-                    }
-                    .padding(30)
-                    .background(.black.opacity(0.85))
-                    .cornerRadius(12)
-                    .padding(.bottom, 100)
-                }
-            }
-
-            // Debug window overlay (toggle with 'd' key)
-            if showDebugWindow {
-                VStack {
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Upscaling Debug Output")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Spacer()
-                            Button("Close") {
-                                showDebugWindow = false
-                            }
-                            .buttonStyle(.bordered)
-                        }
-
-                        ScrollView {
-                            Text(debugOutput)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                        }
-                        .frame(height: 300)
-
-                        if isProcessing {
-                            ProgressView()
-                                .progressViewStyle(.linear)
-                                .tint(.white)
-                        }
-                    }
-                    .padding(20)
-                    .background(.black.opacity(0.9))
-                    .cornerRadius(12)
-                    .frame(width: 700)
-                    .padding(.bottom, 40)
-                }
-            }
+            overlayViews
         }
         .overlay {
             if isDragOver {
