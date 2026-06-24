@@ -399,6 +399,9 @@ struct SlideshowView: View {
                 updateDisplayImage()
                 enterFullScreen()
                 musicManager.activate()
+                if let url = imageLoader.currentImageURL {
+                    windowTitle = Self.titleForImage(at: url)
+                }
 
             } else {
                 slideshow.stop()
@@ -442,6 +445,9 @@ struct SlideshowView: View {
                     zoomPan.reset()
                 }
                 lastDisplayedURL = newURL
+                if let newURL {
+                    windowTitle = Self.titleForImage(at: newURL)
+                }
             }
             rotationAngle = currentURLRotation()
             updateDisplayImage()
@@ -917,7 +923,7 @@ struct SlideshowView: View {
         zoomPan.reset()
 
         imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
-        windowTitle = url.lastPathComponent
+        windowTitle = "Slidey"
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
@@ -1067,6 +1073,21 @@ struct SlideshowView: View {
                 window.title = title
             }
         }
+    }
+
+    static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int,
+              w > 0, h > 0 else { return nil }
+        return (w, h)
+    }
+
+    static func titleForImage(at url: URL) -> String {
+        let name = url.lastPathComponent
+        guard let dims = imageDimensions(for: url) else { return name }
+        return "\(name) (\(dims.width)×\(dims.height))"
     }
 
     private func updateDisplayImage() {
@@ -1505,7 +1526,7 @@ struct SlideshowView: View {
                 }
 
                 self.imageLoader.renameImage(from: url, to: newURL)
-                self.windowTitle = newURL.lastPathComponent
+                self.windowTitle = Self.titleForImage(at: newURL)
 
                 let message = "Renamed to \"\(newURL.lastPathComponent)\""
                 self.savedToast = message
