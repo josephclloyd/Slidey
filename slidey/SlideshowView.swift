@@ -263,6 +263,8 @@ struct SlideshowView: View {
             .transition(.opacity)
         }
 
+        directoryMissingOverlay
+
         // Progress indicator overlay
         if isProcessing {
             VStack {
@@ -331,6 +333,7 @@ struct SlideshowView: View {
             }
         }
     }
+
 
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
@@ -483,6 +486,19 @@ struct SlideshowView: View {
                 slideshow.stop()
             } else {
                 consumePendingOpenIfPossible()
+            }
+        }
+        .onChange(of: imageLoader.directoryMissing) { _, missing in
+            if missing {
+                slideshow.stop()
+                showErrorToast("Directory moved or deleted")
+            } else {
+                let message = "Directory restored"
+                savedToast = message
+                savedToastIsError = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if savedToast == message { savedToast = nil }
+                }
             }
         }
         .focusable()
@@ -1813,6 +1829,34 @@ struct SlideshowView: View {
 
     private func saveFavourites() {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
+    }
+
+    @ViewBuilder private var directoryMissingOverlay: some View {
+        if imageLoader.directoryMissing {
+            VStack(spacing: 20) {
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 48))
+                    .foregroundColor(.white.opacity(0.7))
+                Text("Directory is no longer available")
+                    .font(.title2)
+                    .foregroundColor(.white)
+                if let dir = selectedDirectory {
+                    Text(dir.path)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.5))
+                        .lineLimit(2)
+                }
+                Text("Waiting for the directory to reappear…")
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.5))
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+            }
+            .padding(40)
+            .background(.black.opacity(0.85))
+            .cornerRadius(12)
+        }
     }
 
 }

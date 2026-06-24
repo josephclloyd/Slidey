@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Slidey
 
@@ -573,5 +574,156 @@ final class ImageLoaderRenameTests: XCTestCase {
         XCTAssertTrue(loader.imageURLs.contains(newURL))
         XCTAssertTrue(loader.allImageURLs.contains(newURL))
         XCTAssertFalse(loader.allImageURLs.contains(oldURL))
+    }
+}
+
+final class DirectoryMissingTests: XCTestCase {
+    var loader: ImageLoader!
+    var tempDir: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        loader = ImageLoader()
+        loader.sortOrder = .nameAscending
+
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DirectoryMissingTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        for name in ["alpha.jpg", "bravo.jpg", "charlie.jpg"] {
+            FileManager.default.createFile(
+                atPath: tempDir.appendingPathComponent(name).path,
+                contents: Data()
+            )
+        }
+    }
+
+    override func tearDown() {
+        loader = nil
+        if let tempDir, FileManager.default.fileExists(atPath: tempDir.path) {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+        super.tearDown()
+    }
+
+    private func loadAndWait() {
+        loader.loadImagesFromDirectory(url: tempDir)
+        let exp = expectation(description: "Directory loaded")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+    }
+
+    func testDirectoryMissingInitiallyFalse() {
+        XCTAssertFalse(loader.directoryMissing)
+    }
+
+    func testDirectoryMissingAfterLoad() {
+        loadAndWait()
+        XCTAssertFalse(loader.directoryMissing)
+    }
+
+    func testDirectoryMissingDetectedOnDelete() throws {
+        loadAndWait()
+        XCTAssertFalse(loader.directoryMissing)
+
+        try FileManager.default.removeItem(at: tempDir)
+
+        let exp = expectation(description: "directoryMissing becomes true")
+        let cancellable = loader.$directoryMissing
+            .dropFirst()
+            .filter { $0 }
+            .sink { _ in exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+        _ = cancellable
+
+        XCTAssertTrue(loader.directoryMissing)
+    }
+
+    func testDirectoryMissingDetectedOnRename() throws {
+        loadAndWait()
+        XCTAssertFalse(loader.directoryMissing)
+
+        let renamedDir = tempDir.deletingLastPathComponent()
+            .appendingPathComponent("Renamed-\(UUID().uuidString)")
+        try FileManager.default.moveItem(at: tempDir, to: renamedDir)
+        defer { try? FileManager.default.removeItem(at: renamedDir) }
+
+        let exp = expectation(description: "directoryMissing becomes true")
+        let cancellable = loader.$directoryMissing
+            .dropFirst()
+            .filter { $0 }
+            .sink { _ in exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+        _ = cancellable
+
+        XCTAssertTrue(loader.directoryMissing)
+    }
+
+    func testDirectoryMissingClearedOnNewDirectory() throws {
+        loadAndWait()
+
+        try FileManager.default.removeItem(at: tempDir)
+
+        let exp = expectation(description: "directoryMissing becomes true")
+        let cancellable = loader.$directoryMissing
+            .dropFirst()
+            .filter { $0 }
+            .sink { _ in exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+        _ = cancellable
+
+        XCTAssertTrue(loader.directoryMissing)
+
+        let newDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DirectoryMissingTests-new-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: newDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: newDir) }
+        for name in ["one.jpg", "two.jpg"] {
+            FileManager.default.createFile(
+                atPath: newDir.appendingPathComponent(name).path,
+                contents: Data()
+            )
+        }
+
+        loader.loadImagesFromDirectory(url: newDir)
+        let loadExp = expectation(description: "New directory loaded")
+        DispatchQueue.main.async { loadExp.fulfill() }
+        wait(for: [loadExp], timeout: 5)
+
+        XCTAssertFalse(loader.directoryMissing)
+    }
+
+    func testDirectoryRecoveryAfterReappearing() throws {
+        loadAndWait()
+
+        try FileManager.default.removeItem(at: tempDir)
+
+        let missingExp = expectation(description: "directoryMissing becomes true")
+        let missingCancellable = loader.$directoryMissing
+            .dropFirst()
+            .filter { $0 }
+            .sink { _ in missingExp.fulfill() }
+        wait(for: [missingExp], timeout: 5)
+        _ = missingCancellable
+
+        XCTAssertTrue(loader.directoryMissing)
+
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        for name in ["alpha.jpg", "bravo.jpg"] {
+            FileManager.default.createFile(
+                atPath: tempDir.appendingPathComponent(name).path,
+                contents: Data()
+            )
+        }
+
+        let recoveryExp = expectation(description: "directoryMissing becomes false")
+        let recoveryCancellable = loader.$directoryMissing
+            .dropFirst()
+            .filter { !$0 }
+            .sink { _ in recoveryExp.fulfill() }
+        wait(for: [recoveryExp], timeout: 10)
+        _ = recoveryCancellable
+
+        XCTAssertFalse(loader.directoryMissing)
     }
 }
