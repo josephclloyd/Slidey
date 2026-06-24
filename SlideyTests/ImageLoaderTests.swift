@@ -447,6 +447,136 @@ final class ImageLoaderFilterTests: XCTestCase {
     }
 }
 
+final class ImageLoaderRenameTests: XCTestCase {
+    var loader: ImageLoader!
+    var tempDir: URL!
+    var fileURLs: [URL]!
+    let fileNames = ["alpha.jpg", "bravo.jpg", "charlie.jpg", "delta.jpg", "echo.jpg"]
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        loader = ImageLoader()
+        loader.sortOrder = .nameAscending
+
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ImageLoaderRenameTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        for name in fileNames {
+            FileManager.default.createFile(
+                atPath: tempDir.appendingPathComponent(name).path,
+                contents: Data()
+            )
+        }
+
+        loader.loadImagesFromDirectory(url: tempDir)
+        let exp = expectation(description: "Directory loaded")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 5)
+
+        fileURLs = loader.imageURLs
+    }
+
+    override func tearDown() {
+        loader = nil
+        fileURLs = nil
+        if let tempDir {
+            try? FileManager.default.removeItem(at: tempDir)
+        }
+        super.tearDown()
+    }
+
+    func testRenameUpdatesImageURLs() {
+        let oldURL = fileURLs[2]
+        let newURL = tempDir.appendingPathComponent("charlie_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+        XCTAssertTrue(loader.imageURLs.contains(newURL))
+        XCTAssertFalse(loader.imageURLs.contains(oldURL))
+    }
+
+    func testRenameUpdatesAllImageURLs() {
+        let oldURL = fileURLs[2]
+        let newURL = tempDir.appendingPathComponent("charlie_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+        XCTAssertTrue(loader.allImageURLs.contains(newURL))
+        XCTAssertFalse(loader.allImageURLs.contains(oldURL))
+    }
+
+    func testRenamePreservesIndex() {
+        loader.jumpTo(index: 3)
+        let oldURL = fileURLs[1]
+        let newURL = tempDir.appendingPathComponent("bravo_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+        XCTAssertEqual(loader.currentIndex, 3)
+    }
+
+    func testRenamePreservesIndexWhenRenamingCurrentImage() {
+        loader.jumpTo(index: 2)
+        let oldURL = fileURLs[2]
+        let newURL = tempDir.appendingPathComponent("charlie_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+        XCTAssertEqual(loader.currentIndex, 2)
+        XCTAssertEqual(loader.imageURLs[2], newURL)
+    }
+
+    func testRenamePreservesArrayOrder() {
+        let oldURL = fileURLs[2]
+        let newURL = tempDir.appendingPathComponent("charlie_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+        XCTAssertEqual(loader.imageURLs[0], fileURLs[0])
+        XCTAssertEqual(loader.imageURLs[1], fileURLs[1])
+        XCTAssertEqual(loader.imageURLs[2], newURL)
+        XCTAssertEqual(loader.imageURLs[3], fileURLs[3])
+        XCTAssertEqual(loader.imageURLs[4], fileURLs[4])
+    }
+
+    func testRenamePreservesImageCount() {
+        let newURL = tempDir.appendingPathComponent("alpha_renamed.jpg")
+        loader.renameImage(from: fileURLs[0], to: newURL)
+        XCTAssertEqual(loader.imageURLs.count, 5)
+        XCTAssertEqual(loader.allImageURLs.count, 5)
+    }
+
+    func testRenameNonexistentURLIsNoOp() {
+        let bogus = URL(fileURLWithPath: "/tmp/nonexistent.jpg")
+        let newURL = tempDir.appendingPathComponent("whatever.jpg")
+        let urlsBefore = loader.imageURLs
+        let allBefore = loader.allImageURLs
+        loader.renameImage(from: bogus, to: newURL)
+        XCTAssertEqual(loader.imageURLs, urlsBefore)
+        XCTAssertEqual(loader.allImageURLs, allBefore)
+    }
+
+    func testRenameFirstImage() {
+        let newURL = tempDir.appendingPathComponent("alpha_renamed.jpg")
+        loader.renameImage(from: fileURLs[0], to: newURL)
+        XCTAssertEqual(loader.imageURLs[0], newURL)
+        XCTAssertEqual(loader.allImageURLs[0], newURL)
+    }
+
+    func testRenameLastImage() {
+        let newURL = tempDir.appendingPathComponent("echo_renamed.jpg")
+        loader.renameImage(from: fileURLs[4], to: newURL)
+        XCTAssertEqual(loader.imageURLs[4], newURL)
+        XCTAssertEqual(loader.allImageURLs[4], newURL)
+    }
+
+    func testRenameWithFilterActive() {
+        let kept = Set(["alpha.jpg", "charlie.jpg", "echo.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+        XCTAssertEqual(loader.imageURLs.count, 3)
+
+        let oldURL = loader.imageURLs[1]
+        XCTAssertEqual(oldURL.lastPathComponent, "charlie.jpg")
+        let newURL = tempDir.appendingPathComponent("charlie_renamed.jpg")
+        loader.renameImage(from: oldURL, to: newURL)
+
+        XCTAssertTrue(loader.imageURLs.contains(newURL))
+        XCTAssertTrue(loader.allImageURLs.contains(newURL))
+        XCTAssertFalse(loader.allImageURLs.contains(oldURL))
+    }
+}
+
 final class DirectoryMissingTests: XCTestCase {
     var loader: ImageLoader!
     var tempDir: URL!
