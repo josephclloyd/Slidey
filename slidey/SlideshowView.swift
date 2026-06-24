@@ -69,7 +69,8 @@ struct SlideshowView: View {
         currentDisplayImage ?? imageLoader.currentImage
     }
 
-    @ViewBuilder private var emptyStateContent: some View {
+    @ViewBuilder
+    private var emptyStateContent: some View {
         if isAutoOpening {
             VStack(spacing: 20) {
                 ProgressView()
@@ -148,41 +149,8 @@ struct SlideshowView: View {
         }
     }
 
-    @ViewBuilder private var imageDisplayContent: some View {
-        @Bindable var zoomPan = zoomPan
-        GeometryReader { geometry in
-            if let image = currentDisplayImage {
-                ImageDisplayView(
-                    image: image,
-                    zoomScale: $zoomPan.zoomScale,
-                    imageOffset: $zoomPan.imageOffset,
-                    containerSize: geometry.size,
-                    rotationAngle: $rotationAngle,
-                    onLeftClick: {
-                        guard !isProcessing else { return }
-                        imageLoader.nextImage()
-                    },
-                    onRightClick: {
-                        guard !isProcessing else { return }
-                        imageLoader.previousImage()
-                    }
-                )
-                .id(imageLoader.currentImageURL)
-                .transition(.opacity)
-                .onAppear {
-                    zoomPan.windowSize = geometry.size
-                    updateDisplayImage()
-                    captureWindow()
-                }
-                .onChange(of: geometry.size) { _, newSize in
-                    zoomPan.windowSize = newSize
-                }
-            }
-        }
-        .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
-    }
-
-    @ViewBuilder private var overlayViews: some View {
+    @ViewBuilder
+    private var overlayViews: some View {
         // Thumbnail strip overlay (bottom)
         if showThumbnails && !imageLoader.imageURLs.isEmpty {
             VStack {
@@ -364,6 +332,41 @@ struct SlideshowView: View {
                 .padding(.bottom, 40)
             }
         }
+    }
+
+
+    @ViewBuilder private var imageDisplayContent: some View {
+        @Bindable var zoomPan = zoomPan
+        GeometryReader { geometry in
+            if let image = currentDisplayImage {
+                ImageDisplayView(
+                    image: image,
+                    zoomScale: $zoomPan.zoomScale,
+                    imageOffset: $zoomPan.imageOffset,
+                    containerSize: geometry.size,
+                    rotationAngle: $rotationAngle,
+                    onLeftClick: {
+                        guard !isProcessing else { return }
+                        imageLoader.nextImage()
+                    },
+                    onRightClick: {
+                        guard !isProcessing else { return }
+                        imageLoader.previousImage()
+                    }
+                )
+                .id(imageLoader.currentImageURL)
+                .transition(.opacity)
+                .onAppear {
+                    zoomPan.windowSize = geometry.size
+                    updateDisplayImage()
+                    captureWindow()
+                }
+                .onChange(of: geometry.size) { _, newSize in
+                    zoomPan.windowSize = newSize
+                }
+            }
+        }
+        .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
     }
 
     private var coreView: some View {
@@ -569,6 +572,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToTrash)) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyToFolder)) { _ in
+            ifKeyWindow { copyCurrentImageToFolder() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToFolder)) { _ in
+            ifKeyWindow { moveCurrentImageToFolder() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
@@ -1540,6 +1549,73 @@ struct SlideshowView: View {
                         self.showErrorToast("Failed to trash: \(error.localizedDescription)")
                     }
                 }
+            }
+        }
+    }
+
+    private func pickDestinationFolder(completion: @escaping (URL) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Select destination folder"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            completion(url)
+        }
+    }
+
+    private func copyCurrentImageToFolder() {
+        guard let sourceURL = imageLoader.currentImageURL else { return }
+        pickDestinationFolder { destDir in
+            let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
+            do {
+                if FileManager.default.fileExists(atPath: destURL.path) {
+                    try FileManager.default.removeItem(at: destURL)
+                }
+                try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                let folderName = destDir.lastPathComponent
+                let message = "Copied to \(folderName)"
+                self.savedToast = message
+                self.savedToastIsError = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if self.savedToast == message { self.savedToast = nil }
+                }
+            } catch {
+                self.showErrorToast("Copy failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func moveCurrentImageToFolder() {
+        guard let sourceURL = imageLoader.currentImageURL else { return }
+        pickDestinationFolder { destDir in
+            let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
+            do {
+                if FileManager.default.fileExists(atPath: destURL.path) {
+                    try FileManager.default.removeItem(at: destURL)
+                }
+                try FileManager.default.moveItem(at: sourceURL, to: destURL)
+                let folderName = destDir.lastPathComponent
+                let message = "Moved to \(folderName)"
+                self.savedToast = message
+                self.savedToastIsError = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    if self.savedToast == message { self.savedToast = nil }
+                }
+                self.rotationAngles[sourceURL] = nil
+                self.enhancedImages[sourceURL] = nil
+                self.smoothedImages[sourceURL] = nil
+                self.upscaledImages[sourceURL] = nil
+                self.savedZoomScales[sourceURL] = nil
+                self.savedPanOffsets[sourceURL] = nil
+                self.infoOverlayURLs.remove(sourceURL)
+                self.imageInfoCache[sourceURL] = nil
+                self.imageLoader.removeImage(at: sourceURL)
+            } catch {
+                self.showErrorToast("Move failed: \(error.localizedDescription)")
             }
         }
     }
