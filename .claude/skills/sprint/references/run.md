@@ -228,10 +228,24 @@ conflict. The `addBlockedBy` edge ensures #16 waits for #15 to merge.
 
 If CI fails at a line in `body` or `coreView` with "unable to type-check", apply this split. Needs two repair passes if the first extraction doesn't shorten `body` enough.
 
+## Bundle detection (impl session includes files from a sibling issue)
+
+If an impl session's PR includes files that belong to a *different* sprint issue (e.g. #97 session creating pr-size.yml which was #99's work):
+
+1. Check whether the bundled work is correct: read the diff and compare to the sibling issue's acceptance criteria.
+2. **If correct:** update the PR description to reference both issues (`Closes #N\nCloses #M`), post a comment explaining the bundle, and advance both issues to done together. Do not split.
+3. **If incorrect or partial:** remove the bundled file(s) from the branch, open a note in the sibling issue about what was attempted, and re-spawn that issue's impl session separately.
+
+Never silently accept a bundle — always update the PR body so both issues are linked and closed.
+
 ## Quota-hit recovery (session exits with "You're out of extra usage")
 
 When a session hits the usage quota mid-work, the branch may not exist yet and changes are
-uncommitted in the main worktree. Do not discard — the work is usually complete.
+uncommitted in the main worktree.
+
+**Zero-progress case (most common when quota hits early):** If multiple sessions all hit quota simultaneously, they typically made no commits and created no remote branches. Check with `git log <branch> ^main --oneline` — if empty, the session left nothing useful. Delete the stale local branch (`git branch -D <branch-name>`) and re-spawn after the quota resets. Do not attempt recovery of empty branches.
+
+**Partial-progress case:** Do not discard — the work is usually complete.
 
 ```bash
 # 1. Check what the session left behind
