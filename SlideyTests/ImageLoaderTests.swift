@@ -4,7 +4,7 @@ import XCTest
 
 final class AppSortOrderTests: XCTestCase {
     func testAllCasesCount() {
-        XCTAssertEqual(AppSortOrder.allCases.count, 7)
+        XCTAssertEqual(AppSortOrder.allCases.count, 9)
     }
 
     func testDisplayNames() {
@@ -12,6 +12,8 @@ final class AppSortOrderTests: XCTestCase {
         XCTAssertEqual(AppSortOrder.creationDateDescending.displayName, "Creation Date (Newest First)")
         XCTAssertEqual(AppSortOrder.modificationDateAscending.displayName, "Modification Date (Oldest First)")
         XCTAssertEqual(AppSortOrder.modificationDateDescending.displayName, "Modification Date (Newest First)")
+        XCTAssertEqual(AppSortOrder.captureDateAscending.displayName, "Capture Date (Oldest First)")
+        XCTAssertEqual(AppSortOrder.captureDateDescending.displayName, "Capture Date (Newest First)")
         XCTAssertEqual(AppSortOrder.nameAscending.displayName, "Name (A → Z)")
         XCTAssertEqual(AppSortOrder.nameDescending.displayName, "Name (Z → A)")
         XCTAssertEqual(AppSortOrder.random.displayName, "Random")
@@ -92,11 +94,11 @@ final class SupportedExtensionTests: XCTestCase {
 final class SortComparatorTests: XCTestCase {
     let now = Date()
 
-    func makeEntries() -> [(url: URL, created: Date, modified: Date)] {
+    func makeEntries() -> [(url: URL, created: Date, modified: Date, captured: Date?)] {
         [
-            (url: URL(fileURLWithPath: "/img/banana.jpg"), created: now.addingTimeInterval(-200), modified: now.addingTimeInterval(-10)),
-            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now.addingTimeInterval(-100), modified: now.addingTimeInterval(-30)),
-            (url: URL(fileURLWithPath: "/img/cherry.jpg"), created: now.addingTimeInterval(-300), modified: now.addingTimeInterval(-20)),
+            (url: URL(fileURLWithPath: "/img/banana.jpg"), created: now.addingTimeInterval(-200), modified: now.addingTimeInterval(-10), captured: now.addingTimeInterval(-150)),
+            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now.addingTimeInterval(-100), modified: now.addingTimeInterval(-30), captured: now.addingTimeInterval(-50)),
+            (url: URL(fileURLWithPath: "/img/cherry.jpg"), created: now.addingTimeInterval(-300), modified: now.addingTimeInterval(-20), captured: now.addingTimeInterval(-250)),
         ]
     }
 
@@ -124,6 +126,48 @@ final class SortComparatorTests: XCTestCase {
         XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["banana.jpg", "cherry.jpg", "apple.jpg"])
     }
 
+    func testCaptureDateAscending() {
+        var entries = makeEntries()
+        ImageLoader.sortEntries(&entries, by: .captureDateAscending)
+        XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["cherry.jpg", "banana.jpg", "apple.jpg"])
+    }
+
+    func testCaptureDateDescending() {
+        var entries = makeEntries()
+        ImageLoader.sortEntries(&entries, by: .captureDateDescending)
+        XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["apple.jpg", "banana.jpg", "cherry.jpg"])
+    }
+
+    func testCaptureDateAscendingNilsSortToEnd() {
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = [
+            (url: URL(fileURLWithPath: "/img/banana.jpg"), created: now, modified: now, captured: now.addingTimeInterval(-100)),
+            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/cherry.jpg"), created: now, modified: now, captured: now.addingTimeInterval(-200)),
+        ]
+        ImageLoader.sortEntries(&entries, by: .captureDateAscending)
+        XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["cherry.jpg", "banana.jpg", "apple.jpg"])
+    }
+
+    func testCaptureDateDescendingNilsSortToBeginning() {
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = [
+            (url: URL(fileURLWithPath: "/img/banana.jpg"), created: now, modified: now, captured: now.addingTimeInterval(-100)),
+            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/cherry.jpg"), created: now, modified: now, captured: now.addingTimeInterval(-200)),
+        ]
+        ImageLoader.sortEntries(&entries, by: .captureDateDescending)
+        XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["apple.jpg", "banana.jpg", "cherry.jpg"])
+    }
+
+    func testCaptureDateAllNilsFallBackToName() {
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = [
+            (url: URL(fileURLWithPath: "/img/cherry.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/banana.jpg"), created: now, modified: now, captured: nil),
+        ]
+        ImageLoader.sortEntries(&entries, by: .captureDateAscending)
+        XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["apple.jpg", "banana.jpg", "cherry.jpg"])
+    }
+
     func testNameAscending() {
         var entries = makeEntries()
         ImageLoader.sortEntries(&entries, by: .nameAscending)
@@ -137,10 +181,10 @@ final class SortComparatorTests: XCTestCase {
     }
 
     func testNameSortIsCaseInsensitive() {
-        var entries: [(url: URL, created: Date, modified: Date)] = [
-            (url: URL(fileURLWithPath: "/img/Banana.jpg"), created: now, modified: now),
-            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now, modified: now),
-            (url: URL(fileURLWithPath: "/img/Cherry.jpg"), created: now, modified: now),
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = [
+            (url: URL(fileURLWithPath: "/img/Banana.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/apple.jpg"), created: now, modified: now, captured: nil),
+            (url: URL(fileURLWithPath: "/img/Cherry.jpg"), created: now, modified: now, captured: nil),
         ]
         ImageLoader.sortEntries(&entries, by: .nameAscending)
         XCTAssertEqual(entries.map { $0.url.lastPathComponent }, ["apple.jpg", "Banana.jpg", "Cherry.jpg"])
@@ -148,7 +192,7 @@ final class SortComparatorTests: XCTestCase {
 
     func testRandomShufflesEntries() {
         var entries = (0..<50).map { i in
-            (url: URL(fileURLWithPath: "/img/\(String(format: "%03d", i)).jpg"), created: now, modified: now)
+            (url: URL(fileURLWithPath: "/img/\(String(format: "%03d", i)).jpg"), created: now, modified: now, captured: nil as Date?)
         }
         let original = entries.map { $0.url }
         ImageLoader.sortEntries(&entries, by: .random)
@@ -157,14 +201,14 @@ final class SortComparatorTests: XCTestCase {
     }
 
     func testSortEmptyArray() {
-        var entries: [(url: URL, created: Date, modified: Date)] = []
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = []
         ImageLoader.sortEntries(&entries, by: .nameAscending)
         XCTAssertTrue(entries.isEmpty)
     }
 
     func testSortSingleElement() {
-        var entries: [(url: URL, created: Date, modified: Date)] = [
-            (url: URL(fileURLWithPath: "/img/only.jpg"), created: now, modified: now)
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = [
+            (url: URL(fileURLWithPath: "/img/only.jpg"), created: now, modified: now, captured: nil)
         ]
         ImageLoader.sortEntries(&entries, by: .nameAscending)
         XCTAssertEqual(entries.count, 1)

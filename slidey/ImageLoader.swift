@@ -7,6 +7,8 @@ enum AppSortOrder: String, CaseIterable, Identifiable {
     case creationDateDescending
     case modificationDateAscending
     case modificationDateDescending
+    case captureDateAscending
+    case captureDateDescending
     case nameAscending
     case nameDescending
     case random
@@ -19,6 +21,8 @@ enum AppSortOrder: String, CaseIterable, Identifiable {
         case .creationDateDescending: return "Creation Date (Newest First)"
         case .modificationDateAscending: return "Modification Date (Oldest First)"
         case .modificationDateDescending: return "Modification Date (Newest First)"
+        case .captureDateAscending: return "Capture Date (Oldest First)"
+        case .captureDateDescending: return "Capture Date (Newest First)"
         case .nameAscending: return "Name (A → Z)"
         case .nameDescending: return "Name (Z → A)"
         case .random: return "Random"
@@ -97,7 +101,8 @@ class ImageLoader: ObservableObject {
     }
 
     private func scanDirectory(url: URL) -> [URL] {
-        var entries: [(url: URL, created: Date, modified: Date)] = []
+        var entries: [(url: URL, created: Date, modified: Date, captured: Date?)] = []
+        let needsCaptureDate = sortOrder == .captureDateAscending || sortOrder == .captureDateDescending
 
         guard let enumerator = FileManager.default.enumerator(
             at: url,
@@ -114,10 +119,12 @@ class ImageLoader: ObservableObject {
             }
             let ext = fileURL.pathExtension.lowercased()
             guard supportedExtensions.contains(ext) else { continue }
+            let captureDate = needsCaptureDate ? Self.exifCaptureDate(for: fileURL) : nil
             entries.append((
                 url: fileURL,
                 created: r.creationDate ?? Date.distantPast,
-                modified: r.contentModificationDate ?? Date.distantPast
+                modified: r.contentModificationDate ?? Date.distantPast,
+                captured: captureDate
             ))
         }
 
@@ -126,7 +133,28 @@ class ImageLoader: ObservableObject {
         return entries.map { $0.url }
     }
 
-    static func sortEntries(_ entries: inout [(url: URL, created: Date, modified: Date)], by order: AppSortOrder) {
+    private static let exifDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy:MM:dd HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    static func exifCaptureDate(for url: URL) -> Date? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return nil
+        }
+        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any] else {
+            return nil
+        }
+        let dateString = exif[kCGImagePropertyExifDateTimeOriginal] as? String
+            ?? exif[kCGImagePropertyExifDateTimeDigitized] as? String
+        guard let ds = dateString else { return nil }
+        return exifDateFormatter.date(from: ds)
+    }
+
+    static func sortEntries(_ entries: inout [(url: URL, created: Date, modified: Date, captured: Date?)], by order: AppSortOrder) {
         switch order {
         case .creationDateAscending:
             entries.sort { $0.created < $1.created }
@@ -136,6 +164,24 @@ class ImageLoader: ObservableObject {
             entries.sort { $0.modified < $1.modified }
         case .modificationDateDescending:
             entries.sort { $0.modified > $1.modified }
+        case .captureDateAscending:
+            entries.sort {
+                switch ($0.captured, $1.captured) {
+                case let (a?, b?): return a < b
+                case (_?, nil): return true
+                case (nil, _?): return false
+                case (nil, nil): return $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending
+                }
+            }
+        case .captureDateDescending:
+            entries.sort {
+                switch ($0.captured, $1.captured) {
+                case let (a?, b?): return a > b
+                case (nil, _?): return true
+                case (_?, nil): return false
+                case (nil, nil): return $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending
+                }
+            }
         case .nameAscending:
             entries.sort { $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending }
         case .nameDescending:
