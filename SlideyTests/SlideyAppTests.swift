@@ -223,6 +223,43 @@ final class MusicMenuNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - File menu notification wiring tests (copy/move to folder)
+
+final class FileMenuNotificationTests: XCTestCase {
+    func testCopyToFolderNotificationFires() {
+        let expectation = expectation(description: "copyToFolder notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .copyToFolder, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .copyToFolder, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testMoveToFolderNotificationFires() {
+        let expectation = expectation(description: "moveToFolder notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .moveToFolder, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .moveToFolder, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testCopyMoveNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.copyToFolder.rawValue, "CopyToFolder")
+        XCTAssertEqual(NSNotification.Name.moveToFolder.rawValue, "MoveToFolder")
+    }
+
+    func testCopyMoveNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
 // MARK: - Slideshow menu notification wiring tests
 
 final class SlideshowMenuNotificationTests: XCTestCase {

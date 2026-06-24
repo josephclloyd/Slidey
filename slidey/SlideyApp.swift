@@ -287,6 +287,18 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }
             .keyboardShortcut(.delete, modifiers: .command)
+
+            Divider()
+
+            Button("Copy to Folder\u{2026}") {
+                NotificationCenter.default.post(name: .copyToFolder, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+
+            Button("Move to Folder\u{2026}") {
+                NotificationCenter.default.post(name: .moveToFolder, object: nil)
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
         }
     }
 
