@@ -33,3 +33,22 @@ Status: planned
 - All 5 issues touch distinct files — no merge conflicts; all can run in parallel
 - Sprint 11 deferred #83/#95 ("copy/move to folder") explicitly; this sprint delivers it
 - Author trust filter: all issues filed by `josephclloyd` ✓
+
+## Results
+
+Released: v1.11 — 2026-06-24
+
+### Shipped
+- #94 Add SlideshowController tests for loop on/off (PR #113)
+- #96 Expand ImageLoader test coverage for renameImage (PR #114)
+- #98 Decouple CI from hardcoded Xcode version (PR #111)
+- #107 Detect and surface error when watched directory is moved or renamed (PR #115)
+- #95 Copy or move current image to another folder (PR #116)
+
+### Needs attention
+None — all 5 planned issues shipped.
+
+### Stats
+- PRs merged: 5
+- CI wall time per PR: ~90s average
+- Notable: SlideshowView type-checker timeout hit on both #107 and #95 branches; fixed by extracting @ViewBuilder properties and splitting body into coreView + body
