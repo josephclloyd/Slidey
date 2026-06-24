@@ -1,0 +1,35 @@
+name: PR Size Check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize]
+
+jobs:
+  size-check:
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    if: ${{ !startsWith(github.head_ref, 'sprint-') }}
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Warn if PR exceeds 400 changed lines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          changed=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq '.additions + .deletions')
+
+          if [ "$changed" -gt 400 ]; then
+            existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
+              --jq '[.[] | select(.body | contains("**Large PR warning**"))] | length')
+
+            if [ "$existing" -eq 0 ]; then
+              gh pr comment "$PR_NUMBER" --repo "$REPO" --body \
+          "**Large PR warning:** This PR has $changed changed lines (threshold: 400). Consider whether it can be split into smaller, focused PRs.
+
+          This is an informational warning and does not block merge."
+            fi
+          fi
