@@ -4,6 +4,19 @@ import CoreImage
 import IOKit.pwr_mgt
 import UniformTypeIdentifiers
 
+func validateRenameTarget(newName: String, ext: String, directory: URL, originalBasename: String) -> String? {
+    let trimmed = newName.trimmingCharacters(in: .whitespaces)
+    if trimmed.isEmpty || trimmed == originalBasename { return nil }
+    if trimmed.contains("/") || trimmed.contains(":") {
+        return "Name cannot contain \"/\" or \":\" characters"
+    }
+    let targetPath = directory.appendingPathComponent("\(trimmed).\(ext)").path
+    if FileManager.default.fileExists(atPath: targetPath) {
+        return "A file named \"\(trimmed).\(ext)\" already exists"
+    }
+    return nil
+}
+
 struct ImageInfo {
     let width: Int
     let height: Int
@@ -399,6 +412,9 @@ struct SlideshowView: View {
                 updateDisplayImage()
                 enterFullScreen()
                 musicManager.activate()
+                if let url = imageLoader.currentImageURL {
+                    windowTitle = Self.titleForImage(at: url)
+                }
 
             } else {
                 slideshow.stop()
@@ -442,6 +458,9 @@ struct SlideshowView: View {
                     zoomPan.reset()
                 }
                 lastDisplayedURL = newURL
+                if let newURL {
+                    windowTitle = Self.titleForImage(at: newURL)
+                }
             }
             rotationAngle = currentURLRotation()
             updateDisplayImage()
@@ -917,7 +936,7 @@ struct SlideshowView: View {
         zoomPan.reset()
 
         imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
-        windowTitle = url.lastPathComponent
+        windowTitle = "Slidey"
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
@@ -1067,6 +1086,21 @@ struct SlideshowView: View {
                 window.title = title
             }
         }
+    }
+
+    static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let w = props[kCGImagePropertyPixelWidth] as? Int,
+              let h = props[kCGImagePropertyPixelHeight] as? Int,
+              w > 0, h > 0 else { return nil }
+        return (w, h)
+    }
+
+    static func titleForImage(at url: URL) -> String {
+        let name = url.lastPathComponent
+        guard let dims = imageDimensions(for: url) else { return name }
+        return "\(name) (\(dims.width)×\(dims.height))"
     }
 
     private func updateDisplayImage() {
@@ -1458,6 +1492,7 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         let ext = url.pathExtension
         let basename = url.deletingPathExtension().lastPathComponent
+        let directory = url.deletingLastPathComponent()
 
         let alert = NSAlert()
         alert.messageText = "Rename Image"
@@ -1468,15 +1503,53 @@ struct SlideshowView: View {
 
         let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         textField.stringValue = basename
-        alert.accessoryView = textField
+
+        let errorLabel = NSTextField(labelWithString: "")
+        errorLabel.textColor = .systemRed
+        errorLabel.font = .systemFont(ofSize: 11)
+        errorLabel.isHidden = true
+
+        let stackView = NSStackView(views: [textField, errorLabel])
+        stackView.orientation = .vertical
+        stackView.alignment = .leading
+        stackView.spacing = 4
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            textField.widthAnchor.constraint(equalToConstant: 300),
+        ])
+        alert.accessoryView = stackView
+
+        let renameButton = alert.buttons[0]
+
+        let validate = {
+            let newName = textField.stringValue.trimmingCharacters(in: .whitespaces)
+            if let error = validateRenameTarget(newName: newName, ext: ext, directory: directory, originalBasename: basename) {
+                renameButton.isEnabled = false
+                errorLabel.stringValue = error
+                errorLabel.isHidden = false
+            } else {
+                renameButton.isEnabled = !newName.isEmpty
+                errorLabel.isHidden = true
+            }
+        }
+
+        let observer = NotificationCenter.default.addObserver(
+            forName: NSControl.textDidChangeNotification,
+            object: textField,
+            queue: .main
+        ) { _ in
+            validate()
+        }
 
         guard let window = myWindow ?? NSApplication.shared.keyWindow else { return }
         alert.beginSheetModal(for: window) { response in
+            NotificationCenter.default.removeObserver(observer)
             guard response == .alertFirstButtonReturn else { return }
             let newName = textField.stringValue.trimmingCharacters(in: .whitespaces)
             guard !newName.isEmpty else { return }
 
-            let newURL = url.deletingLastPathComponent().appendingPathComponent("\(newName).\(ext)")
+            let newURL = directory.appendingPathComponent("\(newName).\(ext)")
             guard newURL != url else { return }
 
             do {
@@ -1505,7 +1578,7 @@ struct SlideshowView: View {
                 }
 
                 self.imageLoader.renameImage(from: url, to: newURL)
-                self.windowTitle = newURL.lastPathComponent
+                self.windowTitle = Self.titleForImage(at: newURL)
 
                 let message = "Renamed to \"\(newURL.lastPathComponent)\""
                 self.savedToast = message

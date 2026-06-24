@@ -605,3 +605,135 @@ final class ThumbnailCacheTests: XCTestCase {
         XCTAssertLessThanOrEqual(hitCount, 3)
     }
 }
+
+// MARK: - ImageDimensions & TitleForImage Tests
+
+final class ImageDimensionsTests: XCTestCase {
+    private func createTempJPEG(width: Int, height: Int) -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 3,
+            hasAlpha: false, isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        let data = rep.representation(using: .jpeg, properties: [:])!
+        try? data.write(to: url)
+        return url
+    }
+
+    override func tearDown() {
+        try? FileManager.default.contentsOfDirectory(
+            at: FileManager.default.temporaryDirectory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "jpg" }
+         .forEach { try? FileManager.default.removeItem(at: $0) }
+        super.tearDown()
+    }
+
+    func testValidImageReturnsDimensions() {
+        let url = createTempJPEG(width: 10, height: 20)
+        let dims = SlideshowView.imageDimensions(for: url)
+        XCTAssertNotNil(dims)
+        XCTAssertEqual(dims?.width, 10)
+        XCTAssertEqual(dims?.height, 20)
+    }
+
+    func testNonExistentURLReturnsNil() {
+        let url = URL(fileURLWithPath: "/tmp/nonexistent-\(UUID().uuidString).jpg")
+        XCTAssertNil(SlideshowView.imageDimensions(for: url))
+    }
+
+    func testZeroByteFileReturnsNil() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+        FileManager.default.createFile(atPath: url.path, contents: Data())
+        XCTAssertNil(SlideshowView.imageDimensions(for: url))
+    }
+
+    func testTitleForImageWithDimensions() {
+        let url = createTempJPEG(width: 10, height: 20)
+        let title = SlideshowView.titleForImage(at: url)
+        XCTAssertTrue(title.hasSuffix("(10×20)"))
+        XCTAssertTrue(title.hasPrefix(url.lastPathComponent.replacingOccurrences(of: " (10×20)", with: "")))
+    }
+
+    func testTitleForImageFallsBackWithoutDimensions() {
+        let url = URL(fileURLWithPath: "/tmp/nonexistent-\(UUID().uuidString).jpg")
+        let title = SlideshowView.titleForImage(at: url)
+        XCTAssertEqual(title, url.lastPathComponent)
+    }
+}
+
+// MARK: - validateRenameTarget Tests
+
+final class ValidateRenameTargetTests: XCTestCase {
+    private var tempDir: URL!
+
+    override func setUp() {
+        super.setUp()
+        tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: tempDir)
+        super.tearDown()
+    }
+
+    func testValidNameReturnsNil() {
+        let result = validateRenameTarget(newName: "newname", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNil(result)
+    }
+
+    func testEmptyNameReturnsNil() {
+        let result = validateRenameTarget(newName: "", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNil(result)
+    }
+
+    func testWhitespaceOnlyReturnsNil() {
+        let result = validateRenameTarget(newName: "   ", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNil(result)
+    }
+
+    func testSameNameReturnsNil() {
+        let result = validateRenameTarget(newName: "original", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNil(result)
+    }
+
+    func testSlashReturnsError() {
+        let result = validateRenameTarget(newName: "bad/name", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.contains("/"))
+    }
+
+    func testColonReturnsError() {
+        let result = validateRenameTarget(newName: "bad:name", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.contains(":"))
+    }
+
+    func testExistingFileReturnsError() {
+        let existingFile = tempDir.appendingPathComponent("conflict.jpg")
+        FileManager.default.createFile(atPath: existingFile.path, contents: Data())
+
+        let result = validateRenameTarget(newName: "conflict", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.contains("already exists"))
+    }
+
+    func testNonExistingFileReturnsNil() {
+        let result = validateRenameTarget(newName: "unique-name", ext: "png", directory: tempDir, originalBasename: "original")
+        XCTAssertNil(result)
+    }
+
+    func testTrimsWhitespaceBeforeValidating() {
+        let existingFile = tempDir.appendingPathComponent("padded.jpg")
+        FileManager.default.createFile(atPath: existingFile.path, contents: Data())
+
+        let result = validateRenameTarget(newName: "  padded  ", ext: "jpg", directory: tempDir, originalBasename: "original")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.contains("already exists"))
+    }
+}
