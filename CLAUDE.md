@@ -56,6 +56,7 @@ slidey/
 - `CODE_SIGNING_ALLOWED=NO` is required for `xcodebuild` CLI builds. Omitting it causes a codesign failure in non-interactive environments.
 - **App Sandbox** is on. Features that need filesystem access beyond the user-selected directory require additional entitlements — don't add broad access entitlements without discussion.
 - `SlideshowView.swift` uses `.onKeyPress` for Space, 't', etc. Key equivalents in `Commands` structs for the same keys are intentionally **commented out** — `.focusable()` takes priority and the key would be swallowed before the menu fires. See the `SlideshowMenuCommands` comment.
+- **SlideshowView type-checker timeout**: Xcode 16.3's type-checker fails on deeply nested `ModifiedContent<..., ...>` chains. The body is structured as: `@ViewBuilder private var emptyStateContent/imageDisplayContent/overlayViews` → `private var coreView: some View` (ZStack + onChange/focusable/onKeyPress chain) → `var body` (coreView + onReceive chain). Any branch that adds to `overlayViews` or `coreView` may push over the limit and break CI. If CI fails at a line in `body` or `coreView` with "unable to type-check in reasonable time", the fix is to extract more content into a `@ViewBuilder private var` and/or split the `coreView` modifier chain further.
 
 ## Workflow
 

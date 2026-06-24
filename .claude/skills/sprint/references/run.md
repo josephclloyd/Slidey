@@ -219,6 +219,15 @@ TaskCreate "Issue #16: auto-open recent"
 **Never run #15 and #16 in parallel** — they both modify `SlideshowView.swift` and will
 conflict. The `addBlockedBy` edge ensures #16 waits for #15 to merge.
 
+**SlideshowView.swift hot-file — deeper conflict check at plan time:** The "distinct files" check is insufficient for SlideshowView. Two branches that each add a new `@ViewBuilder private var` property, or each add a modifier to `coreView`/`overlayViews`, will produce a merge conflict even though they "touch different features." At plan time, inspect which *sections* of SlideshowView each issue adds to: `emptyStateContent`, `imageDisplayContent`, `overlayViews`, `coreView`, `body`. If two issues touch the same section, serialise them with `addBlockedBy`.
+
+**SlideshowView type-checker timeout:** Xcode 16.3 CI fails with "unable to type-check in reasonable time" when `coreView` or `body` accumulates too many modifier levels. The established fix:
+1. Extract view sections into `@ViewBuilder private var emptyStateContent/imageDisplayContent/overlayViews`
+2. Move the ZStack + onChange/focusable/onKeyPress chain into `private var coreView: some View`
+3. Leave only `coreView` + `.onReceive` chain + `.sheet`/`.alert` in `var body`
+
+If CI fails at a line in `body` or `coreView` with "unable to type-check", apply this split. Needs two repair passes if the first extraction doesn't shorten `body` enough.
+
 ## Quota-hit recovery (session exits with "You're out of extra usage")
 
 When a session hits the usage quota mid-work, the branch may not exist yet and changes are
