@@ -366,7 +366,7 @@ struct SlideshowView: View {
         .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
     }
 
-    var body: some View {
+    private var coreView: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
@@ -490,6 +490,10 @@ struct SlideshowView: View {
         .onKeyPress { keyPress in
             handleKeyPress(keyPress)
         }
+    }
+
+    var body: some View {
+        coreView
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.selectDirectory)) { _ in
             ifKeyWindow { selectDirectory() }
         }
