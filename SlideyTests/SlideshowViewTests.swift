@@ -605,3 +605,63 @@ final class ThumbnailCacheTests: XCTestCase {
         XCTAssertLessThanOrEqual(hitCount, 3)
     }
 }
+
+// MARK: - ImageDimensions & TitleForImage Tests
+
+final class ImageDimensionsTests: XCTestCase {
+    private func createTempJPEG(width: Int, height: Int) -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 3,
+            hasAlpha: false, isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        let data = rep.representation(using: .jpeg, properties: [:])!
+        try? data.write(to: url)
+        return url
+    }
+
+    override func tearDown() {
+        try? FileManager.default.contentsOfDirectory(
+            at: FileManager.default.temporaryDirectory,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "jpg" }
+         .forEach { try? FileManager.default.removeItem(at: $0) }
+        super.tearDown()
+    }
+
+    func testValidImageReturnsDimensions() {
+        let url = createTempJPEG(width: 10, height: 20)
+        let dims = SlideshowView.imageDimensions(for: url)
+        XCTAssertNotNil(dims)
+        XCTAssertEqual(dims?.width, 10)
+        XCTAssertEqual(dims?.height, 20)
+    }
+
+    func testNonExistentURLReturnsNil() {
+        let url = URL(fileURLWithPath: "/tmp/nonexistent-\(UUID().uuidString).jpg")
+        XCTAssertNil(SlideshowView.imageDimensions(for: url))
+    }
+
+    func testZeroByteFileReturnsNil() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
+        FileManager.default.createFile(atPath: url.path, contents: Data())
+        XCTAssertNil(SlideshowView.imageDimensions(for: url))
+    }
+
+    func testTitleForImageWithDimensions() {
+        let url = createTempJPEG(width: 10, height: 20)
+        let title = SlideshowView.titleForImage(at: url)
+        XCTAssertTrue(title.hasSuffix("(10×20)"))
+        XCTAssertTrue(title.hasPrefix(url.lastPathComponent.replacingOccurrences(of: " (10×20)", with: "")))
+    }
+
+    func testTitleForImageFallsBackWithoutDimensions() {
+        let url = URL(fileURLWithPath: "/tmp/nonexistent-\(UUID().uuidString).jpg")
+        let title = SlideshowView.titleForImage(at: url)
+        XCTAssertEqual(title, url.lastPathComponent)
+    }
+}

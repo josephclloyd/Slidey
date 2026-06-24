@@ -400,7 +400,7 @@ struct SlideshowView: View {
                 enterFullScreen()
                 musicManager.activate()
                 if let url = imageLoader.currentImageURL {
-                    windowTitle = titleForImage(at: url)
+                    windowTitle = Self.titleForImage(at: url)
                 }
 
             } else {
@@ -446,7 +446,7 @@ struct SlideshowView: View {
                 }
                 lastDisplayedURL = newURL
                 if let newURL {
-                    windowTitle = titleForImage(at: newURL)
+                    windowTitle = Self.titleForImage(at: newURL)
                 }
             }
             rotationAngle = currentURLRotation()
@@ -1075,7 +1075,7 @@ struct SlideshowView: View {
         }
     }
 
-    private static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
+    static func imageDimensions(for url: URL) -> (width: Int, height: Int)? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let w = props[kCGImagePropertyPixelWidth] as? Int,
@@ -1084,9 +1084,9 @@ struct SlideshowView: View {
         return (w, h)
     }
 
-    private func titleForImage(at url: URL) -> String {
+    static func titleForImage(at url: URL) -> String {
         let name = url.lastPathComponent
-        guard let dims = Self.imageDimensions(for: url) else { return name }
+        guard let dims = imageDimensions(for: url) else { return name }
         return "\(name) (\(dims.width)×\(dims.height))"
     }
 
@@ -1526,7 +1526,7 @@ struct SlideshowView: View {
                 }
 
                 self.imageLoader.renameImage(from: url, to: newURL)
-                self.windowTitle = self.titleForImage(at: newURL)
+                self.windowTitle = Self.titleForImage(at: newURL)
 
                 let message = "Renamed to \"\(newURL.lastPathComponent)\""
                 self.savedToast = message
