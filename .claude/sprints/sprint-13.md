@@ -29,3 +29,21 @@ Status: planned
 - #106 and #104 both touch SlideshowView.swift — #104 blocked by #106
 - #97, #99, #103, #106 can all start in parallel; #104 starts after #106 merges
 - Author trust filter: all issues filed by `josephclloyd` ✓
+
+## Results
+
+Released: v1.12 — 2026-06-24
+
+### Shipped
+- #97 + #99 Add test coverage report + PR size warning to CI (PR #118, bundled)
+- #103 Sort by EXIF capture date (PR #119)
+- #106 Show image dimensions in window title (PR #120)
+- #104 Improve rename UX with inline validation (PR #121)
+
+### Needs attention
+None — all 5 planned issues shipped.
+
+### Stats
+- PRs merged: 4 (5 issues — #97/#99 bundled)
+- CI wall time per PR: ~90s average
+- Notable: quota hit mid-sprint on #99, #103, #106 sessions; re-spawned after reset; all completed on second attempt. #97 session over-delivered by including #99's pr-size.yml — accepted the bundle rather than splitting.
