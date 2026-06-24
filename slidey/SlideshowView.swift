@@ -332,44 +332,48 @@ struct SlideshowView: View {
         }
     }
 
-    var body: some View {
+    @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
+        GeometryReader { geometry in
+            if let image = currentDisplayImage {
+                ImageDisplayView(
+                    image: image,
+                    zoomScale: $zoomPan.zoomScale,
+                    imageOffset: $zoomPan.imageOffset,
+                    containerSize: geometry.size,
+                    rotationAngle: $rotationAngle,
+                    onLeftClick: {
+                        guard !isProcessing else { return }
+                        imageLoader.nextImage()
+                    },
+                    onRightClick: {
+                        guard !isProcessing else { return }
+                        imageLoader.previousImage()
+                    }
+                )
+                .id(imageLoader.currentImageURL)
+                .transition(.opacity)
+                .onAppear {
+                    zoomPan.windowSize = geometry.size
+                    updateDisplayImage()
+                    captureWindow()
+                }
+                .onChange(of: geometry.size) { _, newSize in
+                    zoomPan.windowSize = newSize
+                }
+            }
+        }
+        .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
+    }
+
+    var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
             if imageLoader.imageURLs.isEmpty {
                 emptyStateContent
             } else {
-                GeometryReader { geometry in
-                    if let image = currentDisplayImage {
-                        ImageDisplayView(
-                            image: image,
-                            zoomScale: $zoomPan.zoomScale,
-                            imageOffset: $zoomPan.imageOffset,
-                            containerSize: geometry.size,
-                            rotationAngle: $rotationAngle,
-                            onLeftClick: {
-                                guard !isProcessing else { return }
-                                imageLoader.nextImage()
-                            },
-                            onRightClick: {
-                                guard !isProcessing else { return }
-                                imageLoader.previousImage()
-                            }
-                        )
-                        .id(imageLoader.currentImageURL)
-                        .transition(.opacity)
-                        .onAppear {
-                            zoomPan.windowSize = geometry.size
-                            updateDisplayImage()
-                            captureWindow()
-                        }
-                        .onChange(of: geometry.size) { _, newSize in
-                            zoomPan.windowSize = newSize
-                        }
-                    }
-                }
-                .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
+                imageDisplayContent
             }
 
             overlayViews
