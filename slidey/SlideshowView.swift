@@ -2006,13 +2006,16 @@ struct ThumbnailCell: View {
             self.thumbnail = cached
             return
         }
-        let maxPixel = Int(size * 2) // 2x for retina
+        let maxPixel = Int(size * 2)
         let target = url
+
+        // Debounce: cells scrolled past in under 50 ms cancel here (Task.sleep
+        // throws on cancellation) instead of spawning a disk-read task.
+        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+
         let thumb = await Task.detached(priority: .utility) {
             return Self.generate(url: target, maxPixelSize: maxPixel)
         }.value
-        // Cell may have been recycled to a different URL while we were
-        // generating — only commit if we're still the cell for `target`.
         guard target == url else { return }
         if let thumb {
             ThumbnailCache.shared.set(target, image: thumb)
