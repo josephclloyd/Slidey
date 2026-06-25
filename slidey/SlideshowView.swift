@@ -909,6 +909,7 @@ struct SlideshowView: View {
 
     private func updateCursorVisibility() {
         let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails && slideshow.isPlaying
+        let shouldAutoHideMenuBar = isFullScreen && slideshow.isPlaying
 
         DispatchQueue.main.async {
             if shouldHideCursor && !isCursorHidden {
@@ -920,7 +921,6 @@ struct SlideshowView: View {
                 cursorShowTask?.cancel()
             }
 
-            let shouldAutoHideMenuBar = isFullScreen && slideshow.isPlaying
             NSApplication.shared.presentationOptions = shouldAutoHideMenuBar ? [.autoHideMenuBar] : []
         }
     }
