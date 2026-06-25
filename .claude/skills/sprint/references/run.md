@@ -54,7 +54,7 @@ checks are especially important — corrupted state from a prior run is hard to 
 
 ## Post-impl routine (run after EVERY impl session goes idle)
 
-Do these three steps in order before running the review phase. All three are required
+Do these steps in order before running the review phase. All are required
 every sprint — impl sessions consistently skip them:
 
 ```bash
@@ -62,11 +62,21 @@ every sprint — impl sessions consistently skip them:
 gh pr view <prNumber> --json body -q '.body' | grep -i closes
 # If empty: gh pr edit <PR> --body "$(gh pr view <PR> --json body -q '.body')\n\nCloses #N"
 
-# 2. Restore main checkout (sessions branch in the main worktree, leaving HEAD on feature branch)
+# 2. SlideshowView.swift testability note — impl sessions reliably omit this.
+#    If the PR diff touches SlideshowView.swift, check the PR body mentions tests/testability.
+gh pr diff <prNumber> | grep -q "SlideshowView.swift" && \
+  gh pr view <prNumber> --json body -q '.body' | grep -qi "test" || \
+  echo "MISSING: add testability note to PR body"
+# If missing, add: gh pr edit <PR> --body "$(gh pr view <PR> --json body -q '.body')
+#
+# ## Testing
+# No unit tests added — all new code is SwiftUI/AppKit UI wiring with no extractable logic; manual test checklist covers the behaviour."
+
+# 3. Restore main checkout (sessions branch in the main worktree, leaving HEAD on feature branch)
 git branch --show-current   # if not "main":
 git checkout main
 
-# 3. Re-pair tracked work item so prNumber populates (daemon doesn't auto-link)
+# 4. Re-pair tracked work item so prNumber populates (daemon doesn't auto-link)
 mcx untrack N
 sleep 10
 mcx track N
