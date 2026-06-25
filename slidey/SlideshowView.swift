@@ -2016,6 +2016,8 @@ struct ThumbnailCell: View {
         let thumb = await Task.detached(priority: .utility) {
             return Self.generate(url: target, maxPixelSize: maxPixel)
         }.value
+        // Cell may have been recycled to a different URL while we were
+        // generating — only commit if we're still the cell for `target`.
         guard target == url else { return }
         if let thumb {
             ThumbnailCache.shared.set(target, image: thumb)
