@@ -24,3 +24,22 @@ Status: planned
 - #101 blocked by #109: both touch SlideshowView.swift; #101 runs after #109 merges
 - Author trust filter: all issues filed by `josephclloyd` ✓
 - Sprint 13 shipped #118, #119, #120, #121; no sprint-13.md file was created (sprint ran before plan-file convention was enforced)
+
+## Results
+
+Released: v1.13 — 2026-06-25
+
+### Shipped
+- #109 Add basic VoiceOver accessibility labels (PR #123)
+- #108 Debounce thumbnail generation for large directories (PR #124)
+- #101 Presentation mode: hide cursor and menu bar when fullscreen (PR #125)
+
+### Needs attention
+None — all 3 planned issues shipped.
+
+### Stats
+- PRs merged: 3
+- Total cost: ~$6.12
+- Sessions spawned: 12 (3 impl @ opus, 4 review @ sonnet, 3 repair @ opus, 2 re-review @ sonnet)
+- CI wall time per PR: ~90s average
+- Notable: all three PRs needed a repair pass solely for missing testability note in PR description; baked into skill as a recurring pattern
