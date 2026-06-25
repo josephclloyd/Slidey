@@ -100,17 +100,8 @@ final class MusicManager: ObservableObject {
     }
 
     func resumeIfConfigured() {
-        if musicMode != .off && isActive && player.state.playbackStatus == .playing {
-            return
-        }
-
-        var modeToPlay = musicMode
-        if modeToPlay == .off {
-            guard lastConfiguredMode != .off else { return }
-            modeToPlay = lastConfiguredMode
-            musicMode = modeToPlay
-            UserDefaults.standard.set(modeToPlay.rawValue, forKey: "musicMode")
-        }
+        guard musicMode != .off else { return }
+        if isActive && player.state.playbackStatus == .playing { return }
 
         if !isActive { isActive = true }
         Task { await startPlayback() }
