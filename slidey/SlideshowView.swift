@@ -1059,6 +1059,7 @@ struct SlideshowView: View {
             // so enqueue after it to catch the case where the directory had no images
             // or the bookmark couldn't be resolved.
             DispatchQueue.main.async {
+                self.slideshow.stop()
                 if self.imageLoader.imageURLs.isEmpty {
                     self.isAutoOpening = false
                 }
