@@ -215,22 +215,21 @@ struct SettingsView: View {
                     }
                 }
             }
-            Section("Music") {
+            Section(
+                header: Text("Music"),
+                footer: Text(musicSelectionText)
+            ) {
                 Toggle("Resume music when starting slideshow", isOn: $autoPlayMusic)
-                Text(musicSelectionText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            Section("Input") {
+            Section(
+                header: Text("Input"),
+                footer: Text("When on, the image follows your fingers (macOS-native feel). When off, scroll direction is inverted.")
+            ) {
                 Toggle("Natural scroll pan", isOn: $naturalScrollPan)
-                Text("When on, the image follows your fingers (macOS-native feel). When off, scroll direction is inverted.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(20)
+        .formStyle(.grouped)
+        .animation(.default, value: transitionsEnabled)
         .frame(width: 420)
     }
 }
