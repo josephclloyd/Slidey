@@ -440,7 +440,7 @@ struct SlideshowView: View {
                 rotationAngle = currentURLRotation()
                 updateDisplayImage()
                 enterFullScreen()
-                musicManager.activate()
+                if autoPlayMusic { musicManager.activate() }
                 if let url = imageLoader.currentImageURL {
                     windowTitle = Self.titleForImage(at: url)
                 }
@@ -501,7 +501,7 @@ struct SlideshowView: View {
             updateCursorVisibility()
             if fullScreen {
                 acquireDisplaySleepAssertion()
-                musicManager.activate()
+                if autoPlayMusic { musicManager.activate() }
             } else {
                 releaseDisplaySleepAssertion()
                 musicManager.deactivate()
