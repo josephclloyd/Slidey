@@ -77,9 +77,22 @@ struct SlideshowView: View {
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
     @State private var showFavouritesOnly: Bool = false
+    @State private var isCursorHidden = false
+    @State private var mouseMonitor: Any?
+    @State private var cursorShowTask: Task<Void, Never>?
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
+    }
+
+    private var imageAccessibilityLabel: String {
+        guard let url = imageLoader.currentImageURL else { return "No image" }
+        let name = url.lastPathComponent
+        let position = "image \(imageLoader.currentIndex + 1) of \(imageLoader.imageURLs.count)"
+        if let dims = Self.imageDimensions(for: url) {
+            return "\(name), \(dims.width) by \(dims.height) pixels, \(position)"
+        }
+        return "\(name), \(position)"
     }
 
     @ViewBuilder
@@ -94,6 +107,8 @@ struct SlideshowView: View {
                     .font(.title3)
                     .foregroundColor(.white.opacity(0.7))
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Loading images")
             .onAppear {
                 captureWindow()
             }
@@ -124,6 +139,7 @@ struct SlideshowView: View {
                             selectDirectory()
                         }
                         .buttonStyle(.borderedProminent)
+                        .accessibilityHint("Opens a folder picker to choose an image directory")
                     }
 
                     if !recentDirectories.directories.isEmpty {
@@ -150,6 +166,8 @@ struct SlideshowView: View {
                                         .cornerRadius(6)
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("Open \(entry.displayName)")
+                                    .accessibilityHint("Opens this recent directory")
                                 }
                             }
                         }
@@ -291,14 +309,19 @@ struct SlideshowView: View {
                         .progressViewStyle(.linear)
                         .tint(.white)
                         .frame(width: 220)
+                        .accessibilityLabel("Upscale progress")
+                        .accessibilityValue("\(Int(upscaleProgress * 100)) percent")
 
                     Text("\(Int(upscaleProgress * 100))%")
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
+                        .accessibilityHidden(true)
 
                     Button("Cancel", action: cancelUpscale)
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityLabel("Cancel upscaling")
+                        .accessibilityHint("Stops the AI upscaling process")
                 }
                 .padding(30)
                 .background(.black.opacity(0.85))
@@ -321,6 +344,7 @@ struct SlideshowView: View {
                             showDebugWindow = false
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityLabel("Close debug window")
                     }
 
                     ScrollView {
@@ -367,6 +391,11 @@ struct SlideshowView: View {
                         imageLoader.previousImage()
                     }
                 )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(imageAccessibilityLabel)
+                .accessibilityAddTraits(.isImage)
+                .accessibilityAction(named: "Next image") { imageLoader.nextImage() }
+                .accessibilityAction(named: "Previous image") { imageLoader.previousImage() }
                 .id(imageLoader.currentImageURL)
                 .transition(.opacity)
                 .onAppear {
@@ -481,6 +510,10 @@ struct SlideshowView: View {
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
+        .onChange(of: slideshow.isPlaying) { _, _ in
+            cursorShowTask?.cancel()
+            updateCursorVisibility()
+        }
         .onChange(of: sortOrder, initial: true) { _, newValue in
             imageLoader.sortOrder = newValue
             if !imageLoader.imageURLs.isEmpty {
@@ -491,11 +524,18 @@ struct SlideshowView: View {
             loadFavourites()
             consumePendingOpenIfPossible()
             scheduleAutoOpenRecent()
+            startMouseMonitor()
         }
         .onDisappear {
             slideshow.stop()
             releaseDisplaySleepAssertion()
             musicManager.deactivate()
+            stopMouseMonitor()
+            if isCursorHidden {
+                NSCursor.unhide()
+                isCursorHidden = false
+            }
+            NSApplication.shared.presentationOptions = []
         }
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
@@ -868,15 +908,49 @@ struct SlideshowView: View {
     }
 
     private func updateCursorVisibility() {
-        // Hide cursor only if: images are loaded AND fullscreen AND window has focus
-        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails
+        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails && slideshow.isPlaying
+        let shouldAutoHideMenuBar = isFullScreen && slideshow.isPlaying
 
         DispatchQueue.main.async {
-            if shouldHideCursor {
+            if shouldHideCursor && !isCursorHidden {
                 NSCursor.hide()
-            } else {
+                isCursorHidden = true
+            } else if !shouldHideCursor && isCursorHidden {
                 NSCursor.unhide()
+                isCursorHidden = false
+                cursorShowTask?.cancel()
             }
+
+            NSApplication.shared.presentationOptions = shouldAutoHideMenuBar ? [.autoHideMenuBar] : []
+        }
+    }
+
+    private func startMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
+            if self.isCursorHidden {
+                NSCursor.unhide()
+                self.isCursorHidden = false
+                self.scheduleCursorHide()
+            }
+            return event
+        }
+    }
+
+    private func stopMouseMonitor() {
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+        cursorShowTask?.cancel()
+    }
+
+    private func scheduleCursorHide() {
+        cursorShowTask?.cancel()
+        cursorShowTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            updateCursorVisibility()
         }
     }
 
@@ -1926,6 +2000,8 @@ struct SlideshowView: View {
                     .progressViewStyle(.circular)
                     .tint(.white)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Directory is no longer available. Waiting for the directory to reappear.")
             .padding(40)
             .background(.black.opacity(0.85))
             .cornerRadius(12)
@@ -1995,9 +2071,20 @@ struct ThumbnailCell: View {
             .cornerRadius(3)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(thumbnailAccessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+        .accessibilityHint("Double tap to view this image")
         .task(id: url) {
             await loadThumbnail()
         }
+    }
+
+    private var thumbnailAccessibilityLabel: String {
+        var label = url.lastPathComponent
+        if isFavourite { label += ", favourited" }
+        if isSelected { label += ", selected" }
+        return label
     }
 
     @MainActor
@@ -2006,8 +2093,13 @@ struct ThumbnailCell: View {
             self.thumbnail = cached
             return
         }
-        let maxPixel = Int(size * 2) // 2x for retina
+        let maxPixel = Int(size * 2)
         let target = url
+
+        // Debounce: cells scrolled past in under 50 ms cancel here (Task.sleep
+        // throws on cancellation) instead of spawning a disk-read task.
+        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+
         let thumb = await Task.detached(priority: .utility) {
             return Self.generate(url: target, maxPixelSize: maxPixel)
         }.value
@@ -2063,6 +2155,7 @@ struct ThumbnailStrip: View {
             }
             .frame(height: thumbSize + 16)
             .background(.black.opacity(0.75))
+            .accessibilityLabel("Thumbnail strip, \(imageLoader.imageURLs.count) images")
             .onChange(of: imageLoader.currentIndex) { _, _ in
                 if let url = imageLoader.currentImageURL {
                     withAnimation(.easeInOut(duration: 0.2)) {
