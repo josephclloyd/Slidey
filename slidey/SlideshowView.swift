@@ -82,6 +82,16 @@ struct SlideshowView: View {
         currentDisplayImage ?? imageLoader.currentImage
     }
 
+    private var imageAccessibilityLabel: String {
+        guard let url = imageLoader.currentImageURL else { return "No image" }
+        let name = url.lastPathComponent
+        let position = "image \(imageLoader.currentIndex + 1) of \(imageLoader.imageURLs.count)"
+        if let dims = Self.imageDimensions(for: url) {
+            return "\(name), \(dims.width) by \(dims.height) pixels, \(position)"
+        }
+        return "\(name), \(position)"
+    }
+
     @ViewBuilder
     private var emptyStateContent: some View {
         if isAutoOpening {
@@ -94,6 +104,8 @@ struct SlideshowView: View {
                     .font(.title3)
                     .foregroundColor(.white.opacity(0.7))
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Loading images")
             .onAppear {
                 captureWindow()
             }
@@ -124,6 +136,7 @@ struct SlideshowView: View {
                             selectDirectory()
                         }
                         .buttonStyle(.borderedProminent)
+                        .accessibilityHint("Opens a folder picker to choose an image directory")
                     }
 
                     if !recentDirectories.directories.isEmpty {
@@ -150,6 +163,8 @@ struct SlideshowView: View {
                                         .cornerRadius(6)
                                     }
                                     .buttonStyle(.plain)
+                                    .accessibilityLabel("Open \(entry.displayName)")
+                                    .accessibilityHint("Opens this recent directory")
                                 }
                             }
                         }
@@ -291,14 +306,19 @@ struct SlideshowView: View {
                         .progressViewStyle(.linear)
                         .tint(.white)
                         .frame(width: 220)
+                        .accessibilityLabel("Upscale progress")
+                        .accessibilityValue("\(Int(upscaleProgress * 100)) percent")
 
                     Text("\(Int(upscaleProgress * 100))%")
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
+                        .accessibilityHidden(true)
 
                     Button("Cancel", action: cancelUpscale)
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityLabel("Cancel upscaling")
+                        .accessibilityHint("Stops the AI upscaling process")
                 }
                 .padding(30)
                 .background(.black.opacity(0.85))
@@ -321,6 +341,7 @@ struct SlideshowView: View {
                             showDebugWindow = false
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityLabel("Close debug window")
                     }
 
                     ScrollView {
@@ -367,6 +388,11 @@ struct SlideshowView: View {
                         imageLoader.previousImage()
                     }
                 )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(imageAccessibilityLabel)
+                .accessibilityAddTraits(.isImage)
+                .accessibilityAction(named: "Next image") { imageLoader.nextImage() }
+                .accessibilityAction(named: "Previous image") { imageLoader.previousImage() }
                 .id(imageLoader.currentImageURL)
                 .transition(.opacity)
                 .onAppear {
@@ -1926,6 +1952,8 @@ struct SlideshowView: View {
                     .progressViewStyle(.circular)
                     .tint(.white)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Directory is no longer available. Waiting for the directory to reappear.")
             .padding(40)
             .background(.black.opacity(0.85))
             .cornerRadius(12)
@@ -1995,9 +2023,20 @@ struct ThumbnailCell: View {
             .cornerRadius(3)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(thumbnailAccessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+        .accessibilityHint("Double tap to view this image")
         .task(id: url) {
             await loadThumbnail()
         }
+    }
+
+    private var thumbnailAccessibilityLabel: String {
+        var label = url.lastPathComponent
+        if isFavourite { label += ", favourited" }
+        if isSelected { label += ", selected" }
+        return label
     }
 
     @MainActor
@@ -2063,6 +2102,7 @@ struct ThumbnailStrip: View {
             }
             .frame(height: thumbSize + 16)
             .background(.black.opacity(0.75))
+            .accessibilityLabel("Thumbnail strip, \(imageLoader.imageURLs.count) images")
             .onChange(of: imageLoader.currentIndex) { _, _ in
                 if let url = imageLoader.currentImageURL {
                     withAnimation(.easeInOut(duration: 0.2)) {
