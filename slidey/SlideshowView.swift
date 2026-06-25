@@ -77,6 +77,9 @@ struct SlideshowView: View {
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
     @State private var showFavouritesOnly: Bool = false
+    @State private var isCursorHidden = false
+    @State private var mouseMonitor: Any?
+    @State private var cursorShowTask: Task<Void, Never>?
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -507,6 +510,10 @@ struct SlideshowView: View {
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
+        .onChange(of: slideshow.isPlaying) { _, _ in
+            cursorShowTask?.cancel()
+            updateCursorVisibility()
+        }
         .onChange(of: sortOrder, initial: true) { _, newValue in
             imageLoader.sortOrder = newValue
             if !imageLoader.imageURLs.isEmpty {
@@ -517,11 +524,18 @@ struct SlideshowView: View {
             loadFavourites()
             consumePendingOpenIfPossible()
             scheduleAutoOpenRecent()
+            startMouseMonitor()
         }
         .onDisappear {
             slideshow.stop()
             releaseDisplaySleepAssertion()
             musicManager.deactivate()
+            stopMouseMonitor()
+            if isCursorHidden {
+                NSCursor.unhide()
+                isCursorHidden = false
+            }
+            NSApplication.shared.presentationOptions = []
         }
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
@@ -894,15 +908,49 @@ struct SlideshowView: View {
     }
 
     private func updateCursorVisibility() {
-        // Hide cursor only if: images are loaded AND fullscreen AND window has focus
-        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails
+        let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails && slideshow.isPlaying
 
         DispatchQueue.main.async {
-            if shouldHideCursor {
+            if shouldHideCursor && !isCursorHidden {
                 NSCursor.hide()
-            } else {
+                isCursorHidden = true
+            } else if !shouldHideCursor && isCursorHidden {
                 NSCursor.unhide()
+                isCursorHidden = false
+                cursorShowTask?.cancel()
             }
+
+            let shouldAutoHideMenuBar = isFullScreen && slideshow.isPlaying
+            NSApplication.shared.presentationOptions = shouldAutoHideMenuBar ? [.autoHideMenuBar] : []
+        }
+    }
+
+    private func startMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { event in
+            if self.isCursorHidden {
+                NSCursor.unhide()
+                self.isCursorHidden = false
+                self.scheduleCursorHide()
+            }
+            return event
+        }
+    }
+
+    private func stopMouseMonitor() {
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+        cursorShowTask?.cancel()
+    }
+
+    private func scheduleCursorHide() {
+        cursorShowTask?.cancel()
+        cursorShowTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            updateCursorVisibility()
         }
     }
 
