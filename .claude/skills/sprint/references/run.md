@@ -253,7 +253,15 @@ Never silently accept a bundle — always update the PR body so both issues are 
 When a session hits the usage quota mid-work, the branch may not exist yet and changes are
 uncommitted in the main worktree.
 
-**Zero-progress case (most common when quota hits early):** If multiple sessions all hit quota simultaneously, they typically made no commits and created no remote branches. Check with `git log <branch> ^main --oneline` — if empty, the session left nothing useful. Delete the stale local branch (`git branch -D <branch-name>`) and re-spawn after the quota resets. Do not attempt recovery of empty branches.
+**Zero-progress case (most common when quota hits early):** If multiple sessions all hit quota simultaneously, they typically made no commits and created no remote branches. Check with `git log <branch> ^main --oneline` — if empty, the session left nothing useful. If the build also fails, discard without further investigation:
+
+```bash
+git checkout main
+git branch -D <branch-name>
+git checkout -- <modified-files>   # restore any partial edits
+```
+
+Re-spawn after the quota resets. Do not attempt recovery of a zero-commit, failing-build branch — the session had made no meaningful progress.
 
 **Partial-progress case:** Do not discard — the work is usually complete.
 
@@ -307,6 +315,22 @@ gh api repos/josephclloyd/Slidey/pulls/N --jq '{state: .state, merged: .merged, 
 ```
 If that also fails, prompt Joe: `! gh auth refresh -h github.com` (requires interactive
 browser flow — cannot be automated).
+
+## Ambiguous test result in impl session output
+
+When the impl session result text says "Build: SUCCEEDED" without an explicit "N passed" test count, the Test CI job may not have been checked. Verify before spawning review:
+
+```bash
+gh pr checks <prNumber>   # both Build and Test jobs must be green
+```
+
+Do not rely solely on the session's self-reported result — impl sessions do not always wait for the Test job to finish before exiting.
+
+## Binary-invoked features (realesrgan, external tools)
+
+CI cannot execute the bundled `realesrgan-ncnn-vulkan` binary — it only confirms the Swift code compiles. For any PR that changes how the binary is invoked (new flags like `-s 2`, new model selection, different output paths), the review phase cannot catch runtime regressions. Add a note in the review spawn prompt for such PRs:
+
+> This PR changes binary invocation parameters. The reviewer should confirm: (1) the flag is passed correctly in the spawn call, (2) the output file is loaded back into the view using the same code path as the previously working invocation, and (3) the manual test checklist explicitly requires running the binary on a real image and inspecting the result.
 
 ## Per-session bookkeeping
 
