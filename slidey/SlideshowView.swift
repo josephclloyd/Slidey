@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import CoreImage
+import CoreML
 import IOKit.pwr_mgt
 import UniformTypeIdentifiers
 
@@ -56,7 +57,6 @@ struct SlideshowView: View {
     @State private var debugOutput = ""
     @State private var showDebugWindow = false
     @State private var showFilename = false
-    @State private var upscaleProcess: Process?
     @State private var upscaleCancelled = false
     @State private var upscaleProgress: Double = 0
     @State private var isDragOver = false
@@ -1285,217 +1285,258 @@ struct SlideshowView: View {
         upscaleCancelled = false
         upscaleProgress = 0
         activeUpscaleScale = scale
-        debugOutput = "Starting upscale process (\(scale)x)...\n"
-        let originalImage = sourceImage
+        debugOutput = "Starting \(scale)x Core ML upscale...\n"
 
-        // Create temp files with a unique per-run prefix so concurrent upscales
-        // don't collide and so a local attacker can't pre-create a symlink at a
-        // predictable path to redirect the binary's write.
-        let tempDir = FileManager.default.temporaryDirectory
-        let runID = UUID().uuidString
-        let inputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_input.png")
-        let outputPath = tempDir.appendingPathComponent("realesrgan_\(runID)_output.png")
-
-        debugOutput += "Temp input: \(inputPath.path)\n"
-        debugOutput += "Temp output: \(outputPath.path)\n"
-
-        // Save image to temp file
-        guard let tiffData = originalImage.tiffRepresentation,
-              let bitmapImage = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
-            debugOutput += "ERROR: Failed to convert image to PNG\n"
-            isProcessing = false
-            return
-        }
-
-        do {
-            try pngData.write(to: inputPath)
-            debugOutput += "Saved input image (\(pngData.count) bytes)\n"
-        } catch {
-            debugOutput += "ERROR writing temp input file: \(error)\n"
-            isProcessing = false
-            return
-        }
-
-        // Get paths from bundle - try multiple lookup methods
-        var executablePath: String?
-        var modelsPath: String?
-
-        // First, show bundle info
-        let bundlePath = Bundle.main.resourcePath
-        debugOutput += "Bundle resource path: \(bundlePath ?? "nil")\n"
-
-        if let bundlePath = bundlePath {
-            // List what's actually in the bundle
-            do {
-                let contents = try FileManager.default.contentsOfDirectory(atPath: bundlePath)
-                debugOutput += "Bundle contents: \(contents.joined(separator: ", "))\n"
-            } catch {
-                debugOutput += "Error listing bundle contents: \(error)\n"
-            }
-        }
-
-        // Method 1: Try with Resources directory
-        executablePath = Bundle.main.path(forResource: "realesrgan-ncnn-vulkan", ofType: "", inDirectory: "Resources")
-        modelsPath = Bundle.main.path(forResource: "models", ofType: nil, inDirectory: "Resources")
-
-        if executablePath != nil {
-            debugOutput += "Method 1 success: Found in Resources/\n"
-        }
-
-        // Method 2: Try without Resources directory
-        if executablePath == nil {
-            executablePath = Bundle.main.path(forResource: "realesrgan-ncnn-vulkan", ofType: "")
-            if executablePath != nil {
-                debugOutput += "Method 2 success: Found at root level\n"
-            }
-        }
-        if modelsPath == nil {
-            modelsPath = Bundle.main.path(forResource: "models", ofType: nil)
-        }
-
-        // Method 3: Try direct bundle resource path
-        if executablePath == nil, let bundlePath = bundlePath {
-            let testPath = (bundlePath as NSString).appendingPathComponent("Resources/realesrgan-ncnn-vulkan")
-            debugOutput += "Testing path: \(testPath)\n"
-            if FileManager.default.fileExists(atPath: testPath) {
-                executablePath = testPath
-                debugOutput += "Method 3 success: Found at \(testPath)\n"
-            } else {
-                debugOutput += "File does not exist at \(testPath)\n"
-            }
-
-            let testModelsPath = (bundlePath as NSString).appendingPathComponent("Resources/models")
-            if FileManager.default.fileExists(atPath: testModelsPath) {
-                modelsPath = testModelsPath
-                debugOutput += "Found models at: \(testModelsPath)\n"
-            }
-        }
-
-        guard let executablePath = executablePath, let modelsPath = modelsPath else {
-            debugOutput += "\nERROR: Binary or models not found in bundle\n"
-            debugOutput += "The Resources folder needs to be added to the Xcode project's Copy Bundle Resources build phase\n"
-            isProcessing = false
-            return
-        }
-
-        debugOutput += "Executable: \(executablePath)\n"
-        debugOutput += "Models path: \(modelsPath)\n"
-
-        // Configure the process up front so cancellation can find it the moment
-        // the user clicks Cancel, even if .run() hasn't been called yet.
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executablePath)
-        let arguments = [
-            "-i", inputPath.path,
-            "-o", outputPath.path,
-            "-n", "realesrgan-x4plus",
-            "-s", "\(scale)",
-            "-m", modelsPath
-        ]
-        process.arguments = arguments
-
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        upscaleProcess = process
-        debugOutput += "Command: \(executablePath) \(arguments.joined(separator: " "))\n\n"
+        let modelName = scale == 2 ? "RealESRGAN_x2plus_522_fp16" : "RealESRGAN_x4plus_522_fp16"
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
-                try process.run()
-
-                let outputHandle = outputPipe.fileHandleForReading
-                let errorHandle = errorPipe.fileHandleForReading
-
-                outputHandle.readabilityHandler = { handle in
-                    let data = handle.availableData
-                    if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
-                        DispatchQueue.main.async {
-                            self.debugOutput += output
-                            if let pct = Self.parseLastPercentage(in: output) {
-                                self.upscaleProgress = pct / 100.0
-                            }
-                        }
+                // Xcode compiles .mlpackage → .mlmodelc at build time; fall back to
+                // .mlpackage for any non-Xcode distribution path.
+                guard let pkgURL = Bundle.main.url(forResource: modelName, withExtension: "mlmodelc") ??
+                                    Bundle.main.url(forResource: modelName, withExtension: "mlpackage",
+                                                    subdirectory: "Resources") ??
+                                    Bundle.main.url(forResource: modelName, withExtension: "mlpackage") else {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "ERROR: \(modelName) not found in bundle\n"
+                        self.isProcessing = false
                     }
+                    return
                 }
-
-                errorHandle.readabilityHandler = { handle in
-                    let data = handle.availableData
-                    if !data.isEmpty, let output = String(data: data, encoding: .utf8) {
-                        DispatchQueue.main.async {
-                            self.debugOutput += output
-                            if let pct = Self.parseLastPercentage(in: output) {
-                                self.upscaleProgress = pct / 100.0
-                            }
-                        }
-                    }
-                }
-
-                process.waitUntilExit()
-
-                outputHandle.readabilityHandler = nil
-                errorHandle.readabilityHandler = nil
 
                 DispatchQueue.main.async {
-                    self.isProcessing = false
-                    self.upscaleProcess = nil
-                    self.debugOutput += "\nProcess exited with status: \(process.terminationStatus)\n"
+                    self.debugOutput += "Loading model (may take ~30s on first run)...\n"
+                }
 
-                    if self.upscaleCancelled {
-                        self.debugOutput += "Upscaling cancelled by user.\n"
-                    } else if process.terminationStatus == 0 {
-                        if FileManager.default.fileExists(atPath: outputPath.path) {
-                            if let upscaledImage = NSImage(contentsOf: outputPath) {
-                                self.debugOutput += "SUCCESS: Loaded upscaled image\n"
-                                self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
-                                self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
-                                self.upscaledImages[targetURL] = upscaledImage
-                                self.upscaleFactors[targetURL] = scale
-                                self.upscaleProgress = 1.0
-                                self.updateDisplayImage()
-                            } else {
-                                self.debugOutput += "ERROR: Failed to load output image from \(outputPath.path)\n"
-                            }
-                        } else {
-                            self.debugOutput += "ERROR: Output file not created at \(outputPath.path)\n"
-                        }
-                    } else {
-                        self.debugOutput += "ERROR: Upscaling failed\n"
+                let config = MLModelConfiguration()
+                config.computeUnits = .all
+                let model = try MLModel(contentsOf: pkgURL, configuration: config)
+                let outputKey = model.modelDescription.outputDescriptionsByName.keys.first!
+
+                guard let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "ERROR: Could not get CGImage from source image\n"
+                        self.isProcessing = false
                     }
+                    return
+                }
 
-                    // Cleanup temp files
-                    try? FileManager.default.removeItem(at: inputPath)
-                    try? FileManager.default.removeItem(at: outputPath)
+                let imgW = cgImage.width
+                let imgH = cgImage.height
+                let outW = imgW * scale
+                let outH = imgH * scale
+
+                DispatchQueue.main.async {
+                    self.debugOutput += "Image: \(imgW)×\(imgH) → \(outW)×\(outH)\n"
+                    self.debugOutput += "Upscaling via Core ML...\n"
+                }
+
+                // Render source image to a flat RGBA UInt8 pixel buffer
+                var inputPixels = [UInt8](repeating: 0, count: imgW * imgH * 4)
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                guard let drawCtx = CGContext(
+                    data: &inputPixels, width: imgW, height: imgH,
+                    bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                ) else {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "ERROR: Failed to create drawing context\n"
+                        self.isProcessing = false
+                    }
+                    return
+                }
+                drawCtx.draw(cgImage, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
+
+                if self.upscaleCancelled {
+                    DispatchQueue.main.async { self.isProcessing = false }
+                    return
+                }
+
+                // Run tiled Core ML inference
+                var outputPixels = [UInt8](repeating: 255, count: outW * outH * 4)
+                try Self.runTiledUpscale(
+                    model: model, outputKey: outputKey,
+                    inputPixels: inputPixels, imgW: imgW, imgH: imgH,
+                    outputPixels: &outputPixels, outW: outW, outH: outH,
+                    scale: scale,
+                    isCancelled: { self.upscaleCancelled },
+                    onProgress: { p in DispatchQueue.main.async { self.upscaleProgress = p } }
+                )
+
+                if self.upscaleCancelled {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "Upscaling cancelled.\n"
+                        self.isProcessing = false
+                    }
+                    return
+                }
+
+                // Wrap output pixel buffer in NSImage
+                guard let outCtx = CGContext(
+                    data: &outputPixels, width: outW, height: outH,
+                    bitsPerComponent: 8, bytesPerRow: outW * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                ), let outCGImage = outCtx.makeImage() else {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "ERROR: Failed to create output image\n"
+                        self.isProcessing = false
+                    }
+                    return
+                }
+
+                let result = NSImage(cgImage: outCGImage, size: NSSize(width: outW, height: outH))
+                DispatchQueue.main.async {
+                    self.upscaledImages[targetURL] = result
+                    self.upscaleFactors[targetURL] = scale
+                    self.upscaleProgress = 1.0
+                    self.debugOutput += "SUCCESS: \(imgW)×\(imgH) → \(outW)×\(outH)\n"
+                    self.isProcessing = false
+                    self.updateDisplayImage()
                 }
             } catch {
                 DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: \(error.localizedDescription)\n"
                     self.isProcessing = false
-                    self.upscaleProcess = nil
-                    self.debugOutput += "ERROR running upscaling process: \(error)\n"
-                    try? FileManager.default.removeItem(at: inputPath)
-                    try? FileManager.default.removeItem(at: outputPath)
                 }
             }
+        }
+    }
+
+    // Runs Real-ESRGAN inference on tiled regions of the input and accumulates
+    // results with linear-ramp blending in overlap zones to avoid seams.
+    // Tile parameters match the hanxiao/real-esrgan-coreml reference implementation:
+    // 512px tiles, 32px overlap, 10px reflect pre-pad, 522×522 model input.
+    // swiftlint:disable:next function_parameter_count
+    private static func runTiledUpscale(
+        model: MLModel, outputKey: String,
+        inputPixels: [UInt8], imgW: Int, imgH: Int,
+        outputPixels: inout [UInt8], outW: Int, outH: Int,
+        scale: Int,
+        isCancelled: () -> Bool,
+        onProgress: (Double) -> Void
+    ) throws {
+        let tileSize = 512
+        let tileOverlap = 32
+        let prePad = 10
+        let modelSize = tileSize + prePad  // 522
+        let outModelSide = modelSize * scale
+
+        // Float accumulators for weighted blending
+        var accR = [Float](repeating: 0, count: outW * outH)
+        var accG = [Float](repeating: 0, count: outW * outH)
+        var accB = [Float](repeating: 0, count: outW * outH)
+        var accW = [Float](repeating: 0, count: outW * outH)
+
+        func tileStarts(total: Int) -> [Int] {
+            guard total > tileSize else { return [0] }
+            var positions: [Int] = []
+            let stride = tileSize - tileOverlap
+            var pos = 0
+            while pos < total {
+                if pos + tileSize >= total {
+                    positions.append(max(0, total - tileSize))
+                    break
+                }
+                positions.append(pos)
+                pos += stride
+            }
+            return positions
+        }
+
+        let yStarts = tileStarts(total: imgH)
+        let xStarts = tileStarts(total: imgW)
+        let totalTiles = yStarts.count * xStarts.count
+        var tilesDone = 0
+
+        // Reuse a single MLMultiArray across tiles to avoid per-tile allocation
+        let inputArray = try MLMultiArray(
+            shape: [1, 3, NSNumber(value: modelSize), NSNumber(value: modelSize)],
+            dataType: .float32
+        )
+        let inPtr = inputArray.dataPointer.bindMemory(to: Float.self, capacity: 3 * modelSize * modelSize)
+
+        for y0 in yStarts {
+            if isCancelled() { return }
+            for x0 in xStarts {
+                if isCancelled() { return }
+
+                let y1 = min(y0 + tileSize, imgH)
+                let x1 = min(x0 + tileSize, imgW)
+                let tileH = y1 - y0
+                let tileW = x1 - x0
+                let paddedH = tileH + prePad
+                let paddedW = tileW + prePad
+
+                // Fill model input (NCHW, float32 [0,1]) with reflect-padded tile data.
+                // Two-layer reflect: first resolves square-pad (modelSize→paddedH×paddedW),
+                // then resolves pre-pad (paddedH→tileH).
+                for row in 0..<modelSize {
+                    for col in 0..<modelSize {
+                        let pr = row < paddedH ? row : 2 * (paddedH - 1) - row
+                        let pc = col < paddedW ? col : 2 * (paddedW - 1) - col
+                        let tr = pr  < tileH   ? pr  : 2 * (tileH   - 1) - pr
+                        let tc = pc  < tileW   ? pc  : 2 * (tileW   - 1) - pc
+                        let pixIdx = ((y0 + tr) * imgW + (x0 + tc)) * 4
+                        let pos = row * modelSize + col
+                        inPtr[0 * modelSize * modelSize + pos] = Float(inputPixels[pixIdx])     / 255.0
+                        inPtr[1 * modelSize * modelSize + pos] = Float(inputPixels[pixIdx + 1]) / 255.0
+                        inPtr[2 * modelSize * modelSize + pos] = Float(inputPixels[pixIdx + 2]) / 255.0
+                    }
+                }
+
+                let inFeatures = try MLDictionaryFeatureProvider(
+                    dictionary: ["input": MLFeatureValue(multiArray: inputArray)]
+                )
+                let outFeatures = try model.prediction(from: inFeatures)
+                guard let outArray = outFeatures.featureValue(for: outputKey)?.multiArrayValue else {
+                    throw NSError(domain: "SlideyUpscale", code: 1,
+                                  userInfo: [NSLocalizedDescriptionKey: "Model produced no output"])
+                }
+                let outPtr = outArray.dataPointer.bindMemory(
+                    to: Float.self, capacity: 3 * outModelSide * outModelSide
+                )
+
+                // Accumulate tile output with linear-ramp blend weights in overlap zones
+                let rampPx = tileOverlap * scale
+                for ty in 0..<tileH * scale {
+                    let gy = y0 * scale + ty
+                    for tx in 0..<tileW * scale {
+                        let gx = x0 * scale + tx
+                        var w: Float = 1.0
+                        if rampPx > 0 {
+                            if y0 > 0 && ty < rampPx            { w *= Float(ty) / Float(rampPx) }
+                            if y1 < imgH && ty >= tileH * scale - rampPx { w *= Float(tileH * scale - 1 - ty) / Float(rampPx) }
+                            if x0 > 0 && tx < rampPx            { w *= Float(tx) / Float(rampPx) }
+                            if x1 < imgW && tx >= tileW * scale - rampPx { w *= Float(tileW * scale - 1 - tx) / Float(rampPx) }
+                        }
+                        let idx = gy * outW + gx
+                        accR[idx] += outPtr[0 * outModelSide * outModelSide + ty * outModelSide + tx] * w
+                        accG[idx] += outPtr[1 * outModelSide * outModelSide + ty * outModelSide + tx] * w
+                        accB[idx] += outPtr[2 * outModelSide * outModelSide + ty * outModelSide + tx] * w
+                        accW[idx] += w
+                    }
+                }
+
+                tilesDone += 1
+                onProgress(Double(tilesDone) / Double(totalTiles))
+            }
+        }
+
+        if isCancelled() { return }
+
+        // Normalise and write to UInt8 output
+        for i in 0..<outW * outH {
+            let w = max(accW[i], 1e-8)
+            outputPixels[i * 4]     = UInt8(min(255, max(0, Int((accR[i] / w * 255).rounded()))))
+            outputPixels[i * 4 + 1] = UInt8(min(255, max(0, Int((accG[i] / w * 255).rounded()))))
+            outputPixels[i * 4 + 2] = UInt8(min(255, max(0, Int((accB[i] / w * 255).rounded()))))
         }
     }
 
     private func cancelUpscale() {
         upscaleCancelled = true
-        upscaleProcess?.terminate()
-    }
-
-    /// Scans `text` for the last "DDD.DD%" token and returns its numeric value
-    /// (without the % sign). Used to drive the upscale progress bar from the
-    /// realesrgan-ncnn-vulkan binary's stderr stream.
-    static func parseLastPercentage(in text: String) -> Double? {
-        guard let regex = try? NSRegularExpression(pattern: #"(\d+(?:\.\d+)?)%"#) else { return nil }
-        let nsText = text as NSString
-        let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
-        guard let last = matches.last else { return nil }
-        return Double(nsText.substring(with: last.range(at: 1)))
     }
 
     private func invalidateUpscaling(for url: URL) {
