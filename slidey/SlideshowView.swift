@@ -1680,6 +1680,44 @@ struct SlideshowView: View {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                     if self.savedToast == message { self.savedToast = nil }
                 }
+
+                self.myWindow?.undoManager?.registerUndo(withTarget: self.imageLoader) { _ in
+                    do {
+                        try FileManager.default.moveItem(at: newURL, to: url)
+
+                        if let val = self.rotationAngles.removeValue(forKey: newURL) { self.rotationAngles[url] = val }
+                        if let val = self.enhancedImages.removeValue(forKey: newURL) { self.enhancedImages[url] = val }
+                        if let val = self.smoothedImages.removeValue(forKey: newURL) { self.smoothedImages[url] = val }
+                        if let val = self.upscaledImages.removeValue(forKey: newURL) { self.upscaledImages[url] = val }
+                        if let val = self.upscaleFactors.removeValue(forKey: newURL) { self.upscaleFactors[url] = val }
+                        if let val = self.savedZoomScales.removeValue(forKey: newURL) { self.savedZoomScales[url] = val }
+                        if let val = self.savedPanOffsets.removeValue(forKey: newURL) { self.savedPanOffsets[url] = val }
+                        if self.infoOverlayURLs.remove(newURL) != nil { self.infoOverlayURLs.insert(url) }
+                        if let val = self.imageInfoCache.removeValue(forKey: newURL) { self.imageInfoCache[url] = val }
+
+                        let renamedKey = newURL.absoluteString
+                        if self.favouriteURLStrings.remove(renamedKey) != nil {
+                            self.favouriteURLStrings.insert(url.absoluteString)
+                            self.saveFavourites()
+                            if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                        }
+
+                        if self.lastDisplayedURL == newURL { self.lastDisplayedURL = url }
+
+                        self.imageLoader.renameImage(from: newURL, to: url)
+                        self.windowTitle = Self.titleForImage(at: url)
+
+                        let undoMessage = "Renamed back to \"\(url.lastPathComponent)\""
+                        self.savedToast = undoMessage
+                        self.savedToastIsError = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            if self.savedToast == undoMessage { self.savedToast = nil }
+                        }
+                    } catch {
+                        self.showErrorToast("Undo failed: \(error.localizedDescription)")
+                    }
+                }
+                self.myWindow?.undoManager?.setActionName("Rename")
             } catch {
                 self.showErrorToast("Rename failed: \(error.localizedDescription)")
             }
@@ -1701,8 +1739,22 @@ struct SlideshowView: View {
         if let window = myWindow ?? NSApplication.shared.keyWindow {
             alert.beginSheetModal(for: window) { response in
                 if response == .alertFirstButtonReturn {
+                    let imageIndex = self.imageLoader.imageURLs.firstIndex(of: url) ?? 0
+                    let allIndex = self.imageLoader.allImageURLs.firstIndex(of: url) ?? 0
+                    let savedRotation = self.rotationAngles[url]
+                    let savedEnhanced = self.enhancedImages[url]
+                    let savedSmoothed = self.smoothedImages[url]
+                    let savedUpscaled = self.upscaledImages[url]
+                    let savedUpscaleFactor = self.upscaleFactors[url]
+                    let savedZoom = self.savedZoomScales[url]
+                    let savedPan = self.savedPanOffsets[url]
+                    let hadInfoOverlay = self.infoOverlayURLs.contains(url)
+                    let savedInfo = self.imageInfoCache[url]
+                    let wasFavourite = self.favouriteURLStrings.contains(url.absoluteString)
+
                     do {
-                        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                        var trashResultURL: NSURL?
+                        try FileManager.default.trashItem(at: url, resultingItemURL: &trashResultURL)
                         self.rotationAngles[url] = nil
                         self.enhancedImages[url] = nil
                         self.smoothedImages[url] = nil
@@ -1713,6 +1765,43 @@ struct SlideshowView: View {
                         self.infoOverlayURLs.remove(url)
                         self.imageInfoCache[url] = nil
                         self.imageLoader.removeImage(at: url)
+
+                        if let trashedTo = trashResultURL as URL? {
+                            self.myWindow?.undoManager?.registerUndo(withTarget: self.imageLoader) { _ in
+                                do {
+                                    try FileManager.default.moveItem(at: trashedTo, to: url)
+                                    self.imageLoader.insertImage(url: url, at: imageIndex, allIndex: allIndex)
+                                    if let v = savedRotation { self.rotationAngles[url] = v }
+                                    if let v = savedEnhanced { self.enhancedImages[url] = v }
+                                    if let v = savedSmoothed { self.smoothedImages[url] = v }
+                                    if let v = savedUpscaled { self.upscaledImages[url] = v }
+                                    if let v = savedUpscaleFactor { self.upscaleFactors[url] = v }
+                                    if let v = savedZoom { self.savedZoomScales[url] = v }
+                                    if let v = savedPan { self.savedPanOffsets[url] = v }
+                                    if hadInfoOverlay { self.infoOverlayURLs.insert(url) }
+                                    if let v = savedInfo { self.imageInfoCache[url] = v }
+                                    if wasFavourite {
+                                        self.favouriteURLStrings.insert(url.absoluteString)
+                                        self.saveFavourites()
+                                        if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                                    }
+                                    self.rotationAngle = self.currentURLRotation()
+                                    self.updateDisplayImage()
+                                    if let current = self.imageLoader.currentImageURL {
+                                        self.windowTitle = Self.titleForImage(at: current)
+                                    }
+                                    let message = "Restored \"\(url.lastPathComponent)\""
+                                    self.savedToast = message
+                                    self.savedToastIsError = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                        if self.savedToast == message { self.savedToast = nil }
+                                    }
+                                } catch {
+                                    self.showErrorToast("Undo failed: \(error.localizedDescription)")
+                                }
+                            }
+                            self.myWindow?.undoManager?.setActionName("Move to Trash")
+                        }
                     } catch {
                         self.showErrorToast("Failed to trash: \(error.localizedDescription)")
                     }
