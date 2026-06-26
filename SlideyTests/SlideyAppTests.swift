@@ -260,6 +260,55 @@ final class FileMenuNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Upscale notification wiring tests
+
+final class UpscaleNotificationTests: XCTestCase {
+    func testUpscale2xNotificationFires() {
+        let expectation = expectation(description: "upscaleImage2x notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .upscaleImage2x, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .upscaleImage2x, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testUpscale4xNotificationFires() {
+        let expectation = expectation(description: "upscaleImage4x notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .upscaleImage4x, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .upscaleImage4x, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testRemoveUpscalingNotificationFires() {
+        let expectation = expectation(description: "removeUpscaling notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .removeUpscaling, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .removeUpscaling, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testUpscaleNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.upscaleImage2x.rawValue, "UpscaleImage2x")
+        XCTAssertEqual(NSNotification.Name.upscaleImage4x.rawValue, "UpscaleImage4x")
+        XCTAssertEqual(NSNotification.Name.removeUpscaling.rawValue, "RemoveUpscaling")
+    }
+
+    func testUpscaleNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.upscaleImage2x, .upscaleImage4x, .removeUpscaling]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
 // MARK: - Slideshow menu notification wiring tests
 
 final class SlideshowMenuNotificationTests: XCTestCase {
