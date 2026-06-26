@@ -45,6 +45,8 @@ struct SlideshowView: View {
     @State private var enhancedImages: [URL: NSImage] = [:]
     @State private var smoothedImages: [URL: NSImage] = [:]
     @State private var upscaledImages: [URL: NSImage] = [:]
+    @State private var upscaleFactors: [URL: Int] = [:]
+    @State private var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
     @State private var currentDisplayImage: NSImage?
@@ -232,6 +234,9 @@ struct SlideshowView: View {
                         if let camera = info.cameraText {
                             Text(camera)
                         }
+                        if let factor = upscaleFactors[url] {
+                            Text("Upscaled \(factor)\u{00d7}")
+                        }
                     }
                     .font(.system(.body, design: .monospaced))
                     .foregroundColor(.white)
@@ -301,7 +306,7 @@ struct SlideshowView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 15) {
-                    Text("AI Upscaling Image (4x)…")
+                    Text("AI Upscaling Image (\(activeUpscaleScale)x)…")
                         .font(.headline)
                         .foregroundColor(.white)
 
@@ -459,6 +464,7 @@ struct SlideshowView: View {
             enhancedImages = enhancedImages.filter { valid.contains($0.key) }
             smoothedImages = smoothedImages.filter { valid.contains($0.key) }
             upscaledImages = upscaledImages.filter { valid.contains($0.key) }
+            upscaleFactors = upscaleFactors.filter { valid.contains($0.key) }
             savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
             savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
             infoOverlayURLs = infoOverlayURLs.intersection(valid)
@@ -602,8 +608,11 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSmoothing)) { _ in
             ifKeyWindow { removeSmoothing() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage)) { _ in
-            ifKeyWindow { upscaleCurrentImage() }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
+            ifKeyWindow { upscaleCurrentImage(scale: 2) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage4x)) { _ in
+            ifKeyWindow { upscaleCurrentImage(scale: 4) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeUpscaling)) { _ in
             ifKeyWindow { removeUpscaling() }
@@ -856,7 +865,8 @@ struct SlideshowView: View {
             removeSmoothing()
             return .handled
         case "u":
-            upscaleCurrentImage()
+            guard !keyPress.modifiers.contains(.option) else { return .ignored }
+            upscaleCurrentImage(scale: 2)
             return .handled
         case "U":
             removeUpscaling()
@@ -1001,6 +1011,7 @@ struct SlideshowView: View {
         enhancedImages = [:]
         smoothedImages = [:]
         upscaledImages = [:]
+        upscaleFactors = [:]
         savedZoomScales = [:]
         savedPanOffsets = [:]
         infoOverlayURLs = []
@@ -1184,12 +1195,17 @@ struct SlideshowView: View {
         // Priority: upscaled > smoothed > enhanced > original
         if let upscaled = upscaledImages[url] {
             currentDisplayImage = upscaled
-        } else if let smoothed = smoothedImages[url] {
-            currentDisplayImage = smoothed
-        } else if let enhanced = enhancedImages[url] {
-            currentDisplayImage = enhanced
+            let factor = upscaleFactors[url] ?? 4
+            windowTitle = Self.titleForImage(at: url) + " [\(factor)\u{00d7} upscaled]"
         } else {
-            currentDisplayImage = imageLoader.currentImage
+            if let smoothed = smoothedImages[url] {
+                currentDisplayImage = smoothed
+            } else if let enhanced = enhancedImages[url] {
+                currentDisplayImage = enhanced
+            } else {
+                currentDisplayImage = imageLoader.currentImage
+            }
+            windowTitle = Self.titleForImage(at: url)
         }
     }
 
@@ -1259,7 +1275,7 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
-    private func upscaleCurrentImage() {
+    private func upscaleCurrentImage(scale: Int) {
         guard !isProcessing else { return }
         guard let targetURL = imageLoader.currentImageURL else { return }
         // Upscale the best non-upscaled version: smoothed > enhanced > original
@@ -1268,7 +1284,8 @@ struct SlideshowView: View {
         isProcessing = true
         upscaleCancelled = false
         upscaleProgress = 0
-        debugOutput = "Starting upscale process...\n"
+        activeUpscaleScale = scale
+        debugOutput = "Starting upscale process (\(scale)x)...\n"
         let originalImage = sourceImage
 
         // Create temp files with a unique per-run prefix so concurrent upscales
@@ -1373,7 +1390,7 @@ struct SlideshowView: View {
             "-i", inputPath.path,
             "-o", outputPath.path,
             "-n", "realesrgan-x4plus",
-            "-s", "4",
+            "-s", "\(scale)",
             "-m", modelsPath
         ]
         process.arguments = arguments
@@ -1436,6 +1453,7 @@ struct SlideshowView: View {
                                 self.debugOutput += "Original size: \(Int(originalImage.size.width))x\(Int(originalImage.size.height))\n"
                                 self.debugOutput += "Upscaled size: \(Int(upscaledImage.size.width))x\(Int(upscaledImage.size.height))\n"
                                 self.upscaledImages[targetURL] = upscaledImage
+                                self.upscaleFactors[targetURL] = scale
                                 self.upscaleProgress = 1.0
                                 self.updateDisplayImage()
                             } else {
@@ -1482,11 +1500,13 @@ struct SlideshowView: View {
 
     private func invalidateUpscaling(for url: URL) {
         upscaledImages[url] = nil
+        upscaleFactors[url] = nil
     }
 
     private func removeUpscaling() {
         guard let url = imageLoader.currentImageURL else { return }
         upscaledImages[url] = nil
+        upscaleFactors[url] = nil
         updateDisplayImage()
     }
 
@@ -1632,6 +1652,7 @@ struct SlideshowView: View {
                 if let val = self.enhancedImages.removeValue(forKey: url) { self.enhancedImages[newURL] = val }
                 if let val = self.smoothedImages.removeValue(forKey: url) { self.smoothedImages[newURL] = val }
                 if let val = self.upscaledImages.removeValue(forKey: url) { self.upscaledImages[newURL] = val }
+                if let val = self.upscaleFactors.removeValue(forKey: url) { self.upscaleFactors[newURL] = val }
                 if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
                 if let val = self.savedPanOffsets.removeValue(forKey: url) { self.savedPanOffsets[newURL] = val }
                 if self.infoOverlayURLs.remove(url) != nil { self.infoOverlayURLs.insert(newURL) }
@@ -1686,6 +1707,7 @@ struct SlideshowView: View {
                         self.enhancedImages[url] = nil
                         self.smoothedImages[url] = nil
                         self.upscaledImages[url] = nil
+                        self.upscaleFactors[url] = nil
                         self.savedZoomScales[url] = nil
                         self.savedPanOffsets[url] = nil
                         self.infoOverlayURLs.remove(url)
@@ -1755,6 +1777,7 @@ struct SlideshowView: View {
                 self.enhancedImages[sourceURL] = nil
                 self.smoothedImages[sourceURL] = nil
                 self.upscaledImages[sourceURL] = nil
+                self.upscaleFactors[sourceURL] = nil
                 self.savedZoomScales[sourceURL] = nil
                 self.savedPanOffsets[sourceURL] = nil
                 self.infoOverlayURLs.remove(sourceURL)

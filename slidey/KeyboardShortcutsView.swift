@@ -28,7 +28,8 @@ struct KeyboardShortcutsView: View {
             ("⇧A", "Remove enhancement"),
             ("m", "Smooth image"),
             ("⇧M", "Remove smoothing"),
-            ("u", "AI upscale (4\u{00d7})"),
+            ("u", "AI upscale (2\u{00d7})"),
+            ("⌥U", "AI upscale (4\u{00d7})"),
             ("⇧U", "Remove upscaling"),
         ]),
         ("Favourites", [
