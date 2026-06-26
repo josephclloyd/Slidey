@@ -249,6 +249,18 @@ class ImageLoader: ObservableObject {
         preloadNeighbours()
     }
 
+    func insertImage(url: URL, at index: Int, allIndex: Int) {
+        let clampedAllIndex = min(allIndex, allImageURLs.count)
+        allImageURLs.insert(url, at: clampedAllIndex)
+
+        if urlFilter == nil || urlFilter?(url) == true {
+            let clampedIndex = min(index, imageURLs.count)
+            imageURLs.insert(url, at: clampedIndex)
+            cache.removeAll()
+            jumpTo(index: clampedIndex)
+        }
+    }
+
     private func loadImage(at index: Int) -> NSImage? {
         guard imageURLs.indices.contains(index) else { return nil }
         if let cached = cache[index] {
