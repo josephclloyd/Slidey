@@ -1500,9 +1500,16 @@ struct SlideshowView: View {
                     throw NSError(domain: "SlideyUpscale", code: 1,
                                   userInfo: [NSLocalizedDescriptionKey: "Model produced no output"])
                 }
-                let outPtr = outArray.dataPointer.bindMemory(
-                    to: Float.self, capacity: 3 * outModelSide * outModelSide
-                )
+
+                // Use MLShapedArray<Float> to read the output — this handles fp16 models
+                // transparently (the fp16 weight file means the model runs in half
+                // precision; the raw MLMultiArray dataType may be .float16 and binding
+                // it as Float would compute wrong offsets and crash).
+                let shaped = MLShapedArray<Float>(outArray)
+                let scalars = shaped.scalars  // flat NCHW [0,1] floats, any prec → Float
+                let rank = shaped.shape.count  // 3 ([C,H,W]) or 4 ([1,C,H,W])
+                let modelOutW = shaped.shape[rank - 1]
+                let outCStride = shaped.shape[rank - 2] * modelOutW
 
                 // Accumulate tile output with linear-ramp blend weights in overlap zones
                 let rampPx = tileOverlap * scale
@@ -1518,9 +1525,10 @@ struct SlideshowView: View {
                             if x1 < imgW && tx >= tileW * scale - rampPx { w *= Float(tileW * scale - 1 - tx) / Float(rampPx) }
                         }
                         let idx = gy * outW + gx
-                        accR[idx] += outPtr[0 * outModelSide * outModelSide + ty * outModelSide + tx] * w
-                        accG[idx] += outPtr[1 * outModelSide * outModelSide + ty * outModelSide + tx] * w
-                        accB[idx] += outPtr[2 * outModelSide * outModelSide + ty * outModelSide + tx] * w
+                        let flat = ty * modelOutW + tx
+                        accR[idx] += scalars[flat] * w
+                        accG[idx] += scalars[outCStride + flat] * w
+                        accB[idx] += scalars[2 * outCStride + flat] * w
                         accW[idx] += w
                     }
                 }
