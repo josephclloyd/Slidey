@@ -1470,14 +1470,20 @@ struct SlideshowView: View {
                 let paddedW = tileW + prePad
 
                 // Fill model input (NCHW, float32 [0,1]) with reflect-padded tile data.
-                // Two-layer reflect: first resolves square-pad (modelSize→paddedH×paddedW),
-                // then resolves pre-pad (paddedH→tileH).
+                // Two-layer reflect: square-pad (modelSize → paddedH×paddedW) then
+                // pre-pad (paddedH → tileH). Uses periodic reflect-clamp so multiple
+                // bounces are handled correctly when the tile is smaller than prePad or
+                // when the square-pad zone is large relative to paddedH.
+                func ri(_ i: Int, _ n: Int) -> Int {
+                    guard n > 1 else { return 0 }
+                    let p = 2 * (n - 1)
+                    let j = ((i % p) + p) % p
+                    return j < n ? j : p - j
+                }
                 for row in 0..<modelSize {
                     for col in 0..<modelSize {
-                        let pr = row < paddedH ? row : 2 * (paddedH - 1) - row
-                        let pc = col < paddedW ? col : 2 * (paddedW - 1) - col
-                        let tr = pr  < tileH   ? pr  : 2 * (tileH   - 1) - pr
-                        let tc = pc  < tileW   ? pc  : 2 * (tileW   - 1) - pc
+                        let tr = ri(ri(row, paddedH), tileH)
+                        let tc = ri(ri(col, paddedW), tileW)
                         let pixIdx = ((y0 + tr) * imgW + (x0 + tc)) * 4
                         let pos = row * modelSize + col
                         inPtr[0 * modelSize * modelSize + pos] = Float(inputPixels[pixIdx])     / 255.0
