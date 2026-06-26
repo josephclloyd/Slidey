@@ -1501,18 +1501,26 @@ struct SlideshowView: View {
                                   userInfo: [NSLocalizedDescriptionKey: "Model produced no output"])
                 }
 
-                // Use MLShapedArray<Float> to read the output — this handles fp16 models
-                // transparently (the fp16 weight file means the model runs in half
-                // precision; the raw MLMultiArray dataType may be .float16 and binding
-                // it as Float would compute wrong offsets and crash).
-                let shaped = MLShapedArray<Float>(outArray)
-                let scalars = shaped.scalars  // flat NCHW [0,1] floats, any prec → Float
-                let rank = shaped.shape.count  // 3 ([C,H,W]) or 4 ([1,C,H,W])
-                let modelOutW = shaped.shape[rank - 1]
-                let outCStride = shaped.shape[rank - 2] * modelOutW
+                // Read output using raw pointer + actual strides to handle fp16/fp32
+                // regardless of how Core ML arranges memory. MLShapedArray<Float> crashes
+                // when the underlying array is Float16 (type mismatch is a fatal error).
+                let outRank = outArray.shape.count
+                let outStrides = outArray.strides
+                // For [1,C,H,W] outRank=4 → chanSt=strides[1]; for [C,H,W] → strides[0]
+                let chanSt = outStrides[outRank - 3].intValue
+                let rowSt  = outStrides[outRank - 2].intValue
+                let colSt  = outStrides[outRank - 1].intValue
 
                 // Accumulate tile output with linear-ramp blend weights in overlap zones
                 let rampPx = tileOverlap * scale
+
+                // Hoist the data-type branch outside the pixel loop
+                let isFP16 = outArray.dataType == .float16
+                let rawPtr16 = isFP16 ? outArray.dataPointer.bindMemory(
+                    to: UInt16.self, capacity: outArray.count) : nil
+                let rawPtr32 = isFP16 ? nil : outArray.dataPointer.bindMemory(
+                    to: Float.self, capacity: outArray.count)
+
                 for ty in 0..<tileH * scale {
                     let gy = y0 * scale + ty
                     for tx in 0..<tileW * scale {
@@ -1525,10 +1533,22 @@ struct SlideshowView: View {
                             if x1 < imgW && tx >= tileW * scale - rampPx { w *= Float(tileW * scale - 1 - tx) / Float(rampPx) }
                         }
                         let idx = gy * outW + gx
-                        let flat = ty * modelOutW + tx
-                        accR[idx] += scalars[flat] * w
-                        accG[idx] += scalars[outCStride + flat] * w
-                        accB[idx] += scalars[2 * outCStride + flat] * w
+                        let base = ty * rowSt + tx * colSt
+                        let r0: Float, g0: Float, b0: Float
+                        if isFP16, let ptr = rawPtr16 {
+                            r0 = Float(Float16(bitPattern: ptr[base]))
+                            g0 = Float(Float16(bitPattern: ptr[chanSt + base]))
+                            b0 = Float(Float16(bitPattern: ptr[2 * chanSt + base]))
+                        } else if let ptr = rawPtr32 {
+                            r0 = ptr[base]
+                            g0 = ptr[chanSt + base]
+                            b0 = ptr[2 * chanSt + base]
+                        } else {
+                            (r0, g0, b0) = (0, 0, 0)
+                        }
+                        accR[idx] += r0 * w
+                        accG[idx] += g0 * w
+                        accB[idx] += b0 * w
                         accW[idx] += w
                     }
                 }
