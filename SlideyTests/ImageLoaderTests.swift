@@ -336,6 +336,43 @@ final class ImageLoaderNavigationTests: XCTestCase {
         XCTAssertEqual(loader.currentIndex, 0)
     }
 
+    func testInsertImageAtOriginalPosition() {
+        let removed = dummyURLs[2]
+        loader.currentIndex = 3
+        loader.removeImage(at: removed)
+        XCTAssertEqual(loader.imageURLs.count, 4)
+        XCTAssertEqual(loader.currentIndex, 2)
+
+        loader.insertImage(url: removed, at: 2, allIndex: 2)
+        XCTAssertEqual(loader.imageURLs.count, 5)
+        XCTAssertEqual(loader.currentIndex, 2)
+        XCTAssertEqual(loader.imageURLs[2], removed)
+    }
+
+    func testInsertImageAtEnd() {
+        let extra = URL(fileURLWithPath: "/tmp/extra.jpg")
+        loader.insertImage(url: extra, at: 5, allIndex: 5)
+        XCTAssertEqual(loader.imageURLs.count, 6)
+        XCTAssertEqual(loader.imageURLs.last, extra)
+        XCTAssertEqual(loader.currentIndex, 5)
+    }
+
+    func testInsertImageClampsIndexBeyondCount() {
+        let extra = URL(fileURLWithPath: "/tmp/extra.jpg")
+        loader.insertImage(url: extra, at: 100, allIndex: 100)
+        XCTAssertEqual(loader.imageURLs.count, 6)
+        XCTAssertEqual(loader.imageURLs.last, extra)
+    }
+
+    func testInsertImageIntoEmptyList() {
+        loader.imageURLs = []
+        let url = dummyURLs[0]
+        loader.insertImage(url: url, at: 0, allIndex: 0)
+        XCTAssertEqual(loader.imageURLs.count, 1)
+        XCTAssertEqual(loader.currentIndex, 0)
+        XCTAssertEqual(loader.currentImageURL, url)
+    }
+
     func testNextImageSingleElement() {
         loader.imageURLs = [dummyURLs[0]]
         loader.currentIndex = 0
@@ -488,6 +525,37 @@ final class ImageLoaderFilterTests: XCTestCase {
         XCTAssertEqual(loader.allImageURLs.count, 4)
         XCTAssertFalse(loader.allImageURLs.contains(bravoURL))
         XCTAssertEqual(loader.imageURLs.count, 4)
+    }
+
+    func testInsertImageUpdatesBothArrays() throws {
+        loadAndWait()
+        let charlieURL = try XCTUnwrap(
+            loader.allImageURLs.first { $0.lastPathComponent == "charlie.jpg" }
+        )
+        let imageIndex = try XCTUnwrap(loader.imageURLs.firstIndex(of: charlieURL))
+        let allIndex = try XCTUnwrap(loader.allImageURLs.firstIndex(of: charlieURL))
+
+        loader.removeImage(at: charlieURL)
+        XCTAssertEqual(loader.imageURLs.count, 4)
+        XCTAssertEqual(loader.allImageURLs.count, 4)
+
+        loader.insertImage(url: charlieURL, at: imageIndex, allIndex: allIndex)
+        XCTAssertEqual(loader.imageURLs.count, 5)
+        XCTAssertEqual(loader.allImageURLs.count, 5)
+        XCTAssertTrue(loader.imageURLs.contains(charlieURL))
+        XCTAssertTrue(loader.allImageURLs.contains(charlieURL))
+    }
+
+    func testInsertImageSkipsFilteredOutURL() {
+        loadAndWait()
+        let kept = Set(["alpha.jpg", "echo.jpg"])
+        loader.urlFilter = { kept.contains($0.lastPathComponent) }
+        XCTAssertEqual(loader.imageURLs.count, 2)
+
+        let extra = URL(fileURLWithPath: "/tmp/filtered-out.jpg")
+        loader.insertImage(url: extra, at: 0, allIndex: 0)
+        XCTAssertEqual(loader.allImageURLs.count, 6)
+        XCTAssertEqual(loader.imageURLs.count, 2)
     }
 }
 

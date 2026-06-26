@@ -358,10 +358,15 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
-            Button("AI Upscale Image (4x)") {
-                NotificationCenter.default.post(name: .upscaleImage, object: nil)
+            Button("AI Upscale Image (2x)") {
+                NotificationCenter.default.post(name: .upscaleImage2x, object: nil)
             }
             .keyboardShortcut("u", modifiers: [])
+
+            Button("AI Upscale Image (4x)") {
+                NotificationCenter.default.post(name: .upscaleImage4x, object: nil)
+            }
+            .keyboardShortcut("u", modifiers: .option)
 
             Button("Remove Upscaling") {
                 NotificationCenter.default.post(name: .removeUpscaling, object: nil)

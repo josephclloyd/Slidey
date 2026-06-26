@@ -301,6 +301,31 @@ final class SlideshowControllerTests: XCTestCase {
     }
 }
 
+// MARK: - Launch State Guardrails
+
+final class LaunchStateGuardrailTests: XCTestCase {
+    func testIsPlayingIsNotPersistedInUserDefaults() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "isPlaying")
+
+        let controller = SlideshowController()
+        XCTAssertFalse(controller.isPlaying)
+
+        defaults.set(true, forKey: "isPlaying")
+        let fresh = SlideshowController()
+        XCTAssertFalse(fresh.isPlaying, "isPlaying must not read from UserDefaults")
+        defaults.removeObject(forKey: "isPlaying")
+    }
+
+    func testStopAfterStartResetsToPaused() {
+        let controller = SlideshowController()
+        controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
+        XCTAssertTrue(controller.isPlaying)
+        controller.stop()
+        XCTAssertFalse(controller.isPlaying, "stop() must always leave slideshow paused")
+    }
+}
+
 // MARK: - Manual Navigation Always Wraps
 
 final class ManualNavigationWrapTests: XCTestCase {
