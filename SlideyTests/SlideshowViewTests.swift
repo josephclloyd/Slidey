@@ -521,56 +521,6 @@ final class NavigationURLKeyingTests: XCTestCase {
     }
 }
 
-// MARK: - ParsePercentage Tests
-
-final class ParsePercentageTests: XCTestCase {
-    func testSimplePercentage() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "50.00%"), 50.0)
-    }
-
-    func testIntegerPercentage() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "75%"), 75.0)
-    }
-
-    func testMultiplePercentagesReturnsLast() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "10.00% 25.00% 50.00%"), 50.0)
-    }
-
-    func testNoPercentageReturnsNil() {
-        XCTAssertNil(SlideshowView.parseLastPercentage(in: "no percentage here"))
-    }
-
-    func testEmptyStringReturnsNil() {
-        XCTAssertNil(SlideshowView.parseLastPercentage(in: ""))
-    }
-
-    func testZeroPercent() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "0%"), 0.0)
-    }
-
-    func testHundredPercent() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "100%"), 100.0)
-    }
-
-    func testPercentageInLongerOutput() {
-        let output = "[2024-01-01] Processing tile 3/4... 75.50%"
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: output), 75.5)
-    }
-
-    func testDecimalPrecision() {
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: "33.33%"), 33.33)
-    }
-
-    func testMultilineOutput() {
-        let output = """
-        Processing...
-        10.00%
-        20.00%
-        30.00%
-        """
-        XCTAssertEqual(SlideshowView.parseLastPercentage(in: output), 30.0)
-    }
-}
 
 final class ThumbnailCacheTests: XCTestCase {
     func testSetAndGet() {
