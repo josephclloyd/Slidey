@@ -316,6 +316,21 @@ gh api repos/josephclloyd/Slidey/pulls/N --jq '{state: .state, merged: .merged, 
 If that also fails, prompt Joe: `! gh auth refresh -h github.com` (requires interactive
 browser flow — cannot be automated).
 
+## mcx session auth failure fallback (direct implementation)
+
+If `mcx claude spawn` returns **"Not logged in · Please run /login"** for all sessions,
+the spawn infrastructure is broken. Do not retry; implement all sprint issues directly
+in the main conversation:
+
+1. Skip `mcx track / mcx phase run / monitor stream` — manage state via TaskCreate/TaskUpdate.
+2. Implement each issue inline (branch → implement → build → commit → push → PR), one at a time.
+3. After each PR is opened, re-pair with `mcx untrack N && sleep 10 && mcx track N` so `prNumber` populates for the merge step.
+4. Review each PR inline (read the diff, spot-check correctness, leave a review comment). Don't skip review.
+5. Merge via `mcx pr merge <PR> --squash` as usual.
+6. After the sprint, note the auth failure in the diary and update `mcx-patch-compat.md` in memory.
+
+**This is a full fallback, not a shortcut.** Serialization (SlideshowView.swift hot-file), review, and CI gates still apply. The only thing bypassed is session spawning — the quality bar stays the same.
+
 ## Ambiguous test result in impl session output
 
 When the impl session result text says "Build: SUCCEEDED" without an explicit "N passed" test count, the Test CI job may not have been checked. Verify before spawning review:

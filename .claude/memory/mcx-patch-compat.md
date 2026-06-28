@@ -42,3 +42,7 @@ sleep 10
 ```
 
 **Status:** Filed against mcx 1.12.1. Watch for fix in future mcx release. [[mcx-version-constraint]]
+
+## Session auth failure (Sprint 16, 2026-06-28)
+
+Even with `claudeBinary` set to the patched binary, spawned sessions returned "Not logged in · Please run /login" and could not authenticate. Sprint 16 was implemented directly in the main conversation as a workaround. If mcx session spawning continues to fail, implement directly rather than blocking the sprint.
