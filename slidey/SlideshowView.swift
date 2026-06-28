@@ -228,7 +228,13 @@ struct SlideshowView: View {
             VStack {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(info.width) \u{00d7} \(info.height) px")
+                        if let upscaled = upscaledImages[url] {
+                            let upW = Int(upscaled.size.width)
+                            let upH = Int(upscaled.size.height)
+                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
+                        } else {
+                            Text("\(info.width) \u{00d7} \(info.height) px")
+                        }
                         Text(info.fileSizeText)
                         Text(info.dateTakenText)
                         if let camera = info.cameraText {
