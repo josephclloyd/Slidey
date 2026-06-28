@@ -17,6 +17,7 @@ struct SlideyApp: App {
             FileMenuCommands(recentDirectories: recentDirectories)
             EditMenuCommands()
             ViewMenuCommands()
+            WindowMenuCommands()
             SlideshowMenuCommands()
             MusicMenuCommands()
             HelpMenuCommands()
@@ -312,6 +313,17 @@ struct FileMenuCommands: Commands {
 
     private func openDirectory() {
         NotificationCenter.default.post(name: .selectDirectory, object: nil)
+    }
+}
+
+struct WindowMenuCommands: Commands {
+    @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
+
+    var body: some Commands {
+        CommandGroup(after: .windowArrangement) {
+            Divider()
+            Toggle("Float Above Other Windows", isOn: $floatAboveOtherWindows)
+        }
     }
 }
 
