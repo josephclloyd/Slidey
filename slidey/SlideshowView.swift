@@ -26,6 +26,19 @@ struct ImageInfo {
     let cameraText: String?
 }
 
+private final class OpenWithMenuDelegate: NSObject {
+    static var current: OpenWithMenuDelegate?  // keep alive through synchronous popup
+
+    let imageURL: URL
+    init(imageURL: URL) { self.imageURL = imageURL }
+
+    @objc func openWith(_ sender: NSMenuItem) {
+        guard let appURL = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open([imageURL], withApplicationAt: appURL,
+                                configuration: NSWorkspace.OpenConfiguration())
+    }
+}
+
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @StateObject private var musicManager = MusicManager()
@@ -75,9 +88,12 @@ struct SlideshowView: View {
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
+    @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
+    @State private var enhancedURLStrings: Set<String> = []
+    @State private var smoothedURLStrings: Set<String> = []
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -228,7 +244,13 @@ struct SlideshowView: View {
             VStack {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(info.width) \u{00d7} \(info.height) px")
+                        if let upscaled = upscaledImages[url] {
+                            let upW = Int(upscaled.size.width)
+                            let upH = Int(upscaled.size.height)
+                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
+                        } else {
+                            Text("\(info.width) \u{00d7} \(info.height) px")
+                        }
                         Text(info.fileSizeText)
                         Text(info.dateTakenText)
                         if let camera = info.cameraText {
@@ -511,6 +533,14 @@ struct SlideshowView: View {
                 musicManager.deactivate()
             }
         }
+        .onChange(of: floatAboveOtherWindows) { _, newValue in
+            myWindow?.level = newValue ? .floating : .normal
+        }
+        .onChange(of: myWindow) { _, window in
+            if let window = window, floatAboveOtherWindows {
+                window.level = .floating
+            }
+        }
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
@@ -653,6 +683,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openInPreview)) { _ in
+            ifKeyWindow { openCurrentImageInDefaultApp() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openWith)) { _ in
+            ifKeyWindow { showOpenWithMenu() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
             ifKeyWindow { toggleFavourite() }
@@ -1005,8 +1041,7 @@ struct SlideshowView: View {
         selectedDirectory = url
         recentDirectories.addDirectory(url)
 
-        // Reset all image modifications
-        rotationAngles = [:]
+        // Reset ephemeral image modifications (rotation persists per URL)
         rotationAngle = .zero
         enhancedImages = [:]
         smoothedImages = [:]
@@ -1117,6 +1152,7 @@ struct SlideshowView: View {
         rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
+            saveFavourites()
         }
     }
 
@@ -1124,6 +1160,7 @@ struct SlideshowView: View {
         rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
+            saveFavourites()
         }
     }
 
@@ -1207,6 +1244,16 @@ struct SlideshowView: View {
             }
             windowTitle = Self.titleForImage(at: url)
         }
+        // Re-apply persisted edits for images not yet processed in this session
+        let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
+        let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
+        if needsEnhance || needsSmooth {
+            DispatchQueue.main.async { [url] in
+                guard self.imageLoader.currentImageURL == url else { return }
+                if needsEnhance { self.enhanceCurrentImage() }
+                if needsSmooth { self.smoothCurrentImage() }
+            }
+        }
     }
 
     private func enhanceCurrentImage() {
@@ -1231,6 +1278,8 @@ struct SlideshowView: View {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: originalImage.size)
             guard let url = imageLoader.currentImageURL else { return }
             enhancedImages[url] = enhancedNSImage
+            enhancedURLStrings.insert(url.absoluteString)
+            saveFavourites()
             invalidateUpscaling(for: url)
             currentDisplayImage = enhancedNSImage
         }
@@ -1239,6 +1288,8 @@ struct SlideshowView: View {
     private func removeEnhancement() {
         guard let url = imageLoader.currentImageURL else { return }
         enhancedImages[url] = nil
+        enhancedURLStrings.remove(url.absoluteString)
+        saveFavourites()
         invalidateUpscaling(for: url)
         updateDisplayImage()
     }
@@ -1263,6 +1314,8 @@ struct SlideshowView: View {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: originalImage.size)
             guard let url = imageLoader.currentImageURL else { return }
             smoothedImages[url] = smoothedNSImage
+            smoothedURLStrings.insert(url.absoluteString)
+            saveFavourites()
             invalidateUpscaling(for: url)
             currentDisplayImage = smoothedNSImage
         }
@@ -1271,6 +1324,8 @@ struct SlideshowView: View {
     private func removeSmoothing() {
         guard let url = imageLoader.currentImageURL else { return }
         smoothedImages[url] = nil
+        smoothedURLStrings.remove(url.absoluteString)
+        saveFavourites()
         invalidateUpscaling(for: url)
         updateDisplayImage()
     }
@@ -1985,6 +2040,34 @@ struct SlideshowView: View {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    private func openCurrentImageInDefaultApp() {
+        guard let url = imageLoader.currentImageURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func showOpenWithMenu() {
+        guard let url = imageLoader.currentImageURL,
+              let window = myWindow ?? NSApplication.shared.keyWindow,
+              let contentView = window.contentView else { return }
+        let apps = NSWorkspace.shared.urlsForApplications(toOpen: url)
+        guard !apps.isEmpty else { return }
+        let menu = NSMenu(title: "Open With")
+        let delegate = OpenWithMenuDelegate(imageURL: url)
+        OpenWithMenuDelegate.current = delegate
+        for appURL in apps {
+            let name = FileManager.default.displayName(atPath: appURL.path)
+            let item = NSMenuItem(title: name, action: #selector(OpenWithMenuDelegate.openWith(_:)),
+                                  keyEquivalent: "")
+            item.representedObject = appURL
+            item.target = delegate
+            menu.addItem(item)
+        }
+        let mouseLocation = NSEvent.mouseLocation
+        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+        let viewPoint = contentView.convert(windowPoint, from: nil)
+        menu.popUp(positioning: nil, at: viewPoint, in: contentView)
+    }
+
     /// Writes the currently-displayed image (with rotation baked in) to a
     /// sibling PNG named `<basename>_edited.png`. Overwrites if it exists.
     /// The original file is never touched. If the source volume is read-only
@@ -2158,10 +2241,23 @@ struct SlideshowView: View {
         if let saved = UserDefaults.standard.stringArray(forKey: "favouriteImages") {
             favouriteURLStrings = Set(saved)
         }
+        if let saved = UserDefaults.standard.dictionary(forKey: "rotationAngles") as? [String: Double] {
+            for (key, val) in saved {
+                if let url = URL(string: key) {
+                    rotationAngles[url] = Angle(degrees: val)
+                }
+            }
+        }
+        enhancedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "enhancedImages") ?? [])
+        smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
     }
 
     private func saveFavourites() {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
+        let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
+        UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
+        UserDefaults.standard.set(Array(enhancedURLStrings), forKey: "enhancedImages")
+        UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {

@@ -17,6 +17,7 @@ struct SlideyApp: App {
             FileMenuCommands(recentDirectories: recentDirectories)
             EditMenuCommands()
             ViewMenuCommands()
+            WindowMenuCommands()
             SlideshowMenuCommands()
             MusicMenuCommands()
             HelpMenuCommands()
@@ -277,6 +278,15 @@ struct FileMenuCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: .command)
 
+            Button("Open in Preview") {
+                NotificationCenter.default.post(name: .openInPreview, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+
+            Button("Open With\u{2026}") {
+                NotificationCenter.default.post(name: .openWith, object: nil)
+            }
+
             Button("Rename\u{2026}") {
                 NotificationCenter.default.post(name: .renameImage, object: nil)
             }
@@ -303,6 +313,17 @@ struct FileMenuCommands: Commands {
 
     private func openDirectory() {
         NotificationCenter.default.post(name: .selectDirectory, object: nil)
+    }
+}
+
+struct WindowMenuCommands: Commands {
+    @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
+
+    var body: some Commands {
+        CommandGroup(after: .windowArrangement) {
+            Divider()
+            Toggle("Float Above Other Windows", isOn: $floatAboveOtherWindows)
+        }
     }
 }
 
