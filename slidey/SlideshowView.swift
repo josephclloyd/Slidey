@@ -78,6 +78,8 @@ struct SlideshowView: View {
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
+    @State private var enhancedURLStrings: Set<String> = []
+    @State private var smoothedURLStrings: Set<String> = []
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -1011,8 +1013,7 @@ struct SlideshowView: View {
         selectedDirectory = url
         recentDirectories.addDirectory(url)
 
-        // Reset all image modifications
-        rotationAngles = [:]
+        // Reset ephemeral image modifications (rotation persists per URL)
         rotationAngle = .zero
         enhancedImages = [:]
         smoothedImages = [:]
@@ -1123,6 +1124,7 @@ struct SlideshowView: View {
         rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
+            saveFavourites()
         }
     }
 
@@ -1130,6 +1132,7 @@ struct SlideshowView: View {
         rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
+            saveFavourites()
         }
     }
 
@@ -1213,6 +1216,15 @@ struct SlideshowView: View {
             }
             windowTitle = Self.titleForImage(at: url)
         }
+        // Re-apply persisted edits for images not yet processed in this session
+        let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
+        let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
+        if needsEnhance || needsSmooth {
+            DispatchQueue.main.async {
+                if needsEnhance { self.enhanceCurrentImage() }
+                if needsSmooth { self.smoothCurrentImage() }
+            }
+        }
     }
 
     private func enhanceCurrentImage() {
@@ -1237,6 +1249,8 @@ struct SlideshowView: View {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: originalImage.size)
             guard let url = imageLoader.currentImageURL else { return }
             enhancedImages[url] = enhancedNSImage
+            enhancedURLStrings.insert(url.absoluteString)
+            saveFavourites()
             invalidateUpscaling(for: url)
             currentDisplayImage = enhancedNSImage
         }
@@ -1245,6 +1259,8 @@ struct SlideshowView: View {
     private func removeEnhancement() {
         guard let url = imageLoader.currentImageURL else { return }
         enhancedImages[url] = nil
+        enhancedURLStrings.remove(url.absoluteString)
+        saveFavourites()
         invalidateUpscaling(for: url)
         updateDisplayImage()
     }
@@ -1269,6 +1285,8 @@ struct SlideshowView: View {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: originalImage.size)
             guard let url = imageLoader.currentImageURL else { return }
             smoothedImages[url] = smoothedNSImage
+            smoothedURLStrings.insert(url.absoluteString)
+            saveFavourites()
             invalidateUpscaling(for: url)
             currentDisplayImage = smoothedNSImage
         }
@@ -1277,6 +1295,8 @@ struct SlideshowView: View {
     private func removeSmoothing() {
         guard let url = imageLoader.currentImageURL else { return }
         smoothedImages[url] = nil
+        smoothedURLStrings.remove(url.absoluteString)
+        saveFavourites()
         invalidateUpscaling(for: url)
         updateDisplayImage()
     }
@@ -2164,10 +2184,23 @@ struct SlideshowView: View {
         if let saved = UserDefaults.standard.stringArray(forKey: "favouriteImages") {
             favouriteURLStrings = Set(saved)
         }
+        if let saved = UserDefaults.standard.dictionary(forKey: "rotationAngles") as? [String: Double] {
+            for (key, val) in saved {
+                if let url = URL(string: key) {
+                    rotationAngles[url] = Angle(degrees: val)
+                }
+            }
+        }
+        enhancedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "enhancedImages") ?? [])
+        smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
     }
 
     private func saveFavourites() {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
+        let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
+        UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
+        UserDefaults.standard.set(Array(enhancedURLStrings), forKey: "enhancedImages")
+        UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {
