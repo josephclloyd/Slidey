@@ -88,6 +88,7 @@ struct SlideshowView: View {
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
+    @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
@@ -530,6 +531,14 @@ struct SlideshowView: View {
             } else {
                 releaseDisplaySleepAssertion()
                 musicManager.deactivate()
+            }
+        }
+        .onChange(of: floatAboveOtherWindows) { _, newValue in
+            myWindow?.level = newValue ? .floating : .normal
+        }
+        .onChange(of: myWindow) { _, window in
+            if let window = window, floatAboveOtherWindows {
+                window.level = .floating
             }
         }
         .onChange(of: showThumbnails) { _, _ in
