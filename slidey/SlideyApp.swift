@@ -277,6 +277,15 @@ struct FileMenuCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: .command)
 
+            Button("Open in Preview") {
+                NotificationCenter.default.post(name: .openInPreview, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: [.command, .shift])
+
+            Button("Open With\u{2026}") {
+                NotificationCenter.default.post(name: .openWith, object: nil)
+            }
+
             Button("Rename\u{2026}") {
                 NotificationCenter.default.post(name: .renameImage, object: nil)
             }
