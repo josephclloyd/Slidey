@@ -26,6 +26,19 @@ struct ImageInfo {
     let cameraText: String?
 }
 
+private final class OpenWithMenuDelegate: NSObject {
+    static var current: OpenWithMenuDelegate?  // keep alive through synchronous popup
+
+    let imageURL: URL
+    init(imageURL: URL) { self.imageURL = imageURL }
+
+    @objc func openWith(_ sender: NSMenuItem) {
+        guard let appURL = sender.representedObject as? URL else { return }
+        NSWorkspace.shared.open([imageURL], withApplicationAt: appURL,
+                                configuration: NSWorkspace.OpenConfiguration())
+    }
+}
+
 struct SlideshowView: View {
     @StateObject private var imageLoader = ImageLoader()
     @StateObject private var musicManager = MusicManager()
@@ -661,6 +674,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
             ifKeyWindow { revealCurrentImageInFinder() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openInPreview)) { _ in
+            ifKeyWindow { openCurrentImageInDefaultApp() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openWith)) { _ in
+            ifKeyWindow { showOpenWithMenu() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
             ifKeyWindow { toggleFavourite() }
@@ -2010,6 +2029,34 @@ struct SlideshowView: View {
     private func revealCurrentImageInFinder() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    private func openCurrentImageInDefaultApp() {
+        guard let url = imageLoader.currentImageURL else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func showOpenWithMenu() {
+        guard let url = imageLoader.currentImageURL,
+              let window = myWindow ?? NSApplication.shared.keyWindow,
+              let contentView = window.contentView else { return }
+        let apps = NSWorkspace.shared.urlsForApplications(toOpen: url)
+        guard !apps.isEmpty else { return }
+        let menu = NSMenu(title: "Open With")
+        let delegate = OpenWithMenuDelegate(imageURL: url)
+        OpenWithMenuDelegate.current = delegate
+        for appURL in apps {
+            let name = FileManager.default.displayName(atPath: appURL.path)
+            let item = NSMenuItem(title: name, action: #selector(OpenWithMenuDelegate.openWith(_:)),
+                                  keyEquivalent: "")
+            item.representedObject = appURL
+            item.target = delegate
+            menu.addItem(item)
+        }
+        let mouseLocation = NSEvent.mouseLocation
+        let windowPoint = window.convertPoint(fromScreen: mouseLocation)
+        let viewPoint = contentView.convert(windowPoint, from: nil)
+        menu.popUp(positioning: nil, at: viewPoint, in: contentView)
     }
 
     /// Writes the currently-displayed image (with rotation baked in) to a

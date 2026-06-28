@@ -19,6 +19,8 @@ extension NSNotification.Name {
 
     static let saveEditedImage = NSNotification.Name("SaveEditedImage")
     static let revealInFinder = NSNotification.Name("RevealInFinder")
+    static let openInPreview = NSNotification.Name("OpenInPreview")
+    static let openWith = NSNotification.Name("OpenWith")
     static let moveToTrash = NSNotification.Name("MoveToTrash")
     static let copyToFolder = NSNotification.Name("CopyToFolder")
     static let moveToFolder = NSNotification.Name("MoveToFolder")
