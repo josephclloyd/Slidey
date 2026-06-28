@@ -1220,7 +1220,8 @@ struct SlideshowView: View {
         let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
         let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
         if needsEnhance || needsSmooth {
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [url] in
+                guard self.imageLoader.currentImageURL == url else { return }
                 if needsEnhance { self.enhanceCurrentImage() }
                 if needsSmooth { self.smoothCurrentImage() }
             }
