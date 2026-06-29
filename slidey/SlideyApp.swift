@@ -339,6 +339,24 @@ struct HelpMenuCommands: Commands {
 }
 
 struct EditMenuCommands: Commands {
+    @AppStorage("activePhotoEffect") private var activePhotoEffect: String = ""
+
+    private var activeEffectLabel: String {
+        switch activePhotoEffect {
+        case "CIPhotoEffectMono": return "Effect: Mono (B&W)"
+        case "CIPhotoEffectNoir": return "Effect: Noir"
+        case "CIPhotoEffectFade": return "Effect: Fade (Vintage)"
+        case "CIPhotoEffectChrome": return "Effect: Chrome"
+        case "CIPhotoEffectProcess": return "Effect: Process"
+        case "CIPhotoEffectTonal": return "Effect: Tonal"
+        default: return "Effect: None"
+        }
+    }
+
+    private func postEffect(_ name: String?) {
+        NotificationCenter.default.post(name: .applyPhotoEffect, object: name)
+    }
+
     var body: some Commands {
         CommandGroup(replacing: .pasteboard) {
             Button("Copy Image") {
@@ -393,6 +411,21 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .removeSharpening, object: nil)
             }
             .keyboardShortcut("h", modifiers: .shift)
+
+            Divider()
+
+            Menu("Photo Effect") {
+                Text(activeEffectLabel)
+                Divider()
+                Button("None") { postEffect(nil) }
+                Divider()
+                Button("Mono (B&W)") { postEffect("CIPhotoEffectMono") }
+                Button("Noir (High-contrast B&W)") { postEffect("CIPhotoEffectNoir") }
+                Button("Fade (Vintage)") { postEffect("CIPhotoEffectFade") }
+                Button("Chrome (Vivid)") { postEffect("CIPhotoEffectChrome") }
+                Button("Process (Cool Fade)") { postEffect("CIPhotoEffectProcess") }
+                Button("Tonal (Soft B&W)") { postEffect("CIPhotoEffectTonal") }
+            }
 
             Divider()
 

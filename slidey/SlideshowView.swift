@@ -101,6 +101,8 @@ struct SlideshowView: View {
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
+    @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
+    @State private var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -692,6 +694,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.denoiseImage)) { _ in
             ifKeyWindow { openDenoiseHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.applyPhotoEffect)) { note in
+            ifKeyWindow { setPhotoEffect(note.object as? String) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -1309,22 +1314,32 @@ struct SlideshowView: View {
             return
         }
         // Priority: upscaled > sharpened > smoothed > enhanced > original
+        var baseImage: NSImage?
         if let upscaled = upscaledImages[url] {
-            currentDisplayImage = upscaled
+            baseImage = upscaled
             let factor = upscaleFactors[url] ?? 4
             windowTitle = Self.titleForImage(at: url) + " [\(factor)\u{00d7} upscaled]"
         } else {
-            if let sharpened = sharpenedImages[url] {
-                currentDisplayImage = sharpened
-            } else if let smoothed = smoothedImages[url] {
-                currentDisplayImage = smoothed
-            } else if let enhanced = enhancedImages[url] {
-                currentDisplayImage = enhanced
-            } else {
-                currentDisplayImage = imageLoader.currentImage
-            }
+            if let sharpened = sharpenedImages[url] { baseImage = sharpened }
+            else if let smoothed = smoothedImages[url] { baseImage = smoothed }
+            else if let enhanced = enhancedImages[url] { baseImage = enhanced }
+            else { baseImage = imageLoader.currentImage }
             windowTitle = Self.titleForImage(at: url)
         }
+        // Apply photo effect as the final compositing step
+        if let effectName = imageEffects[url] {
+            if let cached = effectImages[url] {
+                currentDisplayImage = cached
+            } else if let base = baseImage {
+                let effected = applyPhotoEffect(effectName, to: base)
+                effectImages[url] = effected ?? base
+                currentDisplayImage = effectImages[url]
+            }
+        } else {
+            currentDisplayImage = baseImage
+        }
+        // Update menu display to reflect active effect for this image
+        UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")
         // Re-apply persisted edits for images not yet processed in this session
         let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
         let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
@@ -1367,7 +1382,7 @@ struct SlideshowView: View {
             enhancedURLStrings.insert(url.absoluteString)
             saveFavourites()
             invalidateUpscaling(for: url)
-            currentDisplayImage = enhancedNSImage
+            setDisplay(base: enhancedNSImage, for: url)
         }
     }
 
@@ -1403,7 +1418,7 @@ struct SlideshowView: View {
             smoothedURLStrings.insert(url.absoluteString)
             saveFavourites()
             invalidateUpscaling(for: url)
-            currentDisplayImage = smoothedNSImage
+            setDisplay(base: smoothedNSImage, for: url)
         }
     }
 
@@ -1438,7 +1453,7 @@ struct SlideshowView: View {
             sharpenedURLStrings.insert(url.absoluteString)
             saveFavourites()
             invalidateUpscaling(for: url)
-            currentDisplayImage = sharpenedNSImage
+            setDisplay(base: sharpenedNSImage, for: url)
         }
     }
 
@@ -1448,6 +1463,40 @@ struct SlideshowView: View {
         sharpenedURLStrings.remove(url.absoluteString)
         saveFavourites()
         invalidateUpscaling(for: url)
+        updateDisplayImage()
+    }
+
+    private func applyPhotoEffect(_ filterName: String, to image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: filterName) else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        guard let outputImage = filter.outputImage else { return nil }
+        let ctx = CIContext()
+        guard let cgOut = ctx.createCGImage(outputImage, from: outputImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    /// Set currentDisplayImage to base, applying the active photo effect if present.
+    /// Call this whenever the base image changes to keep the effect in sync.
+    private func setDisplay(base: NSImage, for url: URL) {
+        effectImages[url] = nil
+        if let name = imageEffects[url], let result = applyPhotoEffect(name, to: base) {
+            effectImages[url] = result
+            currentDisplayImage = result
+        } else {
+            currentDisplayImage = base
+        }
+    }
+
+    private func setPhotoEffect(_ filterName: String?) {
+        guard let url = imageLoader.currentImageURL else { return }
+        let name = filterName.flatMap { $0.isEmpty ? nil : $0 }
+        guard imageEffects[url] != name else { return }
+        imageEffects[url] = name
+        effectImages[url] = nil
+        saveFavourites()
+        UserDefaults.standard.set(name ?? "", forKey: "activePhotoEffect")
         updateDisplayImage()
     }
 
@@ -1490,24 +1539,26 @@ struct SlideshowView: View {
     private func applyDenoise() {
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelDenoise(); return }
+        // currentDisplayImage is the raw denoise preview (denoiseBaseImage has no photo effect applied)
         smoothedImages[url] = result
         smoothedURLStrings.insert(url.absoluteString)
         denoiseURLLevels[url.absoluteString] = denoiseLevel
         saveFavourites()
-        invalidateUpscaling(for: url)
+        invalidateUpscaling(for: url)  // also clears effectImages[url]
         showDenoiseHUD = false
         denoiseTask?.cancel()
         denoiseTask = nil
         denoiseBaseImage = nil
+        updateDisplayImage()  // reapplies photo effect over the new smooth base
     }
 
     private func cancelDenoise() {
         guard showDenoiseHUD else { return }
-        currentDisplayImage = denoiseBaseImage ?? imageLoader.currentImage
         showDenoiseHUD = false
         denoiseTask?.cancel()
         denoiseTask = nil
         denoiseBaseImage = nil
+        updateDisplayImage()  // restores pre-HUD display including any active photo effect
     }
 
     private func upscaleCurrentImage(scale: Int) {
@@ -1625,6 +1676,7 @@ struct SlideshowView: View {
                 DispatchQueue.main.async {
                     self.upscaledImages[targetURL] = result
                     self.upscaleFactors[targetURL] = scale
+                    self.effectImages[targetURL] = nil
                     self.upscaleProgress = 1.0
                     self.debugOutput += "SUCCESS: \(imgW)×\(imgH) → \(outW)×\(outH)\n"
                     self.isProcessing = false
@@ -1811,6 +1863,7 @@ struct SlideshowView: View {
     private func invalidateUpscaling(for url: URL) {
         upscaledImages[url] = nil
         upscaleFactors[url] = nil
+        effectImages[url] = nil
     }
 
     private func removeUpscaling() {
@@ -2438,6 +2491,11 @@ struct SlideshowView: View {
         smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
         sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
+        let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
+        imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
+            guard let url = URL(string: key) else { return nil }
+            return (url, val)
+        })
     }
 
     private func saveFavourites() {
@@ -2448,6 +2506,8 @@ struct SlideshowView: View {
         UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
         UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
+        let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
+        UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {
