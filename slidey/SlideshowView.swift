@@ -2753,15 +2753,19 @@ struct ThumbnailStrip: View {
             .background(.black.opacity(0.75))
             .accessibilityLabel("Thumbnail strip, \(imageLoader.imageURLs.count) images")
             .onChange(of: imageLoader.currentIndex) { _, _ in
-                if let url = imageLoader.currentImageURL {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(url, anchor: .center)
+                DispatchQueue.main.async {
+                    if let url = imageLoader.currentImageURL {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(url, anchor: .center)
+                        }
                     }
                 }
             }
             .onAppear {
-                if let url = imageLoader.currentImageURL {
-                    proxy.scrollTo(url, anchor: .center)
+                DispatchQueue.main.async {
+                    if let url = imageLoader.currentImageURL {
+                        proxy.scrollTo(url, anchor: .center)
+                    }
                 }
             }
         }
