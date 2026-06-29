@@ -1,4 +1,6 @@
 import Combine
+import CoreImage
+import SwiftUI
 import XCTest
 @testable import Slidey
 
@@ -309,6 +311,73 @@ final class UpscaleNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Denoise notification wiring tests
+
+final class DenoiseNotificationTests: XCTestCase {
+    func testDenoiseImageNotificationFires() {
+        let expectation = expectation(description: "denoiseImage notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .denoiseImage, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .denoiseImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testDenoiseNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.denoiseImage.rawValue, "DenoiseImage")
+    }
+
+    func testDenoiseURLLevelsRoundTrip() {
+        let suiteName = "DenoiseURLLevelsTest_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let levels: [String: Double] = ["file:///test/a.jpg": 45.0, "file:///test/b.jpg": 72.0]
+        defaults.set(levels, forKey: "denoiseURLLevels")
+        let stored = defaults.dictionary(forKey: "denoiseURLLevels") as? [String: Double] ?? [:]
+        XCTAssertEqual(stored["file:///test/a.jpg"], 45.0)
+        XCTAssertEqual(stored["file:///test/b.jpg"], 72.0)
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+    }
+}
+
+// MARK: - Sharpen notification wiring tests
+
+final class SharpenNotificationTests: XCTestCase {
+    func testSharpenImageNotificationFires() {
+        let expectation = expectation(description: "sharpenImage notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .sharpenImage, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .sharpenImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testRemoveSharpeningNotificationFires() {
+        let expectation = expectation(description: "removeSharpening notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .removeSharpening, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .removeSharpening, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testSharpenNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.sharpenImage.rawValue, "SharpenImage")
+        XCTAssertEqual(NSNotification.Name.removeSharpening.rawValue, "RemoveSharpening")
+    }
+
+    func testSharpenNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.sharpenImage, .removeSharpening]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
 // MARK: - Slideshow menu notification wiring tests
 
 final class SlideshowMenuNotificationTests: XCTestCase {
@@ -349,5 +418,98 @@ final class SlideshowMenuNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.toggleSlideshow.rawValue, "ToggleSlideshow")
         XCTAssertEqual(NSNotification.Name.toggleThumbnails.rawValue, "ToggleThumbnails")
         XCTAssertEqual(NSNotification.Name.toggleImageInfo.rawValue, "ToggleImageInfo")
+    }
+}
+
+// MARK: - Photo effects notification and persistence tests
+
+final class PhotoEffectsTests: XCTestCase {
+    func testApplyPhotoEffectNotificationFiresWithFilterName() {
+        let expectation = expectation(description: "applyPhotoEffect fires with filter name")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applyPhotoEffect, object: nil, queue: .main
+        ) { note in
+            XCTAssertEqual(note.object as? String, "CIPhotoEffectMono")
+            expectation.fulfill()
+        }
+        NotificationCenter.default.post(name: .applyPhotoEffect, object: "CIPhotoEffectMono")
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testApplyPhotoEffectNotificationFiresWithNilForNone() {
+        let expectation = expectation(description: "applyPhotoEffect fires with nil for None")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applyPhotoEffect, object: nil, queue: .main
+        ) { note in
+            XCTAssertNil(note.object)
+            expectation.fulfill()
+        }
+        NotificationCenter.default.post(name: .applyPhotoEffect, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testPhotoEffectNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.applyPhotoEffect.rawValue, "ApplyPhotoEffect")
+    }
+
+    func testPhotoEffectsUserDefaultsRoundTrip() {
+        let suiteName = "PhotoEffectsTest_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let effects: [String: String] = [
+            "file:///test/a.jpg": "CIPhotoEffectMono",
+            "file:///test/b.jpg": "CIPhotoEffectFade"
+        ]
+        defaults.set(effects, forKey: "photoEffects")
+        let stored = defaults.dictionary(forKey: "photoEffects") as? [String: String] ?? [:]
+        XCTAssertEqual(stored["file:///test/a.jpg"], "CIPhotoEffectMono")
+        XCTAssertEqual(stored["file:///test/b.jpg"], "CIPhotoEffectFade")
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+    }
+
+    func testAllCIPhotoEffectFiltersAreValid() {
+        let filterNames = [
+            "CIPhotoEffectMono", "CIPhotoEffectNoir", "CIPhotoEffectFade",
+            "CIPhotoEffectChrome", "CIPhotoEffectProcess", "CIPhotoEffectTonal"
+        ]
+        for name in filterNames {
+            XCTAssertNotNil(CIFilter(name: name), "\(name) should be a valid CIFilter")
+        }
+    }
+}
+
+// MARK: - Smart zoom notification tests
+
+final class SmartZoomTests: XCTestCase {
+    func testToggleSmartZoomNotificationFires() {
+        let expectation = expectation(description: "toggleSmartZoom fires")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .toggleSmartZoom, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testToggleSmartZoomNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.toggleSmartZoom.rawValue, "ToggleSmartZoom")
+    }
+
+    func testZoomPanControllerDefaultState() {
+        let controller = ZoomPanController()
+        XCTAssertEqual(controller.zoomScale, 1.0)
+        XCTAssertEqual(controller.imageOffset, .zero)
+    }
+
+    func testZoomToSalientRegionNoopWithZeroWindowSize() {
+        let controller = ZoomPanController()
+        // windowSize defaults to .zero — zoomToSalientRegion should be a no-op
+        let image = NSImage(size: CGSize(width: 100, height: 100))
+        controller.zoomToSalientRegion(CGRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5), image: image, rotationAngle: .zero)
+        // With zero windowSize the guard fires → no change
+        XCTAssertEqual(controller.zoomScale, 1.0)
+        XCTAssertEqual(controller.imageOffset, .zero)
     }
 }
