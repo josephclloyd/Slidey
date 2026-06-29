@@ -487,6 +487,10 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .vignetteImage, object: nil)
             }
 
+            Button("Adjustments\u{2026}") {
+                NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+            }
+
         }
     }
 }

@@ -479,6 +479,116 @@ final class PhotoEffectsTests: XCTestCase {
     }
 }
 
+// MARK: - Flip notification tests
+
+final class FlipNotificationTests: XCTestCase {
+    func testFlipHorizontalNotificationFires() {
+        let expectation = expectation(description: "flipHorizontal fires")
+        let observer = NotificationCenter.default.addObserver(forName: .flipHorizontal, object: nil, queue: .main) { _ in expectation.fulfill() }
+        NotificationCenter.default.post(name: .flipHorizontal, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testFlipVerticalNotificationFires() {
+        let expectation = expectation(description: "flipVertical fires")
+        let observer = NotificationCenter.default.addObserver(forName: .flipVertical, object: nil, queue: .main) { _ in expectation.fulfill() }
+        NotificationCenter.default.post(name: .flipVertical, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testFlipNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.flipHorizontal.rawValue, "FlipHorizontal")
+        XCTAssertEqual(NSNotification.Name.flipVertical.rawValue, "FlipVertical")
+    }
+}
+
+// MARK: - Vignette notification and persistence tests
+
+final class VignetteNotificationTests: XCTestCase {
+    func testVignetteImageNotificationFires() {
+        let expectation = expectation(description: "vignetteImage fires")
+        let observer = NotificationCenter.default.addObserver(forName: .vignetteImage, object: nil, queue: .main) { _ in expectation.fulfill() }
+        NotificationCenter.default.post(name: .vignetteImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testVignetteNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.vignetteImage.rawValue, "VignetteImage")
+    }
+
+    func testVignetteURLLevelsRoundTrip() {
+        let suiteName = "VignetteURLLevelsTest_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let levels: [String: Double] = ["file:///test/a.jpg": 0.8, "file:///test/b.jpg": 1.5]
+        defaults.set(levels, forKey: "vignetteURLLevels")
+        let stored = defaults.dictionary(forKey: "vignetteURLLevels") as? [String: Double] ?? [:]
+        XCTAssertEqual(stored["file:///test/a.jpg"] ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(stored["file:///test/b.jpg"] ?? 0, 1.5, accuracy: 0.001)
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+    }
+
+    func testCIVignetteEffectFilterIsValid() {
+        XCTAssertNotNil(CIFilter(name: "CIVignetteEffect"))
+    }
+}
+
+// MARK: - Adjustments notification and persistence tests
+
+final class AdjustmentsNotificationTests: XCTestCase {
+    func testAdjustmentsImageNotificationFires() {
+        let expectation = expectation(description: "adjustmentsImage fires")
+        let observer = NotificationCenter.default.addObserver(forName: .adjustmentsImage, object: nil, queue: .main) { _ in expectation.fulfill() }
+        NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testAdjustmentsNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.adjustmentsImage.rawValue, "AdjustmentsImage")
+    }
+
+    func testImageAdjustmentsDefaultIsIdentity() {
+        let adj = SlideshowView.ImageAdjustments()
+        XCTAssertTrue(adj.isIdentity)
+        XCTAssertEqual(adj.exposure, 0)
+        XCTAssertEqual(adj.highlights, 0)
+        XCTAssertEqual(adj.shadows, 0)
+        XCTAssertEqual(adj.vibrance, 0)
+        XCTAssertEqual(adj.warmth, 0)
+    }
+
+    func testImageAdjustmentsIsIdentityFalseWhenNonZero() {
+        var adj = SlideshowView.ImageAdjustments()
+        adj.exposure = 0.5
+        XCTAssertFalse(adj.isIdentity)
+    }
+
+    func testImageAdjustmentsRoundTripViaJSON() throws {
+        var adj = SlideshowView.ImageAdjustments()
+        adj.exposure = 1.0; adj.highlights = -0.5; adj.shadows = 0.3; adj.vibrance = 0.7; adj.warmth = -0.2
+        var dict: [String: SlideshowView.ImageAdjustments] = [:]
+        dict["file:///test/a.jpg"] = adj
+        let data = try JSONEncoder().encode(dict)
+        let decoded = try JSONDecoder().decode([String: SlideshowView.ImageAdjustments].self, from: data)
+        let result = decoded["file:///test/a.jpg"]!
+        XCTAssertEqual(result.exposure, 1.0, accuracy: 0.001)
+        XCTAssertEqual(result.highlights, -0.5, accuracy: 0.001)
+        XCTAssertEqual(result.shadows, 0.3, accuracy: 0.001)
+        XCTAssertEqual(result.vibrance, 0.7, accuracy: 0.001)
+        XCTAssertEqual(result.warmth, -0.2, accuracy: 0.001)
+    }
+
+    func testAdjustmentCIFiltersAreValid() {
+        XCTAssertNotNil(CIFilter(name: "CIExposureAdjust"))
+        XCTAssertNotNil(CIFilter(name: "CIHighlightShadowAdjust"))
+        XCTAssertNotNil(CIFilter(name: "CIVibrance"))
+        XCTAssertNotNil(CIFilter(name: "CITemperatureAndTint"))
+    }
+}
+
 // MARK: - Smart zoom notification tests
 
 final class SmartZoomTests: XCTestCase {

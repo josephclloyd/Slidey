@@ -51,4 +51,6 @@ extension NSNotification.Name {
     static let flipVertical = NSNotification.Name("FlipVertical")
 
     static let vignetteImage = NSNotification.Name("VignetteImage")
+
+    static let adjustmentsImage = NSNotification.Name("AdjustmentsImage")
 }
