@@ -40,6 +40,10 @@ struct ViewMenuCommands: Commands {
                     Text(order.displayName).tag(order)
                 }
             }
+            Divider()
+            Button("Smart Zoom (z)") {
+                NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
+            }
         }
     }
 }

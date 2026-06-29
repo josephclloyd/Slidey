@@ -1,5 +1,6 @@
 import Combine
 import CoreImage
+import SwiftUI
 import XCTest
 @testable import Slidey
 
@@ -475,5 +476,40 @@ final class PhotoEffectsTests: XCTestCase {
         for name in filterNames {
             XCTAssertNotNil(CIFilter(name: name), "\(name) should be a valid CIFilter")
         }
+    }
+}
+
+// MARK: - Smart zoom notification tests
+
+final class SmartZoomTests: XCTestCase {
+    func testToggleSmartZoomNotificationFires() {
+        let expectation = expectation(description: "toggleSmartZoom fires")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .toggleSmartZoom, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testToggleSmartZoomNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.toggleSmartZoom.rawValue, "ToggleSmartZoom")
+    }
+
+    func testZoomPanControllerDefaultState() {
+        let controller = ZoomPanController()
+        XCTAssertEqual(controller.zoomScale, 1.0)
+        XCTAssertEqual(controller.imageOffset, .zero)
+    }
+
+    func testZoomToSalientRegionNoopWithZeroWindowSize() {
+        let controller = ZoomPanController()
+        // windowSize defaults to .zero — zoomToSalientRegion should be a no-op
+        let image = NSImage(size: CGSize(width: 100, height: 100))
+        controller.zoomToSalientRegion(CGRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5), image: image, rotationAngle: .zero)
+        // With zero windowSize the guard fires → no change
+        XCTAssertEqual(controller.zoomScale, 1.0)
+        XCTAssertEqual(controller.imageOffset, .zero)
     }
 }
