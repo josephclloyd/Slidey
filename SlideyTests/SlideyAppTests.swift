@@ -309,6 +309,43 @@ final class UpscaleNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Sharpen notification wiring tests
+
+final class SharpenNotificationTests: XCTestCase {
+    func testSharpenImageNotificationFires() {
+        let expectation = expectation(description: "sharpenImage notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .sharpenImage, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .sharpenImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testRemoveSharpeningNotificationFires() {
+        let expectation = expectation(description: "removeSharpening notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .removeSharpening, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .removeSharpening, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testSharpenNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.sharpenImage.rawValue, "SharpenImage")
+        XCTAssertEqual(NSNotification.Name.removeSharpening.rawValue, "RemoveSharpening")
+    }
+
+    func testSharpenNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.sharpenImage, .removeSharpening]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
 // MARK: - Slideshow menu notification wiring tests
 
 final class SlideshowMenuNotificationTests: XCTestCase {

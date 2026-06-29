@@ -379,6 +379,18 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("Sharpen Image") {
+                NotificationCenter.default.post(name: .sharpenImage, object: nil)
+            }
+            .keyboardShortcut("h", modifiers: [])
+
+            Button("Remove Sharpening") {
+                NotificationCenter.default.post(name: .removeSharpening, object: nil)
+            }
+            .keyboardShortcut("h", modifiers: .shift)
+
+            Divider()
+
             Button("AI Upscale Image (2x)") {
                 NotificationCenter.default.post(name: .upscaleImage2x, object: nil)
             }

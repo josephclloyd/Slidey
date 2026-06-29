@@ -8,6 +8,8 @@ extension NSNotification.Name {
     static let removeEnhancement = NSNotification.Name("RemoveEnhancement")
     static let smoothImage = NSNotification.Name("SmoothImage")
     static let removeSmoothing = NSNotification.Name("RemoveSmoothing")
+    static let sharpenImage = NSNotification.Name("SharpenImage")
+    static let removeSharpening = NSNotification.Name("RemoveSharpening")
     static let upscaleImage2x = NSNotification.Name("UpscaleImage2x")
     static let upscaleImage4x = NSNotification.Name("UpscaleImage4x")
     static let removeUpscaling = NSNotification.Name("RemoveUpscaling")
