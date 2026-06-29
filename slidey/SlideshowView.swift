@@ -3,6 +3,7 @@ import AppKit
 import CoreImage
 import CoreML
 import IOKit.pwr_mgt
+import Vision
 import UniformTypeIdentifiers
 
 func validateRenameTarget(newName: String, ext: String, directory: URL, originalBasename: String) -> String? {
@@ -103,6 +104,8 @@ struct SlideshowView: View {
     @State private var denoiseTask: Task<Void, Never>?
     @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
     @State private var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
+    @State private var smartZoomEnabled: Bool = false
+    @State private var saliencyRects: [URL: CGRect] = [:]
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -567,6 +570,9 @@ struct SlideshowView: View {
             }
             rotationAngle = currentURLRotation()
             updateDisplayImage()
+            if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
+                applySmartZoomIfNeeded(for: url, image: image)
+            }
             // Reset the auto-advance clock on every navigation (manual or
             // auto) so the next tick is always `interval` from now.
             if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
@@ -697,6 +703,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.applyPhotoEffect)) { note in
             ifKeyWindow { setPhotoEffect(note.object as? String) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
+            ifKeyWindow { toggleSmartZoom() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -1013,6 +1022,9 @@ struct SlideshowView: View {
             if !imageLoader.imageURLs.isEmpty {
                 imageLoader.jumpTo(index: Int.random(in: 0..<imageLoader.imageURLs.count))
             }
+            return .handled
+        case "z":
+            toggleSmartZoom()
             return .handled
         case " ":
             toggleSlideshow()
@@ -1498,6 +1510,46 @@ struct SlideshowView: View {
         saveFavourites()
         UserDefaults.standard.set(name ?? "", forKey: "activePhotoEffect")
         updateDisplayImage()
+    }
+
+    private func toggleSmartZoom() {
+        smartZoomEnabled.toggle()
+        if smartZoomEnabled {
+            guard let url = imageLoader.currentImageURL,
+                  let image = imageLoader.currentImage else { return }
+            applySmartZoomIfNeeded(for: url, image: image)
+        } else {
+            zoomPan.reset()
+        }
+    }
+
+    private func applySmartZoomIfNeeded(for url: URL, image: NSImage) {
+        if let cached = saliencyRects[url] {
+            zoomPan.zoomToSalientRegion(cached, image: image, rotationAngle: rotationAngle)
+        } else {
+            computeSaliency(for: url, image: image)
+        }
+    }
+
+    private func computeSaliency(for url: URL, image: NSImage) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [url] in
+            let request = VNGenerateAttentionBasedSaliencyImageRequest()
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do { try handler.perform([request]) } catch { return }
+            guard let results = request.results as? [VNSaliencyImageObservation],
+                  let observation = results.first else { return }
+            var unionRect = CGRect.null
+            for obj in observation.salientObjects ?? [] {
+                unionRect = unionRect.union(obj.boundingBox)
+            }
+            guard !unionRect.isNull else { return }
+            DispatchQueue.main.async { [url] in
+                self.saliencyRects[url] = unionRect
+                guard self.smartZoomEnabled, self.imageLoader.currentImageURL == url else { return }
+                self.zoomPan.zoomToSalientRegion(unionRect, image: image, rotationAngle: self.rotationAngle)
+            }
+        }
     }
 
     private func openDenoiseHUD() {

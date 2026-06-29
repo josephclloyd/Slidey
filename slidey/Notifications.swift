@@ -45,4 +45,5 @@ extension NSNotification.Name {
     static let toggleFavouritesOnly = NSNotification.Name("ToggleFavouritesOnly")
 
     static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
+    static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
 }

@@ -85,6 +85,36 @@ final class ZoomPanController {
         zoomScale = fillScale / fitScale
         imageOffset = .zero
     }
+
+    /// Zoom and pan so the given salient region (Vision normalized coords, bottom-left origin) fills the view.
+    func zoomToSalientRegion(_ salientRect: CGRect, image: NSImage, rotationAngle: Angle) {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              salientRect.width > 0, salientRect.height > 0 else { return }
+        let naturalW = CGFloat(cgImage.width)
+        let naturalH = CGFloat(cgImage.height)
+        let fitScale = min(windowSize.width / naturalW, windowSize.height / naturalH)
+        guard fitScale > 0, windowSize.width > 0 else { return }
+
+        // Salient region size in display coords (at fit scale = zoomScale 1.0)
+        let sDisplayW = salientRect.width * naturalW * fitScale
+        let sDisplayH = salientRect.height * naturalH * fitScale
+        guard sDisplayW > 0, sDisplayH > 0 else { return }
+
+        // Zoom so the salient region fills most of the view (capped to avoid extreme zoom)
+        let rawZoom = min(windowSize.width / sDisplayW, windowSize.height / sDisplayH)
+        zoomScale = min(max(rawZoom, 1.0), 8.0)
+
+        // Salient region center in image pixels, measured from image center
+        // Vision y=0 is bottom; SwiftUI y=0 is top — flip y
+        let pCenterX = (salientRect.midX - 0.5) * naturalW
+        let pCenterY = (0.5 - salientRect.midY) * naturalH
+
+        // Offset to center the salient region in the view
+        imageOffset = CGSize(
+            width: -(pCenterX * fitScale * zoomScale),
+            height: -(pCenterY * fitScale * zoomScale)
+        )
+    }
 }
 
 // MARK: - ClickCatcher
