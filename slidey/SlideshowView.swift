@@ -847,39 +847,42 @@ struct SlideshowView: View {
         }
 
         if key == .home {
-            imageLoader.jumpTo(index: 0)
+            DispatchQueue.main.async { imageLoader.jumpTo(index: 0) }
             return .handled
         }
 
         if key == .end {
-            imageLoader.jumpTo(index: imageLoader.imageURLs.count - 1)
+            DispatchQueue.main.async { imageLoader.jumpTo(index: imageLoader.imageURLs.count - 1) }
             return .handled
         }
 
+        // Defer all state mutations: SwiftUI processes .onKeyPress within its own
+        // update pipeline, so synchronous @Published/@Observable writes here fire
+        // "Publishing changes from within view updates" warnings.
         if zoomPan.zoomScale > 1.0 {
             switch key {
             case .leftArrow:
                 if zoomPan.canPan(direction: .left, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
-                    zoomPan.imageOffset.width += 50
+                    DispatchQueue.main.async { zoomPan.imageOffset.width += 50 }
                 } else {
-                    imageLoader.previousImage()
+                    DispatchQueue.main.async { imageLoader.previousImage() }
                 }
                 return .handled
             case .rightArrow:
                 if zoomPan.canPan(direction: .right, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
-                    zoomPan.imageOffset.width -= 50
+                    DispatchQueue.main.async { zoomPan.imageOffset.width -= 50 }
                 } else {
-                    imageLoader.nextImage()
+                    DispatchQueue.main.async { imageLoader.nextImage() }
                 }
                 return .handled
             case .upArrow:
                 if zoomPan.canPan(direction: .up, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
-                    zoomPan.imageOffset.height += 50
+                    DispatchQueue.main.async { zoomPan.imageOffset.height += 50 }
                 }
                 return .handled
             case .downArrow:
                 if zoomPan.canPan(direction: .down, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
-                    zoomPan.imageOffset.height -= 50
+                    DispatchQueue.main.async { zoomPan.imageOffset.height -= 50 }
                 }
                 return .handled
             default:
@@ -888,10 +891,10 @@ struct SlideshowView: View {
         } else {
             switch key {
             case .leftArrow:
-                imageLoader.previousImage()
+                DispatchQueue.main.async { imageLoader.previousImage() }
                 return .handled
             case .rightArrow:
-                imageLoader.nextImage()
+                DispatchQueue.main.async { imageLoader.nextImage() }
                 return .handled
             default:
                 break
