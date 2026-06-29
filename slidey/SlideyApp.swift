@@ -481,6 +481,12 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .flipVertical, object: nil)
             }
 
+            Divider()
+
+            Button("Vignette\u{2026}") {
+                NotificationCenter.default.post(name: .vignetteImage, object: nil)
+            }
+
         }
     }
 }
