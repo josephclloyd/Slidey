@@ -106,6 +106,11 @@ struct SlideshowView: View {
     @State private var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
     @State private var flippedHorizontally: Set<String> = []
     @State private var flippedVertically: Set<String> = []
+    @State private var vignetteURLLevels: [String: Double] = [:]
+    @State private var showVignetteHUD: Bool = false
+    @State private var vignetteIntensity: Double = 1.0
+    @State private var vignetteBaseImage: NSImage?
+    @State private var vignetteTask: Task<Void, Never>?
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
     @State private var showFavouritesOnly: Bool = false
@@ -236,6 +241,41 @@ struct SlideshowView: View {
                             .buttonStyle(.bordered)
                             .tint(.white)
                         Button("Apply") { applyDenoise() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    @ViewBuilder private var vignetteHUD: some View {
+        if showVignetteHUD {
+            VStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Vignette")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(String(format: "%.1f", vignetteIntensity))
+                            .monospacedDigit()
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    Slider(value: $vignetteIntensity, in: 0...2, step: 0.1)
+                        .onChange(of: vignetteIntensity) { _, _ in scheduleVignettePreview() }
+                        .tint(.white)
+                    HStack(spacing: 16) {
+                        Button("Cancel") { cancelVignetteHUD() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                        Button("Apply") { applyVignetteToImage() }
                             .buttonStyle(.borderedProminent)
                     }
                 }
@@ -449,6 +489,7 @@ struct SlideshowView: View {
         }
 
         denoiseHUD
+        vignetteHUD
 
         // Before/After: "Original" label shown while holding b
         if showingOriginal {
@@ -570,7 +611,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -685,6 +726,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipVertical)) { _ in
             ifKeyWindow { flipCurrentImageVertical() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.vignetteImage)) { _ in
+            ifKeyWindow { openVignetteHUD() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -849,6 +893,18 @@ struct SlideshowView: View {
             }
             if keyPress.characters == "\r" {
                 applyDenoise()
+                return .handled
+            }
+            return .ignored
+        }
+
+        if showVignetteHUD {
+            if key == .escape {
+                cancelVignetteHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyVignetteToImage()
                 return .handled
             }
             return .ignored
@@ -1413,6 +1469,11 @@ struct SlideshowView: View {
         } else {
             currentDisplayImage = baseImage
         }
+        // Apply vignette as the absolute final step (skip during HUD preview)
+        if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
         // Update menu display to reflect active effect for this image
         UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")
         // Re-apply persisted edits for images not yet processed in this session
@@ -1552,8 +1613,6 @@ struct SlideshowView: View {
         return NSImage(cgImage: cgOut, size: image.size)
     }
 
-    /// Set currentDisplayImage to base, applying the active photo effect if present.
-    /// Call this whenever the base image changes to keep the effect in sync.
     private func setDisplay(base: NSImage, for url: URL) {
         let isFlippedH = flippedHorizontally.contains(url.absoluteString)
         let isFlippedV = flippedVertically.contains(url.absoluteString)
@@ -1566,6 +1625,11 @@ struct SlideshowView: View {
             currentDisplayImage = result
         } else {
             currentDisplayImage = flippedBase
+        }
+        // Vignette as final step (skip during HUD preview)
+        if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
         }
     }
 
@@ -1613,6 +1677,67 @@ struct SlideshowView: View {
         saveFavourites()
         UserDefaults.standard.set(name ?? "", forKey: "activePhotoEffect")
         updateDisplayImage()
+    }
+
+    private func applyVignette(intensity: Double, to image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIVignetteEffect") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(x: ciImage.extent.midX, y: ciImage.extent.midY), forKey: "inputCenter")
+        filter.setValue(max(ciImage.extent.width, ciImage.extent.height) * 0.75, forKey: "inputRadius")
+        filter.setValue(intensity, forKey: kCIInputIntensityKey)
+        guard let outputImage = filter.outputImage else { return nil }
+        let context = CIContext()
+        guard let cgOut = context.createCGImage(outputImage, from: outputImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    private func openVignetteHUD() {
+        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
+        guard !slideshow.isPlaying else { return }
+        vignetteIntensity = vignetteURLLevels[url.absoluteString] ?? 1.0
+        showVignetteHUD = true         // pipeline now skips vignette
+        updateDisplayImage()            // recomputes without vignette → clean base
+        vignetteBaseImage = currentDisplayImage
+        scheduleVignettePreview()
+    }
+
+    private func scheduleVignettePreview() {
+        vignetteTask?.cancel()
+        vignetteTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            await MainActor.run { applyVignettePreview() }
+        }
+    }
+
+    private func applyVignettePreview() {
+        guard let base = vignetteBaseImage else { return }
+        currentDisplayImage = (vignetteIntensity > 0 ? applyVignette(intensity: vignetteIntensity, to: base) : nil) ?? base
+    }
+
+    private func applyVignetteToImage() {
+        guard let url = imageLoader.currentImageURL else { cancelVignetteHUD(); return }
+        if vignetteIntensity > 0 {
+            vignetteURLLevels[url.absoluteString] = vignetteIntensity
+        } else {
+            vignetteURLLevels.removeValue(forKey: url.absoluteString)
+        }
+        saveFavourites()
+        showVignetteHUD = false
+        vignetteTask?.cancel()
+        vignetteTask = nil
+        vignetteBaseImage = nil
+        updateDisplayImage()
+    }
+
+    private func cancelVignetteHUD() {
+        guard showVignetteHUD else { return }
+        showVignetteHUD = false
+        vignetteTask?.cancel()
+        vignetteTask = nil
+        vignetteBaseImage = nil
+        updateDisplayImage()  // restores pipeline including any previously persisted vignette
     }
 
     private func toggleSmartZoom() {
@@ -2648,6 +2773,7 @@ struct SlideshowView: View {
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
         flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
         flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
+        vignetteURLLevels = (UserDefaults.standard.dictionary(forKey: "vignetteURLLevels") as? [String: Double]) ?? [:]
         let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
         imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
             guard let url = URL(string: key) else { return nil }
@@ -2665,6 +2791,7 @@ struct SlideshowView: View {
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
         UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
         UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
+        UserDefaults.standard.set(vignetteURLLevels, forKey: "vignetteURLLevels")
         let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
         UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
     }
