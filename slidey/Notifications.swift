@@ -11,6 +11,7 @@ extension NSNotification.Name {
     static let sharpenImage = NSNotification.Name("SharpenImage")
     static let removeSharpening = NSNotification.Name("RemoveSharpening")
     static let denoiseImage = NSNotification.Name("DenoiseImage")
+    static let applyPhotoEffect = NSNotification.Name("ApplyPhotoEffect")
     static let upscaleImage2x = NSNotification.Name("UpscaleImage2x")
     static let upscaleImage4x = NSNotification.Name("UpscaleImage4x")
     static let removeUpscaling = NSNotification.Name("RemoveUpscaling")

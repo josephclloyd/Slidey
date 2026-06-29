@@ -1,4 +1,5 @@
 import Combine
+import CoreImage
 import XCTest
 @testable import Slidey
 
@@ -416,5 +417,63 @@ final class SlideshowMenuNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.toggleSlideshow.rawValue, "ToggleSlideshow")
         XCTAssertEqual(NSNotification.Name.toggleThumbnails.rawValue, "ToggleThumbnails")
         XCTAssertEqual(NSNotification.Name.toggleImageInfo.rawValue, "ToggleImageInfo")
+    }
+}
+
+// MARK: - Photo effects notification and persistence tests
+
+final class PhotoEffectsTests: XCTestCase {
+    func testApplyPhotoEffectNotificationFiresWithFilterName() {
+        let expectation = expectation(description: "applyPhotoEffect fires with filter name")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applyPhotoEffect, object: nil, queue: .main
+        ) { note in
+            XCTAssertEqual(note.object as? String, "CIPhotoEffectMono")
+            expectation.fulfill()
+        }
+        NotificationCenter.default.post(name: .applyPhotoEffect, object: "CIPhotoEffectMono")
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testApplyPhotoEffectNotificationFiresWithNilForNone() {
+        let expectation = expectation(description: "applyPhotoEffect fires with nil for None")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .applyPhotoEffect, object: nil, queue: .main
+        ) { note in
+            XCTAssertNil(note.object)
+            expectation.fulfill()
+        }
+        NotificationCenter.default.post(name: .applyPhotoEffect, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testPhotoEffectNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.applyPhotoEffect.rawValue, "ApplyPhotoEffect")
+    }
+
+    func testPhotoEffectsUserDefaultsRoundTrip() {
+        let suiteName = "PhotoEffectsTest_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let effects: [String: String] = [
+            "file:///test/a.jpg": "CIPhotoEffectMono",
+            "file:///test/b.jpg": "CIPhotoEffectFade"
+        ]
+        defaults.set(effects, forKey: "photoEffects")
+        let stored = defaults.dictionary(forKey: "photoEffects") as? [String: String] ?? [:]
+        XCTAssertEqual(stored["file:///test/a.jpg"], "CIPhotoEffectMono")
+        XCTAssertEqual(stored["file:///test/b.jpg"], "CIPhotoEffectFade")
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+    }
+
+    func testAllCIPhotoEffectFiltersAreValid() {
+        let filterNames = [
+            "CIPhotoEffectMono", "CIPhotoEffectNoir", "CIPhotoEffectFade",
+            "CIPhotoEffectChrome", "CIPhotoEffectProcess", "CIPhotoEffectTonal"
+        ]
+        for name in filterNames {
+            XCTAssertNotNil(CIFilter(name: name), "\(name) should be a valid CIFilter")
+        }
     }
 }
