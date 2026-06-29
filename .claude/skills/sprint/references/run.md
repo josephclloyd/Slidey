@@ -231,6 +231,12 @@ conflict. The `addBlockedBy` edge ensures #16 waits for #15 to merge.
 
 **SlideshowView.swift hot-file — deeper conflict check at plan time:** The "distinct files" check is insufficient for SlideshowView. Two branches that each add a new `@ViewBuilder private var` property, or each add a modifier to `coreView`/`overlayViews`, will produce a merge conflict even though they "touch different features." At plan time, inspect which *sections* of SlideshowView each issue adds to: `emptyStateContent`, `imageDisplayContent`, `overlayViews`, `coreView`, `body`. If two issues touch the same section, serialise them with `addBlockedBy`.
 
+**SwiftLint `cyclomatic_complexity` in `handleCharacterKeyPress`:** This function is extracted from `handleKeyPress` specifically to manage complexity. SwiftLint's error threshold is ~50. After adding any new `case` to `handleCharacterKeyPress`, check the complexity stays green:
+```bash
+xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO 2>&1 | grep cyclomatic
+```
+If it fails, extract a sub-helper (e.g. `handleEditKeyPress`) or add `// swiftlint:disable:next cyclomatic_complexity` only if extraction is genuinely worse. Also check the key binding registry in CLAUDE.md before picking a new key — several single-letter keys are already taken.
+
 **SlideshowView type-checker timeout:** Xcode 16.3 CI fails with "unable to type-check in reasonable time" when `coreView` or `body` accumulates too many modifier levels. The established fix:
 1. Extract view sections into `@ViewBuilder private var emptyStateContent/imageDisplayContent/overlayViews`
 2. Move the ZStack + onChange/focusable/onKeyPress chain into `private var coreView: some View`
