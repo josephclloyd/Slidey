@@ -479,7 +479,7 @@ struct SlideshowView: View {
                     updateDisplayImage()
                     captureWindow()
                 }
-                .onChange(of: geometry.size) { _, newSize in
+                .onGeometryChange(for: CGSize.self, of: { $0.size }) { _, newSize in
                     zoomPan.windowSize = newSize
                 }
             }
@@ -548,13 +548,14 @@ struct SlideshowView: View {
             updateCursorVisibility()
             if isPlaying { cancelDenoise() }
         }
-        .onChange(of: sortOrder, initial: true) { _, newValue in
+        .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
             if !imageLoader.imageURLs.isEmpty {
                 imageLoader.applySort()
             }
         }
         .onAppear {
+            imageLoader.sortOrder = sortOrder
             loadFavourites()
             consumePendingOpenIfPossible()
             scheduleAutoOpenRecent()
@@ -582,15 +583,17 @@ struct SlideshowView: View {
             }
         }
         .onChange(of: imageLoader.directoryMissing) { _, missing in
-            if missing {
-                slideshow.stop()
-                showErrorToast("Directory moved or deleted")
-            } else {
-                let message = "Directory restored"
-                savedToast = message
-                savedToastIsError = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
-                    if savedToast == message { savedToast = nil }
+            DispatchQueue.main.async {
+                if missing {
+                    slideshow.stop()
+                    showErrorToast("Directory moved or deleted")
+                } else {
+                    let message = "Directory restored"
+                    savedToast = message
+                    savedToastIsError = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                        if savedToast == message { savedToast = nil }
+                    }
                 }
             }
         }
