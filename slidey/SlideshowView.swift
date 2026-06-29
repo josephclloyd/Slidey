@@ -96,6 +96,11 @@ struct SlideshowView: View {
     @State private var enhancedURLStrings: Set<String> = []
     @State private var smoothedURLStrings: Set<String> = []
     @State private var sharpenedURLStrings: Set<String> = []
+    @State private var denoiseURLLevels: [String: Double] = [:]
+    @State private var showDenoiseHUD: Bool = false
+    @State private var denoiseLevel: Double = 50.0
+    @State private var denoiseBaseImage: NSImage?
+    @State private var denoiseTask: Task<Void, Never>?
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -196,6 +201,41 @@ struct SlideshowView: View {
             }
             .onAppear {
                 captureWindow()
+            }
+        }
+    }
+
+    @ViewBuilder private var denoiseHUD: some View {
+        if showDenoiseHUD {
+            VStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Denoise")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("\(Int(denoiseLevel))%")
+                            .monospacedDigit()
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    Slider(value: $denoiseLevel, in: 0...100, step: 1)
+                        .onChange(of: denoiseLevel) { _, _ in scheduleDenoisePreview() }
+                        .tint(.white)
+                    HStack(spacing: 16) {
+                        Button("Cancel") { cancelDenoise() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                        Button("Apply") { applyDenoise() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
             }
         }
     }
@@ -398,6 +438,8 @@ struct SlideshowView: View {
                 .padding(.bottom, 40)
             }
         }
+
+        denoiseHUD
     }
 
 
@@ -547,9 +589,10 @@ struct SlideshowView: View {
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
-        .onChange(of: slideshow.isPlaying) { _, _ in
+        .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
+            if isPlaying { cancelDenoise() }
         }
         .onChange(of: sortOrder, initial: true) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -646,6 +689,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSharpening)) { _ in
             ifKeyWindow { removeSharpening() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.denoiseImage)) { _ in
+            ifKeyWindow { openDenoiseHUD() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -802,6 +848,18 @@ struct SlideshowView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
 
+        if showDenoiseHUD {
+            if key == .escape {
+                cancelDenoise()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyDenoise()
+                return .handled
+            }
+            return .ignored
+        }
+
         if key == .escape {
             if isProcessing {
                 cancelUpscale()
@@ -873,15 +931,18 @@ struct SlideshowView: View {
             }
         }
 
+        return handleCharacterKeyPress(keyPress)
+    }
+
+    // swiftlint:disable:next cyclomatic_complexity
+    private func handleCharacterKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         switch keyPress.characters {
         case "+", "=":
             zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
             return .handled
         case "-", "_":
             zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
-            if zoomPan.zoomScale <= 1.0 {
-                zoomPan.reset()
-            }
+            if zoomPan.zoomScale <= 1.0 { zoomPan.reset() }
             return .handled
         case "s", "S":
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
@@ -914,6 +975,9 @@ struct SlideshowView: View {
             return .handled
         case "H":
             removeSharpening()
+            return .handled
+        case "q":
+            openDenoiseHUD()
             return .handled
         case "u":
             guard !keyPress.modifiers.contains(.option) else { return .ignored }
@@ -954,7 +1018,6 @@ struct SlideshowView: View {
                 return .handled
             }
         }
-
         return .ignored
     }
 
@@ -1270,7 +1333,10 @@ struct SlideshowView: View {
             DispatchQueue.main.async { [url] in
                 guard self.imageLoader.currentImageURL == url else { return }
                 if needsEnhance { self.enhanceCurrentImage() }
-                if needsSmooth { self.smoothCurrentImage() }
+                if needsSmooth {
+                    let level = self.denoiseURLLevels[url.absoluteString].map { $0 / 1000.0 } ?? 0.02
+                    self.smoothCurrentImage(noiseLevel: level)
+                }
                 if needsSharpen { self.sharpenCurrentImage() }
             }
         }
@@ -1314,7 +1380,7 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
-    private func smoothCurrentImage() {
+    private func smoothCurrentImage(noiseLevel: Double = 0.02) {
         guard let originalImage = currentDisplayImage ?? imageLoader.currentImage,
               let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
@@ -1324,7 +1390,7 @@ struct SlideshowView: View {
         guard let filter = CIFilter(name: "CINoiseReduction") else { return }
 
         filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(0.02, forKey: "inputNoiseLevel")
+        filter.setValue(noiseLevel, forKey: "inputNoiseLevel")
         filter.setValue(0.4, forKey: "inputSharpness")
 
         guard let outputImage = filter.outputImage else { return }
@@ -1383,6 +1449,65 @@ struct SlideshowView: View {
         saveFavourites()
         invalidateUpscaling(for: url)
         updateDisplayImage()
+    }
+
+    private func openDenoiseHUD() {
+        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
+        guard !slideshow.isPlaying else { return }
+        // Start from the enhanced (or original) image, not the currently smoothed/sharpened one,
+        // so the HUD adjusts denoise from the correct base.
+        denoiseBaseImage = enhancedImages[url] ?? imageLoader.currentImage
+        denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
+        showDenoiseHUD = true
+        applyDenoisePreview()
+    }
+
+    private func scheduleDenoisePreview() {
+        denoiseTask?.cancel()
+        denoiseTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            await MainActor.run { applyDenoisePreview() }
+        }
+    }
+
+    private func applyDenoisePreview() {
+        guard let base = denoiseBaseImage,
+              let cgImage = base.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let noiseLevel = denoiseLevel / 1000.0
+        guard noiseLevel > 0 else { currentDisplayImage = base; return }
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CINoiseReduction") else { return }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(noiseLevel, forKey: "inputNoiseLevel")
+        filter.setValue(0.4, forKey: "inputSharpness")
+        guard let outputImage = filter.outputImage else { return }
+        let context = CIContext()
+        if let cgOut = context.createCGImage(outputImage, from: outputImage.extent) {
+            currentDisplayImage = NSImage(cgImage: cgOut, size: base.size)
+        }
+    }
+
+    private func applyDenoise() {
+        guard let url = imageLoader.currentImageURL,
+              let result = currentDisplayImage else { cancelDenoise(); return }
+        smoothedImages[url] = result
+        smoothedURLStrings.insert(url.absoluteString)
+        denoiseURLLevels[url.absoluteString] = denoiseLevel
+        saveFavourites()
+        invalidateUpscaling(for: url)
+        showDenoiseHUD = false
+        denoiseTask?.cancel()
+        denoiseTask = nil
+        denoiseBaseImage = nil
+    }
+
+    private func cancelDenoise() {
+        guard showDenoiseHUD else { return }
+        currentDisplayImage = denoiseBaseImage ?? imageLoader.currentImage
+        showDenoiseHUD = false
+        denoiseTask?.cancel()
+        denoiseTask = nil
+        denoiseBaseImage = nil
     }
 
     private func upscaleCurrentImage(scale: Int) {
@@ -2312,6 +2437,7 @@ struct SlideshowView: View {
         enhancedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "enhancedImages") ?? [])
         smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
         sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
+        denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
     }
 
     private func saveFavourites() {
@@ -2321,6 +2447,7 @@ struct SlideshowView: View {
         UserDefaults.standard.set(Array(enhancedURLStrings), forKey: "enhancedImages")
         UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
         UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
+        UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {

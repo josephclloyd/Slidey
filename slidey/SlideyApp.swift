@@ -377,6 +377,11 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("m", modifiers: .shift)
 
+            Button("Denoise\u{2026}") {
+                NotificationCenter.default.post(name: .denoiseImage, object: nil)
+            }
+            .keyboardShortcut("q", modifiers: [])
+
             Divider()
 
             Button("Sharpen Image") {

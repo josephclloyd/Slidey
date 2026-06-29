@@ -309,6 +309,36 @@ final class UpscaleNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Denoise notification wiring tests
+
+final class DenoiseNotificationTests: XCTestCase {
+    func testDenoiseImageNotificationFires() {
+        let expectation = expectation(description: "denoiseImage notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .denoiseImage, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .denoiseImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testDenoiseNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.denoiseImage.rawValue, "DenoiseImage")
+    }
+
+    func testDenoiseURLLevelsRoundTrip() {
+        let suiteName = "DenoiseURLLevelsTest_\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let levels: [String: Double] = ["file:///test/a.jpg": 45.0, "file:///test/b.jpg": 72.0]
+        defaults.set(levels, forKey: "denoiseURLLevels")
+        let stored = defaults.dictionary(forKey: "denoiseURLLevels") as? [String: Double] ?? [:]
+        XCTAssertEqual(stored["file:///test/a.jpg"], 45.0)
+        XCTAssertEqual(stored["file:///test/b.jpg"], 72.0)
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+    }
+}
+
 // MARK: - Sharpen notification wiring tests
 
 final class SharpenNotificationTests: XCTestCase {
