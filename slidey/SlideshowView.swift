@@ -140,7 +140,7 @@ struct SlideshowView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Loading images")
             .onAppear {
-                captureWindow()
+                DispatchQueue.main.async { captureWindow() }
             }
         } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
@@ -155,7 +155,7 @@ struct SlideshowView: View {
                     .foregroundColor(.white.opacity(0.5))
             }
             .onAppear {
-                captureWindow()
+                DispatchQueue.main.async { captureWindow() }
             }
         } else {
             VStack(spacing: 30) {
@@ -205,7 +205,7 @@ struct SlideshowView: View {
                 }
             }
             .onAppear {
-                captureWindow()
+                DispatchQueue.main.async { captureWindow() }
             }
         }
     }
@@ -475,9 +475,13 @@ struct SlideshowView: View {
                 .id(imageLoader.currentImageURL)
                 .transition(.opacity)
                 .onAppear {
-                    zoomPan.windowSize = geometry.size
-                    updateDisplayImage()
-                    captureWindow()
+                    // Defer mutations: .id() causes this onAppear to fire synchronously
+                    // within the parent view's render pass (not after it).
+                    DispatchQueue.main.async {
+                        zoomPan.windowSize = geometry.size
+                        updateDisplayImage()
+                        captureWindow()
+                    }
                 }
                 .onGeometryChange(for: CGSize.self, of: { $0.size }) { _, newSize in
                     zoomPan.windowSize = newSize
