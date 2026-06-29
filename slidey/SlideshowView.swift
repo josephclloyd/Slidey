@@ -225,7 +225,7 @@ struct SlideshowView: View {
                             .foregroundColor(.white.opacity(0.7))
                     }
                     Slider(value: $denoiseLevel, in: 0...100, step: 1)
-                        .onChange(of: denoiseLevel) { _, _ in scheduleDenoisePreview() }
+                        .onChange(of: denoiseLevel) { _, _ in DispatchQueue.main.async { scheduleDenoisePreview() } }
                         .tint(.white)
                     HStack(spacing: 16) {
                         Button("Cancel") { cancelDenoise() }
