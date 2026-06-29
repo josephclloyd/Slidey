@@ -472,6 +472,25 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("r", modifiers: .shift)
 
+            Divider()
+
+            Button("Flip Horizontal") {
+                NotificationCenter.default.post(name: .flipHorizontal, object: nil)
+            }
+            Button("Flip Vertical") {
+                NotificationCenter.default.post(name: .flipVertical, object: nil)
+            }
+
+            Divider()
+
+            Button("Vignette\u{2026}") {
+                NotificationCenter.default.post(name: .vignetteImage, object: nil)
+            }
+
+            Button("Adjustments\u{2026}") {
+                NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+            }
+
         }
     }
 }

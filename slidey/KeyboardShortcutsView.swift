@@ -31,6 +31,9 @@ struct KeyboardShortcutsView: View {
             ("u", "AI upscale (2\u{00d7})"),
             ("⌥U", "AI upscale (4\u{00d7})"),
             ("⇧U", "Remove upscaling"),
+            ("b (hold)", "Preview original (before/after)"),
+            ("Edit > Vignette\u{2026}", "Open Vignette HUD"),
+            ("e", "Open Adjustments HUD"),
         ]),
         ("Favourites", [
             ("x", "Toggle favourite"),

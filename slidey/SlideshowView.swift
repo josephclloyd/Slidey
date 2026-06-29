@@ -104,12 +104,37 @@ struct SlideshowView: View {
     @State private var denoiseTask: Task<Void, Never>?
     @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
     @State private var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
+    @State private var flippedHorizontally: Set<String> = []
+    @State private var flippedVertically: Set<String> = []
+    @State private var vignetteURLLevels: [String: Double] = [:]
+    @State private var showVignetteHUD: Bool = false
+    @State private var vignetteIntensity: Double = 1.0
+    @State private var vignetteBaseImage: NSImage?
+    @State private var vignetteTask: Task<Void, Never>?
+
+    struct ImageAdjustments: Codable, Equatable {
+        var exposure: Double = 0
+        var highlights: Double = 0
+        var shadows: Double = 0
+        var vibrance: Double = 0
+        var warmth: Double = 0
+        var isIdentity: Bool {
+            exposure == 0 && highlights == 0 && shadows == 0 && vibrance == 0 && warmth == 0
+        }
+    }
+    @State private var adjustmentURLLevels: [String: ImageAdjustments] = [:]
+    @State private var showAdjustmentsHUD: Bool = false
+    @State private var adjustments: ImageAdjustments = .init()
+    @State private var adjustmentsBaseImage: NSImage?
+    @State private var adjustmentsTask: Task<Void, Never>?
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
+    @State private var keyUpMonitor: Any?
     @State private var cursorShowTask: Task<Void, Never>?
+    @State private var showingOriginal: Bool = false
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -242,6 +267,95 @@ struct SlideshowView: View {
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
             }
+        }
+    }
+
+    @ViewBuilder private var vignetteHUD: some View {
+        if showVignetteHUD {
+            VStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("Vignette")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text(String(format: "%.1f", vignetteIntensity))
+                            .monospacedDigit()
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    Slider(value: $vignetteIntensity, in: 0...2, step: 0.1)
+                        .onChange(of: vignetteIntensity) { _, _ in scheduleVignettePreview() }
+                        .tint(.white)
+                    HStack(spacing: 16) {
+                        Button("Cancel") { cancelVignetteHUD() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                        Button("Apply") { applyVignetteToImage() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    @ViewBuilder private var adjustmentsHUD: some View {
+        if showAdjustmentsHUD {
+            VStack {
+                Spacer()
+                VStack(spacing: 10) {
+                    Text("Adjustments")
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    adjustmentRow("Exposure", value: $adjustments.exposure, range: -2...2)
+                    adjustmentRow("Highlights", value: $adjustments.highlights, range: -1...1)
+                    adjustmentRow("Shadows", value: $adjustments.shadows, range: -1...1)
+                    adjustmentRow("Vibrance", value: $adjustments.vibrance, range: -1...1)
+                    adjustmentRow("Warmth", value: $adjustments.warmth, range: -1...1)
+                    HStack(spacing: 16) {
+                        Button("Reset") {
+                            adjustments = .init()
+                            scheduleAdjustmentsPreview()
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                        Spacer()
+                        Button("Cancel") { cancelAdjustmentsHUD() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                        Button("Apply") { applyAdjustmentsToImage() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 400)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    private func adjustmentRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.white)
+                .frame(width: 90, alignment: .leading)
+            Slider(value: value, in: range)
+                .onChange(of: value.wrappedValue) { _, _ in scheduleAdjustmentsPreview() }
+                .tint(.white)
+            Text(String(format: "%+.2f", value.wrappedValue))
+                .monospacedDigit()
+                .foregroundColor(.white.opacity(0.7))
+                .frame(width: 50, alignment: .trailing)
         }
     }
 
@@ -445,13 +559,31 @@ struct SlideshowView: View {
         }
 
         denoiseHUD
+        vignetteHUD
+        adjustmentsHUD
+
+        // Before/After: "Original" label shown while holding b
+        if showingOriginal {
+            VStack {
+                Text("Original")
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.7))
+                    .cornerRadius(6)
+                    .padding(.top, 20)
+                Spacer()
+            }
+        }
     }
 
 
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
-            if let image = currentDisplayImage {
+            let displayedImage = showingOriginal ? imageLoader.currentImage : currentDisplayImage
+            if let image = displayedImage {
                 ImageDisplayView(
                     image: image,
                     zoomScale: $zoomPan.zoomScale,
@@ -550,7 +682,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -660,6 +792,18 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipHorizontal)) { _ in
+            ifKeyWindow { flipCurrentImageHorizontal() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipVertical)) { _ in
+            ifKeyWindow { flipCurrentImageVertical() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.vignetteImage)) { _ in
+            ifKeyWindow { openVignetteHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.adjustmentsImage)) { _ in
+            ifKeyWindow { openAdjustmentsHUD() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -748,6 +892,7 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
                 windowHasFocus = false
+                showingOriginal = false
                 updateCursorVisibility()
             }
         }
@@ -822,6 +967,30 @@ struct SlideshowView: View {
             }
             if keyPress.characters == "\r" {
                 applyDenoise()
+                return .handled
+            }
+            return .ignored
+        }
+
+        if showVignetteHUD {
+            if key == .escape {
+                cancelVignetteHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyVignetteToImage()
+                return .handled
+            }
+            return .ignored
+        }
+
+        if showAdjustmentsHUD {
+            if key == .escape {
+                cancelAdjustmentsHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyAdjustmentsToImage()
                 return .handled
             }
             return .ignored
@@ -982,6 +1151,12 @@ struct SlideshowView: View {
         case "z":
             toggleSmartZoom()
             return .handled
+        case "e":
+            openAdjustmentsHUD()
+            return .handled
+        case "b":
+            showingOriginal = true
+            return .handled
         case " ":
             toggleSlideshow()
             return .handled
@@ -1030,12 +1205,22 @@ struct SlideshowView: View {
             }
             return event
         }
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { event in
+            if event.charactersIgnoringModifiers == "b" {
+                DispatchQueue.main.async { self.showingOriginal = false }
+            }
+            return event
+        }
     }
 
     private func stopMouseMonitor() {
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
             mouseMonitor = nil
+        }
+        if let monitor = keyUpMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyUpMonitor = nil
         }
         cursorShowTask?.cancel()
     }
@@ -1353,17 +1538,35 @@ struct SlideshowView: View {
             else { baseImage = imageLoader.currentImage }
             windowTitle = Self.titleForImage(at: url)
         }
-        // Apply photo effect as the final compositing step
+        // Apply flip and photo effect as the final compositing steps
+        let isFlippedH = flippedHorizontally.contains(url.absoluteString)
+        let isFlippedV = flippedVertically.contains(url.absoluteString)
+        let needsFlip = isFlippedH || isFlippedV
         if let effectName = imageEffects[url] {
             if let cached = effectImages[url] {
                 currentDisplayImage = cached
             } else if let base = baseImage {
-                let effected = applyPhotoEffect(effectName, to: base)
-                effectImages[url] = effected ?? base
+                let processedBase = needsFlip
+                    ? (applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base)
+                    : base
+                let effected = applyPhotoEffect(effectName, to: processedBase)
+                effectImages[url] = effected ?? processedBase
                 currentDisplayImage = effectImages[url]
             }
+        } else if needsFlip, let base = baseImage {
+            currentDisplayImage = applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base
         } else {
             currentDisplayImage = baseImage
+        }
+        // Apply adjustments (skip during HUD preview)
+        if !showAdjustmentsHUD, let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyAdjustments(adj, to: image) ?? image
+        }
+        // Apply vignette as the absolute final step (skip during HUD preview)
+        if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
         }
         // Update menu display to reflect active effect for this image
         UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")
@@ -1504,16 +1707,64 @@ struct SlideshowView: View {
         return NSImage(cgImage: cgOut, size: image.size)
     }
 
-    /// Set currentDisplayImage to base, applying the active photo effect if present.
-    /// Call this whenever the base image changes to keep the effect in sync.
     private func setDisplay(base: NSImage, for url: URL) {
+        let isFlippedH = flippedHorizontally.contains(url.absoluteString)
+        let isFlippedV = flippedVertically.contains(url.absoluteString)
+        let flippedBase = (isFlippedH || isFlippedV)
+            ? (applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base)
+            : base
         effectImages[url] = nil
-        if let name = imageEffects[url], let result = applyPhotoEffect(name, to: base) {
+        if let name = imageEffects[url], let result = applyPhotoEffect(name, to: flippedBase) {
             effectImages[url] = result
             currentDisplayImage = result
         } else {
-            currentDisplayImage = base
+            currentDisplayImage = flippedBase
         }
+        // Adjustments (skip during HUD preview)
+        if !showAdjustmentsHUD, let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyAdjustments(adj, to: image) ?? image
+        }
+        // Vignette as final step (skip during HUD preview)
+        if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+    }
+
+    private func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {
+        guard horizontal || vertical else { return image }
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var ciImage = CIImage(cgImage: cgImage)
+        if horizontal {
+            let t = CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -ciImage.extent.width, y: 0)
+            ciImage = ciImage.transformed(by: t)
+        }
+        if vertical {
+            let t = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -ciImage.extent.height)
+            ciImage = ciImage.transformed(by: t)
+        }
+        let context = CIContext()
+        guard let cgOut = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    private func flipCurrentImageHorizontal() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let key = url.absoluteString
+        if flippedHorizontally.contains(key) { flippedHorizontally.remove(key) } else { flippedHorizontally.insert(key) }
+        effectImages[url] = nil
+        saveFavourites()
+        updateDisplayImage()
+    }
+
+    private func flipCurrentImageVertical() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let key = url.absoluteString
+        if flippedVertically.contains(key) { flippedVertically.remove(key) } else { flippedVertically.insert(key) }
+        effectImages[url] = nil
+        saveFavourites()
+        updateDisplayImage()
     }
 
     private func setPhotoEffect(_ filterName: String?) {
@@ -1524,6 +1775,141 @@ struct SlideshowView: View {
         effectImages[url] = nil
         saveFavourites()
         UserDefaults.standard.set(name ?? "", forKey: "activePhotoEffect")
+        updateDisplayImage()
+    }
+
+    private func applyVignette(intensity: Double, to image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CIVignetteEffect") else { return nil }
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(x: ciImage.extent.midX, y: ciImage.extent.midY), forKey: "inputCenter")
+        filter.setValue(max(ciImage.extent.width, ciImage.extent.height) * 0.75, forKey: "inputRadius")
+        filter.setValue(intensity, forKey: kCIInputIntensityKey)
+        guard let outputImage = filter.outputImage else { return nil }
+        let context = CIContext()
+        guard let cgOut = context.createCGImage(outputImage, from: outputImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    private func openVignetteHUD() {
+        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
+        guard !slideshow.isPlaying else { return }
+        vignetteIntensity = vignetteURLLevels[url.absoluteString] ?? 1.0
+        showVignetteHUD = true         // pipeline now skips vignette
+        updateDisplayImage()            // recomputes without vignette → clean base
+        vignetteBaseImage = currentDisplayImage
+        scheduleVignettePreview()
+    }
+
+    private func scheduleVignettePreview() {
+        vignetteTask?.cancel()
+        vignetteTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            await MainActor.run { applyVignettePreview() }
+        }
+    }
+
+    private func applyVignettePreview() {
+        guard let base = vignetteBaseImage else { return }
+        currentDisplayImage = (vignetteIntensity > 0 ? applyVignette(intensity: vignetteIntensity, to: base) : nil) ?? base
+    }
+
+    private func applyVignetteToImage() {
+        guard let url = imageLoader.currentImageURL else { cancelVignetteHUD(); return }
+        if vignetteIntensity > 0 {
+            vignetteURLLevels[url.absoluteString] = vignetteIntensity
+        } else {
+            vignetteURLLevels.removeValue(forKey: url.absoluteString)
+        }
+        saveFavourites()
+        showVignetteHUD = false
+        vignetteTask?.cancel()
+        vignetteTask = nil
+        vignetteBaseImage = nil
+        updateDisplayImage()
+    }
+
+    private func cancelVignetteHUD() {
+        guard showVignetteHUD else { return }
+        showVignetteHUD = false
+        vignetteTask?.cancel()
+        vignetteTask = nil
+        vignetteBaseImage = nil
+        updateDisplayImage()  // restores pipeline including any previously persisted vignette
+    }
+
+    private func applyAdjustments(_ adj: ImageAdjustments, to image: NSImage) -> NSImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var ciImage = CIImage(cgImage: cgImage)
+        if adj.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
+            f.setValue(ciImage, forKey: kCIInputImageKey)
+            f.setValue(adj.exposure, forKey: kCIInputEVKey)
+            ciImage = f.outputImage ?? ciImage
+        }
+        if adj.highlights != 0 || adj.shadows != 0, let f = CIFilter(name: "CIHighlightShadowAdjust") {
+            f.setValue(ciImage, forKey: kCIInputImageKey)
+            f.setValue(Float(1 - adj.highlights), forKey: "inputHighlightAmount")
+            f.setValue(Float(adj.shadows + 0.5), forKey: "inputShadowAmount")
+            ciImage = f.outputImage ?? ciImage
+        }
+        if adj.vibrance != 0, let f = CIFilter(name: "CIVibrance") {
+            f.setValue(ciImage, forKey: kCIInputImageKey)
+            f.setValue(adj.vibrance, forKey: "inputAmount")
+            ciImage = f.outputImage ?? ciImage
+        }
+        if adj.warmth != 0, let f = CIFilter(name: "CITemperatureAndTint") {
+            f.setValue(ciImage, forKey: kCIInputImageKey)
+            let neutral = CIVector(x: 6500 + adj.warmth * 2000, y: 0)
+            f.setValue(neutral, forKey: "inputNeutral")
+            f.setValue(CIVector(x: 6500, y: 0), forKey: "inputTargetNeutral")
+            ciImage = f.outputImage ?? ciImage
+        }
+        let ctx = CIContext()
+        guard let cgOut = ctx.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    private func openAdjustmentsHUD() {
+        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
+        guard !slideshow.isPlaying else { return }
+        adjustments = adjustmentURLLevels[url.absoluteString] ?? .init()
+        showAdjustmentsHUD = true
+        updateDisplayImage()
+        adjustmentsBaseImage = currentDisplayImage
+        scheduleAdjustmentsPreview()
+    }
+
+    private func scheduleAdjustmentsPreview() {
+        adjustmentsTask?.cancel()
+        adjustmentsTask = Task {
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            await MainActor.run { applyAdjustmentsPreview() }
+        }
+    }
+
+    private func applyAdjustmentsPreview() {
+        guard let base = adjustmentsBaseImage else { return }
+        currentDisplayImage = (adjustments.isIdentity ? nil : applyAdjustments(adjustments, to: base)) ?? base
+    }
+
+    private func applyAdjustmentsToImage() {
+        guard let url = imageLoader.currentImageURL else { cancelAdjustmentsHUD(); return }
+        if !adjustments.isIdentity {
+            adjustmentURLLevels[url.absoluteString] = adjustments
+        } else {
+            adjustmentURLLevels.removeValue(forKey: url.absoluteString)
+        }
+        saveFavourites()
+        showAdjustmentsHUD = false
+        adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
+        updateDisplayImage()
+    }
+
+    private func cancelAdjustmentsHUD() {
+        guard showAdjustmentsHUD else { return }
+        showAdjustmentsHUD = false
+        adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
         updateDisplayImage()
     }
 
@@ -2558,6 +2944,13 @@ struct SlideshowView: View {
         smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
         sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
+        flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
+        flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
+        vignetteURLLevels = (UserDefaults.standard.dictionary(forKey: "vignetteURLLevels") as? [String: Double]) ?? [:]
+        if let data = UserDefaults.standard.data(forKey: "adjustmentURLLevels"),
+           let decoded = try? JSONDecoder().decode([String: ImageAdjustments].self, from: data) {
+            adjustmentURLLevels = decoded
+        }
         let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
         imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
             guard let url = URL(string: key) else { return nil }
@@ -2573,6 +2966,12 @@ struct SlideshowView: View {
         UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
         UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
+        UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
+        UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
+        UserDefaults.standard.set(vignetteURLLevels, forKey: "vignetteURLLevels")
+        if let data = try? JSONEncoder().encode(adjustmentURLLevels) {
+            UserDefaults.standard.set(data, forKey: "adjustmentURLLevels")
+        }
         let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
         UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
     }
