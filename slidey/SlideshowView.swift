@@ -104,6 +104,8 @@ struct SlideshowView: View {
     @State private var denoiseTask: Task<Void, Never>?
     @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
     @State private var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
+    @State private var flippedHorizontally: Set<String> = []
+    @State private var flippedVertically: Set<String> = []
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
     @State private var showFavouritesOnly: Bool = false
@@ -677,6 +679,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipHorizontal)) { _ in
+            ifKeyWindow { flipCurrentImageHorizontal() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipVertical)) { _ in
+            ifKeyWindow { flipCurrentImageVertical() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -1385,15 +1393,23 @@ struct SlideshowView: View {
             else { baseImage = imageLoader.currentImage }
             windowTitle = Self.titleForImage(at: url)
         }
-        // Apply photo effect as the final compositing step
+        // Apply flip and photo effect as the final compositing steps
+        let isFlippedH = flippedHorizontally.contains(url.absoluteString)
+        let isFlippedV = flippedVertically.contains(url.absoluteString)
+        let needsFlip = isFlippedH || isFlippedV
         if let effectName = imageEffects[url] {
             if let cached = effectImages[url] {
                 currentDisplayImage = cached
             } else if let base = baseImage {
-                let effected = applyPhotoEffect(effectName, to: base)
-                effectImages[url] = effected ?? base
+                let processedBase = needsFlip
+                    ? (applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base)
+                    : base
+                let effected = applyPhotoEffect(effectName, to: processedBase)
+                effectImages[url] = effected ?? processedBase
                 currentDisplayImage = effectImages[url]
             }
+        } else if needsFlip, let base = baseImage {
+            currentDisplayImage = applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base
         } else {
             currentDisplayImage = baseImage
         }
@@ -1539,13 +1555,53 @@ struct SlideshowView: View {
     /// Set currentDisplayImage to base, applying the active photo effect if present.
     /// Call this whenever the base image changes to keep the effect in sync.
     private func setDisplay(base: NSImage, for url: URL) {
+        let isFlippedH = flippedHorizontally.contains(url.absoluteString)
+        let isFlippedV = flippedVertically.contains(url.absoluteString)
+        let flippedBase = (isFlippedH || isFlippedV)
+            ? (applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base)
+            : base
         effectImages[url] = nil
-        if let name = imageEffects[url], let result = applyPhotoEffect(name, to: base) {
+        if let name = imageEffects[url], let result = applyPhotoEffect(name, to: flippedBase) {
             effectImages[url] = result
             currentDisplayImage = result
         } else {
-            currentDisplayImage = base
+            currentDisplayImage = flippedBase
         }
+    }
+
+    private func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {
+        guard horizontal || vertical else { return image }
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        var ciImage = CIImage(cgImage: cgImage)
+        if horizontal {
+            let t = CGAffineTransform(scaleX: -1, y: 1).translatedBy(x: -ciImage.extent.width, y: 0)
+            ciImage = ciImage.transformed(by: t)
+        }
+        if vertical {
+            let t = CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -ciImage.extent.height)
+            ciImage = ciImage.transformed(by: t)
+        }
+        let context = CIContext()
+        guard let cgOut = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return NSImage(cgImage: cgOut, size: image.size)
+    }
+
+    private func flipCurrentImageHorizontal() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let key = url.absoluteString
+        if flippedHorizontally.contains(key) { flippedHorizontally.remove(key) } else { flippedHorizontally.insert(key) }
+        effectImages[url] = nil
+        saveFavourites()
+        updateDisplayImage()
+    }
+
+    private func flipCurrentImageVertical() {
+        guard let url = imageLoader.currentImageURL else { return }
+        let key = url.absoluteString
+        if flippedVertically.contains(key) { flippedVertically.remove(key) } else { flippedVertically.insert(key) }
+        effectImages[url] = nil
+        saveFavourites()
+        updateDisplayImage()
     }
 
     private func setPhotoEffect(_ filterName: String?) {
@@ -2590,6 +2646,8 @@ struct SlideshowView: View {
         smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
         sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
+        flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
+        flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
         let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
         imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
             guard let url = URL(string: key) else { return nil }
@@ -2605,6 +2663,8 @@ struct SlideshowView: View {
         UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
         UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
+        UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
+        UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
         let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
         UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
     }
