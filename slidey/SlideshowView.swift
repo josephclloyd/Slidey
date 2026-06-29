@@ -109,7 +109,9 @@ struct SlideshowView: View {
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
+    @State private var keyUpMonitor: Any?
     @State private var cursorShowTask: Task<Void, Never>?
+    @State private var showingOriginal: Bool = false
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -445,13 +447,29 @@ struct SlideshowView: View {
         }
 
         denoiseHUD
+
+        // Before/After: "Original" label shown while holding b
+        if showingOriginal {
+            VStack {
+                Text("Original")
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.7))
+                    .cornerRadius(6)
+                    .padding(.top, 20)
+                Spacer()
+            }
+        }
     }
 
 
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
-            if let image = currentDisplayImage {
+            let displayedImage = showingOriginal ? imageLoader.currentImage : currentDisplayImage
+            if let image = displayedImage {
                 ImageDisplayView(
                     image: image,
                     zoomScale: $zoomPan.zoomScale,
@@ -748,6 +766,7 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
                 windowHasFocus = false
+                showingOriginal = false
                 updateCursorVisibility()
             }
         }
@@ -982,6 +1001,9 @@ struct SlideshowView: View {
         case "z":
             toggleSmartZoom()
             return .handled
+        case "b":
+            showingOriginal = true
+            return .handled
         case " ":
             toggleSlideshow()
             return .handled
@@ -1030,12 +1052,22 @@ struct SlideshowView: View {
             }
             return event
         }
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { event in
+            if event.charactersIgnoringModifiers == "b" {
+                DispatchQueue.main.async { self.showingOriginal = false }
+            }
+            return event
+        }
     }
 
     private func stopMouseMonitor() {
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
             mouseMonitor = nil
+        }
+        if let monitor = keyUpMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyUpMonitor = nil
         }
         cursorShowTask?.cancel()
     }
