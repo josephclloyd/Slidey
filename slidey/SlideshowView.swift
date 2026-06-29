@@ -58,6 +58,7 @@ struct SlideshowView: View {
     @State private var windowTitle: String = "Slidey"
     @State private var enhancedImages: [URL: NSImage] = [:]
     @State private var smoothedImages: [URL: NSImage] = [:]
+    @State private var sharpenedImages: [URL: NSImage] = [:]
     @State private var upscaledImages: [URL: NSImage] = [:]
     @State private var upscaleFactors: [URL: Int] = [:]
     @State private var activeUpscaleScale: Int = 4
@@ -94,6 +95,7 @@ struct SlideshowView: View {
     @State private var favouriteURLStrings: Set<String> = []
     @State private var enhancedURLStrings: Set<String> = []
     @State private var smoothedURLStrings: Set<String> = []
+    @State private var sharpenedURLStrings: Set<String> = []
     @State private var showFavouritesOnly: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
@@ -485,6 +487,7 @@ struct SlideshowView: View {
             rotationAngles = rotationAngles.filter { valid.contains($0.key) }
             enhancedImages = enhancedImages.filter { valid.contains($0.key) }
             smoothedImages = smoothedImages.filter { valid.contains($0.key) }
+            sharpenedImages = sharpenedImages.filter { valid.contains($0.key) }
             upscaledImages = upscaledImages.filter { valid.contains($0.key) }
             upscaleFactors = upscaleFactors.filter { valid.contains($0.key) }
             savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
@@ -637,6 +640,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSmoothing)) { _ in
             ifKeyWindow { removeSmoothing() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.sharpenImage)) { _ in
+            ifKeyWindow { sharpenCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSharpening)) { _ in
+            ifKeyWindow { removeSharpening() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -900,6 +909,12 @@ struct SlideshowView: View {
         case "M":
             removeSmoothing()
             return .handled
+        case "h":
+            sharpenCurrentImage()
+            return .handled
+        case "H":
+            removeSharpening()
+            return .handled
         case "u":
             guard !keyPress.modifiers.contains(.option) else { return .ignored }
             upscaleCurrentImage(scale: 2)
@@ -1045,6 +1060,7 @@ struct SlideshowView: View {
         rotationAngle = .zero
         enhancedImages = [:]
         smoothedImages = [:]
+        sharpenedImages = [:]
         upscaledImages = [:]
         upscaleFactors = [:]
         savedZoomScales = [:]
@@ -1229,13 +1245,15 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: upscaled > smoothed > enhanced > original
+        // Priority: upscaled > sharpened > smoothed > enhanced > original
         if let upscaled = upscaledImages[url] {
             currentDisplayImage = upscaled
             let factor = upscaleFactors[url] ?? 4
             windowTitle = Self.titleForImage(at: url) + " [\(factor)\u{00d7} upscaled]"
         } else {
-            if let smoothed = smoothedImages[url] {
+            if let sharpened = sharpenedImages[url] {
+                currentDisplayImage = sharpened
+            } else if let smoothed = smoothedImages[url] {
                 currentDisplayImage = smoothed
             } else if let enhanced = enhancedImages[url] {
                 currentDisplayImage = enhanced
@@ -1247,11 +1265,13 @@ struct SlideshowView: View {
         // Re-apply persisted edits for images not yet processed in this session
         let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
         let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
-        if needsEnhance || needsSmooth {
+        let needsSharpen = sharpenedURLStrings.contains(url.absoluteString) && sharpenedImages[url] == nil
+        if needsEnhance || needsSmooth || needsSharpen {
             DispatchQueue.main.async { [url] in
                 guard self.imageLoader.currentImageURL == url else { return }
                 if needsEnhance { self.enhanceCurrentImage() }
                 if needsSmooth { self.smoothCurrentImage() }
+                if needsSharpen { self.sharpenCurrentImage() }
             }
         }
     }
@@ -1330,11 +1350,46 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
+    private func sharpenCurrentImage() {
+        guard let originalImage = currentDisplayImage ?? imageLoader.currentImage,
+              let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+
+        let ciImage = CIImage(cgImage: cgImage)
+        guard let filter = CIFilter(name: "CISharpenLuminance") else { return }
+
+        filter.setValue(ciImage, forKey: kCIInputImageKey)
+        filter.setValue(0.4, forKey: "inputSharpness")
+
+        guard let outputImage = filter.outputImage else { return }
+
+        let context = CIContext()
+        if let sharpenedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
+            let sharpenedNSImage = NSImage(cgImage: sharpenedCGImage, size: originalImage.size)
+            guard let url = imageLoader.currentImageURL else { return }
+            sharpenedImages[url] = sharpenedNSImage
+            sharpenedURLStrings.insert(url.absoluteString)
+            saveFavourites()
+            invalidateUpscaling(for: url)
+            currentDisplayImage = sharpenedNSImage
+        }
+    }
+
+    private func removeSharpening() {
+        guard let url = imageLoader.currentImageURL else { return }
+        sharpenedImages[url] = nil
+        sharpenedURLStrings.remove(url.absoluteString)
+        saveFavourites()
+        invalidateUpscaling(for: url)
+        updateDisplayImage()
+    }
+
     private func upscaleCurrentImage(scale: Int) {
         guard !isProcessing else { return }
         guard let targetURL = imageLoader.currentImageURL else { return }
         // Upscale the best non-upscaled version: smoothed > enhanced > original
-        guard let sourceImage = smoothedImages[targetURL] ?? enhancedImages[targetURL] ?? imageLoader.currentImage else { return }
+        guard let sourceImage = sharpenedImages[targetURL] ?? smoothedImages[targetURL] ?? enhancedImages[targetURL] ?? imageLoader.currentImage else { return }
 
         isProcessing = true
         upscaleCancelled = false
@@ -1781,6 +1836,7 @@ struct SlideshowView: View {
                 if let val = self.rotationAngles.removeValue(forKey: url) { self.rotationAngles[newURL] = val }
                 if let val = self.enhancedImages.removeValue(forKey: url) { self.enhancedImages[newURL] = val }
                 if let val = self.smoothedImages.removeValue(forKey: url) { self.smoothedImages[newURL] = val }
+                if let val = self.sharpenedImages.removeValue(forKey: url) { self.sharpenedImages[newURL] = val }
                 if let val = self.upscaledImages.removeValue(forKey: url) { self.upscaledImages[newURL] = val }
                 if let val = self.upscaleFactors.removeValue(forKey: url) { self.upscaleFactors[newURL] = val }
                 if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
@@ -1818,6 +1874,7 @@ struct SlideshowView: View {
                         if let val = self.rotationAngles.removeValue(forKey: newURL) { self.rotationAngles[url] = val }
                         if let val = self.enhancedImages.removeValue(forKey: newURL) { self.enhancedImages[url] = val }
                         if let val = self.smoothedImages.removeValue(forKey: newURL) { self.smoothedImages[url] = val }
+                        if let val = self.sharpenedImages.removeValue(forKey: newURL) { self.sharpenedImages[url] = val }
                         if let val = self.upscaledImages.removeValue(forKey: newURL) { self.upscaledImages[url] = val }
                         if let val = self.upscaleFactors.removeValue(forKey: newURL) { self.upscaleFactors[url] = val }
                         if let val = self.savedZoomScales.removeValue(forKey: newURL) { self.savedZoomScales[url] = val }
@@ -1874,6 +1931,7 @@ struct SlideshowView: View {
                     let savedRotation = self.rotationAngles[url]
                     let savedEnhanced = self.enhancedImages[url]
                     let savedSmoothed = self.smoothedImages[url]
+                    let savedSharpened = self.sharpenedImages[url]
                     let savedUpscaled = self.upscaledImages[url]
                     let savedUpscaleFactor = self.upscaleFactors[url]
                     let savedZoom = self.savedZoomScales[url]
@@ -1888,6 +1946,7 @@ struct SlideshowView: View {
                         self.rotationAngles[url] = nil
                         self.enhancedImages[url] = nil
                         self.smoothedImages[url] = nil
+                        self.sharpenedImages[url] = nil
                         self.upscaledImages[url] = nil
                         self.upscaleFactors[url] = nil
                         self.savedZoomScales[url] = nil
@@ -1904,6 +1963,7 @@ struct SlideshowView: View {
                                     if let v = savedRotation { self.rotationAngles[url] = v }
                                     if let v = savedEnhanced { self.enhancedImages[url] = v }
                                     if let v = savedSmoothed { self.smoothedImages[url] = v }
+                                    if let v = savedSharpened { self.sharpenedImages[url] = v }
                                     if let v = savedUpscaled { self.upscaledImages[url] = v }
                                     if let v = savedUpscaleFactor { self.upscaleFactors[url] = v }
                                     if let v = savedZoom { self.savedZoomScales[url] = v }
@@ -1995,6 +2055,7 @@ struct SlideshowView: View {
                 self.rotationAngles[sourceURL] = nil
                 self.enhancedImages[sourceURL] = nil
                 self.smoothedImages[sourceURL] = nil
+                self.sharpenedImages[sourceURL] = nil
                 self.upscaledImages[sourceURL] = nil
                 self.upscaleFactors[sourceURL] = nil
                 self.savedZoomScales[sourceURL] = nil
@@ -2250,6 +2311,7 @@ struct SlideshowView: View {
         }
         enhancedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "enhancedImages") ?? [])
         smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
+        sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
     }
 
     private func saveFavourites() {
@@ -2258,6 +2320,7 @@ struct SlideshowView: View {
         UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
         UserDefaults.standard.set(Array(enhancedURLStrings), forKey: "enhancedImages")
         UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
+        UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {
