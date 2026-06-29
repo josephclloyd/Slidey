@@ -511,71 +511,17 @@ struct SlideshowView: View {
             handleDrop(providers: providers)
         }
         .onChange(of: imageLoader.imageURLs.isEmpty) { _, isEmpty in
-            if !isEmpty {
-                isAutoOpening = false
-                rotationAngle = currentURLRotation()
-                updateDisplayImage()
-                enterFullScreen()
-                if let url = imageLoader.currentImageURL {
-                    windowTitle = Self.titleForImage(at: url)
-                }
-
-            } else {
-                slideshow.stop()
-                musicManager.deactivate()
-            }
-            updateCursorVisibility()
+            DispatchQueue.main.async { onImageURLsEmptyChanged(isEmpty) }
         }
         .onChange(of: imageLoader.imageURLs) { _, newURLs in
             // Drop any per-URL session state for files that no longer exist
             // in the directory (deleted on disk, or we switched folders).
-            // Use allImageURLs so filtering doesn't discard state for hidden images.
-            let valid = imageLoader.allImageURLs.isEmpty ? Set(newURLs) : Set(imageLoader.allImageURLs)
-            rotationAngles = rotationAngles.filter { valid.contains($0.key) }
-            enhancedImages = enhancedImages.filter { valid.contains($0.key) }
-            smoothedImages = smoothedImages.filter { valid.contains($0.key) }
-            sharpenedImages = sharpenedImages.filter { valid.contains($0.key) }
-            upscaledImages = upscaledImages.filter { valid.contains($0.key) }
-            upscaleFactors = upscaleFactors.filter { valid.contains($0.key) }
-            savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
-            savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
-            infoOverlayURLs = infoOverlayURLs.intersection(valid)
-            imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
-
-            rotationAngle = currentURLRotation()
-            if !newURLs.isEmpty {
-                updateDisplayImage()
-            }
+            DispatchQueue.main.async { onImageURLsChanged(newURLs) }
         }
         .onChange(of: imageLoader.currentIndex) { _, _ in
-            // Only change zoom/pan when the displayed *file* changes. A rescan
-            // can shift currentIndex while keeping the same file under the
-            // cursor; that shouldn't yank the user out of their zoom.
-            let newURL = imageLoader.currentImageURL
-            if newURL != lastDisplayedURL {
-                if let departingURL = lastDisplayedURL {
-                    savedZoomScales[departingURL] = zoomPan.zoomScale
-                    savedPanOffsets[departingURL] = zoomPan.imageOffset
-                }
-                if let newURL, let savedZoom = savedZoomScales[newURL] {
-                    zoomPan.zoomScale = savedZoom
-                    zoomPan.imageOffset = savedPanOffsets[newURL] ?? .zero
-                } else {
-                    zoomPan.reset()
-                }
-                lastDisplayedURL = newURL
-                if let newURL {
-                    windowTitle = Self.titleForImage(at: newURL)
-                }
-            }
-            rotationAngle = currentURLRotation()
-            updateDisplayImage()
-            if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
-                applySmartZoomIfNeeded(for: url, image: image)
-            }
-            // Reset the auto-advance clock on every navigation (manual or
-            // auto) so the next tick is always `interval` from now.
-            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
+            // Defer mutations to after the view update to suppress
+            // "Publishing changes from within view updates" warnings from @Observable.
+            DispatchQueue.main.async { onCurrentIndexChanged() }
         }
         .onChange(of: isFullScreen) { _, fullScreen in
             updateCursorVisibility()
@@ -1318,6 +1264,65 @@ struct SlideshowView: View {
         let name = url.lastPathComponent
         guard let dims = imageDimensions(for: url) else { return name }
         return "\(name) (\(dims.width)×\(dims.height))"
+    }
+
+    // MARK: - onChange helpers (called via DispatchQueue.main.async to avoid publishing during view update)
+
+    private func onImageURLsEmptyChanged(_ isEmpty: Bool) {
+        if !isEmpty {
+            isAutoOpening = false
+            rotationAngle = currentURLRotation()
+            updateDisplayImage()
+            enterFullScreen()
+            if let url = imageLoader.currentImageURL {
+                windowTitle = Self.titleForImage(at: url)
+            }
+        } else {
+            slideshow.stop()
+            musicManager.deactivate()
+        }
+        updateCursorVisibility()
+    }
+
+    private func onImageURLsChanged(_ newURLs: [URL]) {
+        let valid = imageLoader.allImageURLs.isEmpty ? Set(newURLs) : Set(imageLoader.allImageURLs)
+        rotationAngles = rotationAngles.filter { valid.contains($0.key) }
+        enhancedImages = enhancedImages.filter { valid.contains($0.key) }
+        smoothedImages = smoothedImages.filter { valid.contains($0.key) }
+        sharpenedImages = sharpenedImages.filter { valid.contains($0.key) }
+        upscaledImages = upscaledImages.filter { valid.contains($0.key) }
+        upscaleFactors = upscaleFactors.filter { valid.contains($0.key) }
+        savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
+        savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
+        infoOverlayURLs = infoOverlayURLs.intersection(valid)
+        imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
+        rotationAngle = currentURLRotation()
+        if !newURLs.isEmpty { updateDisplayImage() }
+    }
+
+    private func onCurrentIndexChanged() {
+        let newURL = imageLoader.currentImageURL
+        if newURL != lastDisplayedURL {
+            if let departingURL = lastDisplayedURL {
+                savedZoomScales[departingURL] = zoomPan.zoomScale
+                savedPanOffsets[departingURL] = zoomPan.imageOffset
+            }
+            if let newURL, let savedZoom = savedZoomScales[newURL] {
+                zoomPan.zoomScale = savedZoom
+                zoomPan.imageOffset = savedPanOffsets[newURL] ?? .zero
+            } else {
+                zoomPan.reset()
+            }
+            lastDisplayedURL = newURL
+            if let newURL { windowTitle = Self.titleForImage(at: newURL) }
+        }
+        rotationAngle = currentURLRotation()
+        updateDisplayImage()
+        if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
+            applySmartZoomIfNeeded(for: url, image: image)
+        }
+        // Reset the auto-advance clock on every navigation so the next tick is always `interval` from now.
+        if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
     }
 
     private func updateDisplayImage() {
