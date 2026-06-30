@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "Image edit compositing pipeline, key binding registry, HUD pattern, and SwiftLint limits — updated through Sprint 18"
+description: "Image edit compositing pipeline, key binding registry, HUD pattern, and SwiftLint limits — updated through Sprint 19"
 metadata: 
   node_type: memory
   type: project
@@ -19,9 +19,9 @@ The canonical path for committing an edited NSImage in SlideshowView. It clears 
 
 ## Compositing pipeline order (fixed as of Sprint 18)
 
-`updateDisplayImage` and `setDisplay(base:for:)` apply layers in this order:
+`updateDisplayImage` applies layers in this order:
 
-1. Base image (upscaled > sharpened > smoothed > enhanced > original)
+1. Base image priority: `bgRemoved > faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original`
 2. Flip (CIAffineTransform, horizontal then vertical)
 3. Photo effect (CIFilter, cached in `effectImages[url]`)
 4. Adjustments (Exposure/Highlights/Shadows/Vibrance/Warmth — skip during Adjustments HUD)
@@ -54,9 +54,10 @@ Consistent structure across all three HUDs:
 
 ## `handleCharacterKeyPress` key registry
 
-Keys bound as of Sprint 18: `a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud.
+Keys bound as of Sprint 19:
+`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background.
 
-Free slots: `c`, `g`, `k`, `l`, `o`, `p`, `w`, `y` (and uppercase variants of unused keys).
+Free slots: `l`, `o`, `w`, `y` (and uppercase variants of these).
 
 SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep cyclomatic` after adding keys.
 
@@ -66,4 +67,15 @@ SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep
 
 ## SlideshowView.swift size limits
 
-As of Sprint 18 the file is ~3177 lines. `.swiftlint.yml` thresholds raised to error at 3500 (file) / 3000 (type body). The next substantial editing feature should extract HUD functions to `SlideshowView+Edits.swift`, changing `@State private var` to `@State var` (internal) on anything the extension needs.
+As of Sprint 19 the file is ~3482 lines. `.swiftlint.yml` error threshold: 3500 (file) / 3000 (type body). The next substantial editing feature **must** extract content to a `SlideshowView+Edits.swift` extension before adding more code to the body. Change `@State private var` to `@State var` (internal) on anything the extension needs.
+
+---
+
+## CoreML model integration pattern (Sprint 19)
+
+For large CoreML models (>50 MB) in CI:
+1. Track `weight.bin` via Git LFS: `git lfs track "**/*.mlpackage/Data/com.apple.CoreML/weights/weight.bin"` — **commit `.gitattributes` immediately to the feature branch**.
+2. Add `lfs: true` to all `actions/checkout` steps in `build.yml` at the same time.
+3. Use `MLModel(contentsOf:configuration:) + MLDictionaryFeatureProvider` instead of Xcode's auto-generated wrapper classes. Auto-generated classes require `coremlc` to compile the model at build time; the project file won't trigger this for models added via folder reference.
+
+**Why:** The Xcode project uses a `PBXFileSystemSynchronizedRootGroup` for `Resources/`, which does not reliably trigger `coremlc generate` for new mlpackage additions. Using the raw API removes the compile-time dependency entirely.

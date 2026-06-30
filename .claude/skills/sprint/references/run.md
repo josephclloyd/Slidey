@@ -429,3 +429,20 @@ At wind-down, report:
 - Any open PRs still waiting for CI
 
 Then proceed to review (auto-chain) or stop (run-only).
+
+## Git LFS checklist (when a sprint adds large binary assets)
+
+If any issue adds a file that should be tracked by Git LFS (CoreML models, large binaries, etc.):
+
+1. Run `git lfs track "<pattern>"` to add the tracking rule.
+2. **Immediately** commit `.gitattributes` to the feature branch — not just the worktree.
+3. Add `lfs: true` to all `actions/checkout` steps in `.github/workflows/build.yml` at the same time.
+4. If the model is >50 MB or sourced from a pre-built binary (not Xcode-compiled), use
+   `MLModel(contentsOf:configuration:) + MLDictionaryFeatureProvider` instead of Xcode's
+   auto-generated Swift wrapper classes. Auto-generated classes require `coremlc generate`
+   to run at build time, which the Xcode project's `PBXFileSystemSynchronizedRootGroup`
+   does not trigger for new additions.
+
+Failure mode: CI receives LFS pointer files (43 bytes) instead of the real weights, and the
+model either fails to load at runtime or `coremlc` emits a build error for the auto-generated
+class that references the corrupt weight file.
