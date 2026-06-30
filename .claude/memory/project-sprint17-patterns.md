@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "Image edit compositing pipeline, key binding registry, HUD pattern, and SwiftLint limits — updated through Sprint 19"
+description: "Image edit compositing pipeline, key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns — updated through Sprint 20 pre-sprint"
 metadata: 
   node_type: memory
   type: project
@@ -79,3 +79,9 @@ For large CoreML models (>50 MB) in CI:
 3. Use `MLModel(contentsOf:configuration:) + MLDictionaryFeatureProvider` instead of Xcode's auto-generated wrapper classes. Auto-generated classes require `coremlc` to compile the model at build time; the project file won't trigger this for models added via folder reference.
 
 **Why:** The Xcode project uses a `PBXFileSystemSynchronizedRootGroup` for `Resources/`, which does not reliably trigger `coremlc generate` for new mlpackage additions. Using the raw API removes the compile-time dependency entirely.
+
+**Critical gotcha — ANE pre-compilation in `ct.convert()` (Sprint 20):**
+Always pass `compute_units=ct.ComputeUnit.CPU_ONLY` to `ct.convert()`. Without it, `ct.convert()` internally loads the model via `MLModel(contentsOf:)` to validate it, triggering Apple Neural Engine compilation via XPC — which blocks the conversion for 60+ minutes. `CPU_ONLY` skips this; the saved `.mlpackage` can still be loaded with GPU/ANE compute units at Swift runtime. The MIL program in the package is hardware-agnostic regardless of the `compute_units` flag used during conversion.
+
+**SwinIR-specific — trace at native training size only:**
+SwinIR must be traced at exactly `img_size=126` (126×126) — the model's training patch size. Other sizes (128, 256, 512) either OOM during trace (≥256) or trigger a coremltools `slice_by_index` error in the shift-mask computation (128). The 126×126 input requires tiling at Swift inference time.
