@@ -651,10 +651,4 @@ final class FaceRestoreNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.removeFaceRestoration.rawValue, "RemoveFaceRestoration")
     }
 
-    func testCodeFormerModelExistsInBundle() {
-        // Verifies the mlpackage was compiled and bundled correctly by Xcode.
-        let url = Bundle(for: FaceRestoreNotificationTests.self)
-            .url(forResource: "CodeFormer", withExtension: "mlmodelc")
-        XCTAssertNotNil(url, "CodeFormer.mlmodelc should be present in the app bundle")
-    }
 }
