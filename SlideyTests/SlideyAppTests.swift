@@ -623,3 +623,38 @@ final class SmartZoomTests: XCTestCase {
         XCTAssertEqual(controller.imageOffset, .zero)
     }
 }
+
+// MARK: - Face restoration notification tests
+
+final class FaceRestoreNotificationTests: XCTestCase {
+    func testRestoreFacesNotificationFires() {
+        let exp = expectation(description: "restoreFaces fires")
+        let obs = NotificationCenter.default.addObserver(forName: .restoreFaces, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .restoreFaces, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveFaceRestorationNotificationFires() {
+        let exp = expectation(description: "removeFaceRestoration fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeFaceRestoration, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRestoreFacesNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.restoreFaces.rawValue, "RestoreFaces")
+    }
+
+    func testRemoveFaceRestorationNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeFaceRestoration.rawValue, "RemoveFaceRestoration")
+    }
+
+    func testCodeFormerModelExistsInBundle() {
+        // Verifies the mlpackage was compiled and bundled correctly by Xcode.
+        let url = Bundle(for: FaceRestoreNotificationTests.self)
+            .url(forResource: "CodeFormer", withExtension: "mlmodelc")
+        XCTAssertNotNil(url, "CodeFormer.mlmodelc should be present in the app bundle")
+    }
+}
