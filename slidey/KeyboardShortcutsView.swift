@@ -19,6 +19,8 @@ struct KeyboardShortcutsView: View {
             ("f", "Scale to fill screen"),
             ("r", "Rotate clockwise"),
             ("⇧R", "Rotate counter-clockwise"),
+            ("c", "Flip horizontal (toggle)"),
+            ("⇧C", "Flip vertical (toggle)"),
             ("n", "Toggle filename overlay"),
             ("i", "Toggle image info overlay"),
             ("d", "Toggle debug window"),

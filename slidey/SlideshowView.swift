@@ -1151,6 +1151,12 @@ struct SlideshowView: View {
         case "z":
             toggleSmartZoom()
             return .handled
+        case "c":
+            flipCurrentImageHorizontal()
+            return .handled
+        case "C":
+            flipCurrentImageVertical()
+            return .handled
         case "e":
             openAdjustmentsHUD()
             return .handled
