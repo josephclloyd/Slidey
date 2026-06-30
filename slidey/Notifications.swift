@@ -56,4 +56,7 @@ extension NSNotification.Name {
 
     static let restoreFaces = NSNotification.Name("RestoreFaces")
     static let removeFaceRestoration = NSNotification.Name("RemoveFaceRestoration")
+
+    static let redEyeRemoval = NSNotification.Name("RedEyeRemoval")
+    static let removeRedEye = NSNotification.Name("RemoveRedEye")
 }

@@ -652,3 +652,35 @@ final class FaceRestoreNotificationTests: XCTestCase {
     }
 
 }
+
+// MARK: - Red-eye removal notification tests
+
+final class RedEyeRemovalNotificationTests: XCTestCase {
+    func testRedEyeRemovalNotificationFires() {
+        let exp = expectation(description: "redEyeRemoval fires")
+        let obs = NotificationCenter.default.addObserver(forName: .redEyeRemoval, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveRedEyeNotificationFires() {
+        let exp = expectation(description: "removeRedEye fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeRedEye, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeRedEye, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRedEyeRemovalNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.redEyeRemoval.rawValue, "RedEyeRemoval")
+    }
+
+    func testRemoveRedEyeNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeRedEye.rawValue, "RemoveRedEye")
+    }
+
+    func testCIRedEyeCorrectionFilterIsAvailable() {
+        XCTAssertNotNil(CIFilter(name: "CIRedEyeCorrection"), "CIRedEyeCorrection must be available on macOS 15")
+    }
+}

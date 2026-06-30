@@ -139,6 +139,7 @@ struct SlideshowView: View {
     @State private var isFaceRestoring = false
     @State private var faceRestoreProgress: Double = 0
     @State private var showNoFaceAlert = false
+    @State private var redEyedImages: [URL: NSImage] = [:]
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -836,6 +837,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeFaceRestoration)) { _ in
             ifKeyWindow { removeFaceRestoration() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.redEyeRemoval)) { _ in
+            ifKeyWindow { applyRedEyeOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeRedEye)) { _ in
+            ifKeyWindow { removeRedEyeCorrection() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -1199,6 +1206,12 @@ struct SlideshowView: View {
             return .handled
         case "P":
             removeFaceRestoration()
+            return .handled
+        case "g":
+            applyRedEyeOnCurrentImage()
+            return .handled
+        case "G":
+            removeRedEyeCorrection()
             return .handled
         case "e":
             openAdjustmentsHUD()
@@ -1574,11 +1587,14 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: faceRestored > upscaled > sharpened > smoothed > enhanced > original
+        // Priority: faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original
         var baseImage: NSImage?
         if let faceRestored = faceRestoredImages[url] {
             baseImage = faceRestored
             windowTitle = Self.titleForImage(at: url) + " [faces restored]"
+        } else if let redEye = redEyedImages[url] {
+            baseImage = redEye
+            windowTitle = Self.titleForImage(at: url) + " [red-eye removed]"
         } else if let upscaled = upscaledImages[url] {
             baseImage = upscaled
             let factor = upscaleFactors[url] ?? 4
@@ -2382,6 +2398,45 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         faceRestoredImages[url] = nil
         updateDisplayImage()
+    }
+
+    private func removeRedEyeCorrection() {
+        guard let url = imageLoader.currentImageURL else { return }
+        redEyedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func applyRedEyeOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 1. Confirm at least one face is present before processing
+            let req = VNDetectFaceRectanglesRequest()
+            try? VNImageRequestHandler(cgImage: srcCG, options: [:]).perform([req])
+            guard let faces = req.results as? [VNFaceObservation], !faces.isEmpty else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            // 2. Apply CIRedEyeCorrection to the full image
+            let ciImg = CIImage(cgImage: srcCG)
+            guard let filter = CIFilter(name: "CIRedEyeCorrection") else { return }
+            filter.setValue(ciImg, forKey: kCIInputImageKey)
+            guard let output = filter.outputImage else { return }
+            let ctx = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+            guard let cgResult = ctx.createCGImage(output, from: output.extent) else { return }
+            let result = NSImage(cgImage: cgResult, size: source.size)
+            let capturedURL = url
+            DispatchQueue.main.async {
+                self.redEyedImages[capturedURL] = result
+                self.setDisplay(base: result, for: capturedURL)
+            }
+        }
     }
 
     // Detects faces via Vision, crops each to 512×512, runs CodeFormer, pastes back.
