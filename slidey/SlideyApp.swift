@@ -491,6 +491,18 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
             }
 
+            Divider()
+
+            Button("Restore Faces") {
+                NotificationCenter.default.post(name: .restoreFaces, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: [])
+
+            Button("Remove Face Restoration") {
+                NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: .shift)
+
         }
     }
 }

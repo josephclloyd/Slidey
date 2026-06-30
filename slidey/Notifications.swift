@@ -53,4 +53,7 @@ extension NSNotification.Name {
     static let vignetteImage = NSNotification.Name("VignetteImage")
 
     static let adjustmentsImage = NSNotification.Name("AdjustmentsImage")
+
+    static let restoreFaces = NSNotification.Name("RestoreFaces")
+    static let removeFaceRestoration = NSNotification.Name("RemoveFaceRestoration")
 }
