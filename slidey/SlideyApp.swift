@@ -503,6 +503,18 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("p", modifiers: .shift)
 
+            Divider()
+
+            Button("Remove Red Eye") {
+                NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
+            }
+            .keyboardShortcut("g", modifiers: [])
+
+            Button("Remove Red-Eye Correction") {
+                NotificationCenter.default.post(name: .removeRedEye, object: nil)
+            }
+            .keyboardShortcut("g", modifiers: .shift)
+
         }
     }
 }

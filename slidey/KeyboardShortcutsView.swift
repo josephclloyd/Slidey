@@ -38,6 +38,8 @@ struct KeyboardShortcutsView: View {
             ("e", "Open Adjustments HUD"),
             ("p", "Restore faces via AI (CodeFormer)"),
             ("\u{21e7}P", "Remove face restoration"),
+            ("g", "Remove red eye"),
+            ("\u{21e7}G", "Remove red-eye correction"),
         ]),
         ("Favourites", [
             ("x", "Toggle favourite"),
