@@ -2469,8 +2469,10 @@ struct SlideshowView: View {
                     }
                 }
 
-                // Run CodeFormer
-                guard let out = try? model.prediction(from: CodeFormerInput(face: arr)),
+                // Run CodeFormer via raw MLModel API (avoids compile-time dependency on generated bindings)
+                guard let featureInput = try? MLDictionaryFeatureProvider(
+                          dictionary: ["face": MLFeatureValue(multiArray: arr)]),
+                      let out = try? model.prediction(from: featureInput),
                       let outArr = out.featureValue(for: "restored_face")?.multiArrayValue else { continue }
 
                 // Convert output [-1,1] Float16 → UInt8 RGBA
