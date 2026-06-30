@@ -491,6 +491,42 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
             }
 
+            Divider()
+
+            Button("Restore Faces") {
+                NotificationCenter.default.post(name: .restoreFaces, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: [])
+
+            Button("Remove Face Restoration") {
+                NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: .shift)
+
+            Divider()
+
+            Button("Remove Red Eye") {
+                NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
+            }
+            .keyboardShortcut("g", modifiers: [])
+
+            Button("Remove Red-Eye Correction") {
+                NotificationCenter.default.post(name: .removeRedEye, object: nil)
+            }
+            .keyboardShortcut("g", modifiers: .shift)
+
+            Divider()
+
+            Button("Remove Background") {
+                NotificationCenter.default.post(name: .removeBackground, object: nil)
+            }
+            .keyboardShortcut("k", modifiers: [])
+
+            Button("Restore Background") {
+                NotificationCenter.default.post(name: .restoreBackground, object: nil)
+            }
+            .keyboardShortcut("k", modifiers: .shift)
+
         }
     }
 }

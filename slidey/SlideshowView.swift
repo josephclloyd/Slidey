@@ -135,6 +135,12 @@ struct SlideshowView: View {
     @State private var keyUpMonitor: Any?
     @State private var cursorShowTask: Task<Void, Never>?
     @State private var showingOriginal: Bool = false
+    @State private var faceRestoredImages: [URL: NSImage] = [:]
+    @State private var isFaceRestoring = false
+    @State private var faceRestoreProgress: Double = 0
+    @State private var showNoFaceAlert = false
+    @State private var redEyedImages: [URL: NSImage] = [:]
+    @State private var backgroundRemovedImages: [URL: NSImage] = [:]
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -518,6 +524,28 @@ struct SlideshowView: View {
             }
         }
 
+        if isFaceRestoring {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Restoring Faces\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView(value: faceRestoreProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+                    Text("\(Int(faceRestoreProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
         // Debug window overlay (toggle with 'd' key)
         if showDebugWindow {
             VStack {
@@ -804,6 +832,24 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.adjustmentsImage)) { _ in
             ifKeyWindow { openAdjustmentsHUD() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreFaces)) { _ in
+            ifKeyWindow { restoreFacesOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeFaceRestoration)) { _ in
+            ifKeyWindow { removeFaceRestoration() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.redEyeRemoval)) { _ in
+            ifKeyWindow { applyRedEyeOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeRedEye)) { _ in
+            ifKeyWindow { removeRedEyeCorrection() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeBackground)) { _ in
+            ifKeyWindow { removeBackgroundOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreBackground)) { _ in
+            ifKeyWindow { restoreBackground() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -942,6 +988,11 @@ struct SlideshowView: View {
             Slidey needs access to your Music library to play background music. \
             You can grant access in System Settings > Privacy & Security > Media & Apple Music.
             """)
+        }
+        .alert("No Faces Detected", isPresented: $showNoFaceAlert) {
+            Button("OK") {}
+        } message: {
+            Text("No faces were found in this image.")
         }
     }
 
@@ -1150,6 +1201,30 @@ struct SlideshowView: View {
             return .handled
         case "z":
             toggleSmartZoom()
+            return .handled
+        case "c":
+            flipCurrentImageHorizontal()
+            return .handled
+        case "C":
+            flipCurrentImageVertical()
+            return .handled
+        case "p":
+            restoreFacesOnCurrentImage()
+            return .handled
+        case "P":
+            removeFaceRestoration()
+            return .handled
+        case "g":
+            applyRedEyeOnCurrentImage()
+            return .handled
+        case "G":
+            removeRedEyeCorrection()
+            return .handled
+        case "k":
+            removeBackgroundOnCurrentImage()
+            return .handled
+        case "K":
+            restoreBackground()
             return .handled
         case "e":
             openAdjustmentsHUD()
@@ -1525,9 +1600,18 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: upscaled > sharpened > smoothed > enhanced > original
+        // Priority: bgRemoved > faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original
         var baseImage: NSImage?
-        if let upscaled = upscaledImages[url] {
+        if let bgRemoved = backgroundRemovedImages[url] {
+            baseImage = bgRemoved
+            windowTitle = Self.titleForImage(at: url) + " [background removed]"
+        } else if let faceRestored = faceRestoredImages[url] {
+            baseImage = faceRestored
+            windowTitle = Self.titleForImage(at: url) + " [faces restored]"
+        } else if let redEye = redEyedImages[url] {
+            baseImage = redEye
+            windowTitle = Self.titleForImage(at: url) + " [red-eye removed]"
+        } else if let upscaled = upscaledImages[url] {
             baseImage = upscaled
             let factor = upscaleFactors[url] ?? 4
             windowTitle = Self.titleForImage(at: url) + " [\(factor)\u{00d7} upscaled]"
@@ -2324,6 +2408,224 @@ struct SlideshowView: View {
         upscaledImages[url] = nil
         upscaleFactors[url] = nil
         updateDisplayImage()
+    }
+
+    private func removeFaceRestoration() {
+        guard let url = imageLoader.currentImageURL else { return }
+        faceRestoredImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func removeRedEyeCorrection() {
+        guard let url = imageLoader.currentImageURL else { return }
+        redEyedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func applyRedEyeOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 1. Confirm at least one face is present before processing
+            let req = VNDetectFaceRectanglesRequest()
+            try? VNImageRequestHandler(cgImage: srcCG, options: [:]).perform([req])
+            guard let faces = req.results as? [VNFaceObservation], !faces.isEmpty else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            // 2. Apply CIRedEyeCorrection to the full image
+            let ciImg = CIImage(cgImage: srcCG)
+            guard let filter = CIFilter(name: "CIRedEyeCorrection") else { return }
+            filter.setValue(ciImg, forKey: kCIInputImageKey)
+            guard let output = filter.outputImage else { return }
+            let ctx = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+            guard let cgResult = ctx.createCGImage(output, from: output.extent) else { return }
+            let result = NSImage(cgImage: cgResult, size: source.size)
+            let capturedURL = url
+            DispatchQueue.main.async {
+                self.redEyedImages[capturedURL] = result
+                self.setDisplay(base: result, for: capturedURL)
+            }
+        }
+    }
+
+    private func restoreBackground() {
+        guard let url = imageLoader.currentImageURL else { return }
+        backgroundRemovedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func removeBackgroundOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let handler = VNImageRequestHandler(cgImage: srcCG, options: [:])
+            let req = VNGenerateForegroundInstanceMaskRequest()
+            guard (try? handler.perform([req])) != nil,
+                  let result = req.results?.first else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            guard let maskedBuffer = try? result.generateMaskedImage(
+                      ofInstances: result.allInstances,
+                      from: handler,
+                      croppedToInstancesExtent: false) else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            let ciImg = CIImage(cvPixelBuffer: maskedBuffer)
+            let ctx = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+            guard let maskedCG = ctx.createCGImage(ciImg, from: ciImg.extent) else { return }
+            let masked = NSImage(cgImage: maskedCG, size: source.size)
+            let capturedURL = url
+            DispatchQueue.main.async {
+                self.backgroundRemovedImages[capturedURL] = masked
+                self.setDisplay(base: masked, for: capturedURL)
+            }
+        }
+    }
+
+    // Detects faces via Vision, crops each to 512×512, runs CodeFormer, pastes back.
+    // swiftlint:disable:next function_body_length
+    private func restoreFacesOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        isFaceRestoring = true
+        faceRestoreProgress = 0.0
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 1. Detect faces
+            let req = VNDetectFaceRectanglesRequest()
+            try? VNImageRequestHandler(cgImage: srcCG, options: [:]).perform([req])
+            guard let faces = req.results as? [VNFaceObservation], !faces.isEmpty else {
+                DispatchQueue.main.async { self.isFaceRestoring = false; self.showNoFaceAlert = true }
+                return
+            }
+
+            // 2. Load CodeFormer model
+            guard let modelURL = Bundle.main.url(forResource: "CodeFormer", withExtension: "mlmodelc") ??
+                                  Bundle.main.url(forResource: "CodeFormer", withExtension: "mlpackage") else {
+                DispatchQueue.main.async { self.isFaceRestoring = false }
+                return
+            }
+            let cfg = MLModelConfiguration(); cfg.computeUnits = .all
+            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
+                DispatchQueue.main.async { self.isFaceRestoring = false }
+                return
+            }
+
+            // 3. Build mutable RGBA context from source
+            let imgWidth = srcCG.width, imgHeight = srcCG.height
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let bi = CGImageAlphaInfo.premultipliedLast.rawValue
+            guard let ctx = CGContext(data: nil, width: imgWidth, height: imgHeight,
+                                      bitsPerComponent: 8, bytesPerRow: imgWidth * 4,
+                                      space: cs, bitmapInfo: bi) else {
+                DispatchQueue.main.async { self.isFaceRestoring = false }
+                return
+            }
+            ctx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgWidth, height: imgHeight))
+
+            // 4. Process each face
+            for (idx, face) in faces.enumerated() {
+                // VNFaceObservation.boundingBox: normalized, origin bottom-left → flip Y
+                let bb = face.boundingBox
+                let faceW = max(1, Int(bb.size.width * CGFloat(imgWidth)))
+                let faceH = max(1, Int(bb.size.height * CGFloat(imgHeight)))
+                let side = max(faceW, faceH)
+                let padded = Int(Double(side) * 1.3)
+                let cx = Int(bb.origin.x * CGFloat(imgWidth)) + faceW / 2
+                let cy = Int((1 - bb.origin.y - bb.size.height) * CGFloat(imgHeight)) + faceH / 2
+                let cropX = max(0, cx - padded / 2)
+                let cropY = max(0, cy - padded / 2)
+                let cropW = min(imgWidth - cropX, padded)
+                let cropH = min(imgHeight - cropY, padded)
+                guard cropW > 0, cropH > 0,
+                      let cropCG = srcCG.cropping(to: CGRect(x: cropX, y: cropY,
+                                                              width: cropW, height: cropH)) else { continue }
+
+                // Scale crop to 512×512 and extract RGBA pixels
+                var raw = [UInt8](repeating: 0, count: 512 * 512 * 4)
+                raw.withUnsafeMutableBytes { ptr in
+                    if let faceCtx = CGContext(data: ptr.baseAddress, width: 512, height: 512,
+                                              bitsPerComponent: 8, bytesPerRow: 512 * 4,
+                                              space: cs, bitmapInfo: bi) {
+                        faceCtx.draw(cropCG, in: CGRect(x: 0, y: 0, width: 512, height: 512))
+                    }
+                }
+
+                // Build Float16 MLMultiArray [1,3,512,512] NCHW, normalised to [-1,1]
+                guard let arr = try? MLMultiArray(shape: [1, 3, 512, 512], dataType: .float16) else { continue }
+                arr.withUnsafeMutableBytes { buf, _ in
+                    let ptr = buf.bindMemory(to: Float16.self)
+                    for i in 0..<(512 * 512) {
+                        ptr[0 * 512 * 512 + i] = Float16(Float(raw[i * 4])     / 127.5 - 1)
+                        ptr[1 * 512 * 512 + i] = Float16(Float(raw[i * 4 + 1]) / 127.5 - 1)
+                        ptr[2 * 512 * 512 + i] = Float16(Float(raw[i * 4 + 2]) / 127.5 - 1)
+                    }
+                }
+
+                // Run CodeFormer via raw MLModel API (avoids compile-time dependency on generated bindings)
+                guard let featureInput = try? MLDictionaryFeatureProvider(
+                          dictionary: ["face": MLFeatureValue(multiArray: arr)]),
+                      let out = try? model.prediction(from: featureInput),
+                      let outArr = out.featureValue(for: "restored_face")?.multiArrayValue else { continue }
+
+                // Convert output [-1,1] Float16 → UInt8 RGBA
+                var outRaw = [UInt8](repeating: 255, count: 512 * 512 * 4)
+                outArr.withUnsafeBytes { buf in
+                    let ptr = buf.bindMemory(to: Float16.self)
+                    for i in 0..<(512 * 512) {
+                        outRaw[i*4]   = UInt8(min(255, max(0, Int((Float(ptr[0*512*512+i])+1)*127.5))))
+                        outRaw[i*4+1] = UInt8(min(255, max(0, Int((Float(ptr[1*512*512+i])+1)*127.5))))
+                        outRaw[i*4+2] = UInt8(min(255, max(0, Int((Float(ptr[2*512*512+i])+1)*127.5))))
+                    }
+                }
+
+                // Paste restored face back at crop region
+                outRaw.withUnsafeMutableBytes { ptr in
+                    if let restoredCtx = CGContext(data: ptr.baseAddress, width: 512, height: 512,
+                                                   bitsPerComponent: 8, bytesPerRow: 512 * 4,
+                                                   space: cs, bitmapInfo: bi),
+                       let restoredCG = restoredCtx.makeImage() {
+                        ctx.draw(restoredCG, in: CGRect(x: cropX, y: cropY, width: cropW, height: cropH))
+                    }
+                }
+
+                let progress = Double(idx + 1) / Double(faces.count)
+                DispatchQueue.main.async { self.faceRestoreProgress = progress }
+            }
+
+            guard let finalCG = ctx.makeImage() else {
+                DispatchQueue.main.async { self.isFaceRestoring = false }
+                return
+            }
+            let result = NSImage(cgImage: finalCG, size: NSSize(width: imgWidth, height: imgHeight))
+            let capturedURL = url
+            DispatchQueue.main.async {
+                self.faceRestoredImages[capturedURL] = result
+                self.isFaceRestoring = false
+                self.setDisplay(base: result, for: capturedURL)
+            }
+        }
     }
 
     private func toggleInfoOverlay() {

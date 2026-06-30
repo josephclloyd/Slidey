@@ -623,3 +623,92 @@ final class SmartZoomTests: XCTestCase {
         XCTAssertEqual(controller.imageOffset, .zero)
     }
 }
+
+// MARK: - Face restoration notification tests
+
+final class FaceRestoreNotificationTests: XCTestCase {
+    func testRestoreFacesNotificationFires() {
+        let exp = expectation(description: "restoreFaces fires")
+        let obs = NotificationCenter.default.addObserver(forName: .restoreFaces, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .restoreFaces, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveFaceRestorationNotificationFires() {
+        let exp = expectation(description: "removeFaceRestoration fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeFaceRestoration, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRestoreFacesNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.restoreFaces.rawValue, "RestoreFaces")
+    }
+
+    func testRemoveFaceRestorationNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeFaceRestoration.rawValue, "RemoveFaceRestoration")
+    }
+
+}
+
+// MARK: - Red-eye removal notification tests
+
+final class RedEyeRemovalNotificationTests: XCTestCase {
+    func testRedEyeRemovalNotificationFires() {
+        let exp = expectation(description: "redEyeRemoval fires")
+        let obs = NotificationCenter.default.addObserver(forName: .redEyeRemoval, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveRedEyeNotificationFires() {
+        let exp = expectation(description: "removeRedEye fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeRedEye, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeRedEye, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRedEyeRemovalNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.redEyeRemoval.rawValue, "RedEyeRemoval")
+    }
+
+    func testRemoveRedEyeNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeRedEye.rawValue, "RemoveRedEye")
+    }
+
+    func testCIRedEyeCorrectionFilterIsAvailable() {
+        XCTAssertNotNil(CIFilter(name: "CIRedEyeCorrection"), "CIRedEyeCorrection must be available on macOS 15")
+    }
+}
+
+// MARK: - Background removal notification tests
+
+final class BackgroundRemovalNotificationTests: XCTestCase {
+    func testRemoveBackgroundNotificationFires() {
+        let exp = expectation(description: "removeBackground fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeBackground, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeBackground, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRestoreBackgroundNotificationFires() {
+        let exp = expectation(description: "restoreBackground fires")
+        let obs = NotificationCenter.default.addObserver(forName: .restoreBackground, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .restoreBackground, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveBackgroundNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeBackground.rawValue, "RemoveBackground")
+    }
+
+    func testRestoreBackgroundNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.restoreBackground.rawValue, "RestoreBackground")
+    }
+}
