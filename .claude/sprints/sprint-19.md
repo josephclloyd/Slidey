@@ -84,3 +84,33 @@ Key: one of the remaining free slots.
   `@available` guards needed (deployment target is 15.0).
 - CodeFormer model is 180 MB — consider lazy loading (load on first use, cache instance).
   Compare with RealESRGAN pattern in SlideshowView.swift.
+
+## Results
+
+Released: v1.18 — 2026-06-30
+
+### Shipped
+
+- #186 Add `c`/`C` keyboard shortcuts for Flip Horizontal/Vertical (PR #188)
+- #163 Face restoration via CodeFormer Core ML model; `p`/`P` keys (PR #189)
+- #172 Red-eye removal via `CIRedEyeCorrection`; `g`/`G` keys (PR #190)
+- #159 Background removal via `VNGenerateForegroundInstanceMaskRequest`; `k`/`K` keys (PR #191)
+
+### Infrastructure fixes (part of sprint)
+
+- Added `.gitattributes` to track `weight.bin` via Git LFS (was missing from main)
+- CI: added `lfs: true` to all checkout steps in `build.yml`
+- Switched from auto-generated `CodeFormerInput` class to raw `MLModel + MLDictionaryFeatureProvider`
+  to eliminate compile-time dependency on CoreML-generated bindings
+
+### Needs attention
+
+None. All four planned issues shipped. SlideshowView.swift reached 3482 lines (18 under the
+3500 SwiftLint threshold) — next sprint that adds to the view body should extract content to a
+`@ViewBuilder` extension file.
+
+### Stats
+
+- PRs merged: 4 sprint PRs (#188 pre-sprint, #189/#190/#191 sprint)
+- CI wall time per PR: ~2–3 min
+- SlideshowView.swift: ~3186 → 3482 lines (+296)
