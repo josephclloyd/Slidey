@@ -1,7 +1,7 @@
 # Sprint 20 — 2026-06-30
 
 Started: 2026-06-30T14:00
-Status: planned
+Status: models-ready
 
 ## Theme: AI/ML (CoreML models)
 
@@ -24,25 +24,41 @@ spawning impl sessions. Pattern from sprint 19 (CodeFormer):
 
 ### #164 — SwinIR (JPEG artifact removal)
 
-Model: SwinIR-S (small variant) for JPEG artifact removal  
-- Repo: https://github.com/JingyunLiang/SwinIR (Apache 2.0)  
-- CoreML conversion: coremltools from PyTorch `.pth` checkpoint  
-- Target checkpoint: `model_zoo/swinir_classical_sr_x2.pth` or the JPEG deblocking variant  
-  (`experiment/swinir_s_x4_classical/models/` — look for `swinir_CAR_s126w7_jpeg10.pth`)  
-- Input shape: `(1, C, H, W)` — patch or full image; confirm at conversion time  
-- Expected model size: 10–30 MB (S variant)  
-- If a community CoreML export exists on Hugging Face (search "SwinIR mlpackage"), prefer that  
+**Converted 2026-06-30 — ready to commit.**
+
+Model: SwinIR-M `006_colorCAR_DFWB_s126w7_SwinIR-M_jpeg40` (Apache 2.0)
+- Repo: https://github.com/JingyunLiang/SwinIR
+- Weights: HuggingFace piddnad/DDColor-models → `ddcolor_paper_tiny.pth` (no; see actual note)
+  Actual: GitHub releases page of JingyunLiang/SwinIR, JPEG CAR model
+- File: `slidey/Resources/SwinIR_color_jpeg40.mlpackage`
+- Conversion script: `slidey/Resources/convert_swinir.py`
+- 11,492,067 params; traced at 126×126 (native training size — prevents shift-mask error)
+- Input: (1, 3, 126, 126) float32 RGB [0,1]
+- Output: (1, 3, 126, 126) float32 RGB artifact-removed [0,1]
+- Compiled weight.bin: ~25 MB (tracked via LFS)
+- Swift: tile source into overlapping 126×126 patches, run per-tile, blend/reassemble
+- Conversion notes:
+  - Cannot trace at 256×256 (OOM during trace) or 128×128 (coremltools shift-mask bug)
+  - 126×126 is the only safe trace size; other sizes trigger `slice_by_index` error
+  - `ct.convert()` triggers ANE compilation internally; expect 30–90 min per model
 
 ### #165 — DDColor (B&W colorization)
 
-Model: DDColor-compact  
-- Repo: https://github.com/piddnad/DDColor (Apache 2.0)  
-- Hugging Face: search "DDColor coreml" or "DDColor mlmodel" — community exports exist  
-- If no direct CoreML export: convert with coremltools from the PyTorch checkpoint  
-- Input: RGB image (model handles grayscale detection internally) at 512×512  
-- Output: colorized RGB 512×512 or AB channels in LAB space (check model card)  
-- Expected model size: 50–100 MB (compact variant)  
-- LFS required — file exceeds GitHub's 100 MB limit for the full variant; use compact  
+**Converted 2026-06-30 — ready to commit.**
+
+Model: DDColor paper-tiny (Apache 2.0)
+- Repo: https://github.com/piddnad/DDColor
+- Weights: HuggingFace piddnad/DDColor-models → `ddcolor_paper_tiny.pth` (210 MB)
+- File: `slidey/Resources/DDColor_paper_tiny.mlpackage`
+- Conversion script: `slidey/Resources/convert_ddcolor.py`
+- 55,006,640 params; traced at 512×512
+- Input: (1, 3, 512, 512) float32 — grayscale-encoded RGB [0,1]
+  (L channel from Lab, replicated to R=G=B, /100 for [0,1])
+  Model applies ImageNet normalisation internally.
+- Output: (1, 2, 512, 512) float32 — AB Lab channels (raw)
+- Compiled weight.bin: 115 MB (tracked via LFS); LFS required
+- Swift: extract L from Lab, replicate → inference → upsample AB → merge with orig L → RGB
+- No pre-existing CoreML export on HuggingFace (searched 2026-06-30)  
 
 ## Issues
 
