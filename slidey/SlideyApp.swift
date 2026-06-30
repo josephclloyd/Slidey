@@ -515,6 +515,18 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("g", modifiers: .shift)
 
+            Divider()
+
+            Button("Remove Background") {
+                NotificationCenter.default.post(name: .removeBackground, object: nil)
+            }
+            .keyboardShortcut("k", modifiers: [])
+
+            Button("Restore Background") {
+                NotificationCenter.default.post(name: .restoreBackground, object: nil)
+            }
+            .keyboardShortcut("k", modifiers: .shift)
+
         }
     }
 }

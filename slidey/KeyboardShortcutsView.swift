@@ -40,6 +40,8 @@ struct KeyboardShortcutsView: View {
             ("\u{21e7}P", "Remove face restoration"),
             ("g", "Remove red eye"),
             ("\u{21e7}G", "Remove red-eye correction"),
+            ("k", "Remove background (foreground isolation)"),
+            ("\u{21e7}K", "Restore background"),
         ]),
         ("Favourites", [
             ("x", "Toggle favourite"),
