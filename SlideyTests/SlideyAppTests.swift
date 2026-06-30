@@ -684,3 +684,31 @@ final class RedEyeRemovalNotificationTests: XCTestCase {
         XCTAssertNotNil(CIFilter(name: "CIRedEyeCorrection"), "CIRedEyeCorrection must be available on macOS 15")
     }
 }
+
+// MARK: - Background removal notification tests
+
+final class BackgroundRemovalNotificationTests: XCTestCase {
+    func testRemoveBackgroundNotificationFires() {
+        let exp = expectation(description: "removeBackground fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeBackground, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeBackground, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRestoreBackgroundNotificationFires() {
+        let exp = expectation(description: "restoreBackground fires")
+        let obs = NotificationCenter.default.addObserver(forName: .restoreBackground, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .restoreBackground, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveBackgroundNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeBackground.rawValue, "RemoveBackground")
+    }
+
+    func testRestoreBackgroundNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.restoreBackground.rawValue, "RestoreBackground")
+    }
+}

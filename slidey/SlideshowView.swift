@@ -140,6 +140,7 @@ struct SlideshowView: View {
     @State private var faceRestoreProgress: Double = 0
     @State private var showNoFaceAlert = false
     @State private var redEyedImages: [URL: NSImage] = [:]
+    @State private var backgroundRemovedImages: [URL: NSImage] = [:]
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -843,6 +844,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeRedEye)) { _ in
             ifKeyWindow { removeRedEyeCorrection() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeBackground)) { _ in
+            ifKeyWindow { removeBackgroundOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreBackground)) { _ in
+            ifKeyWindow { restoreBackground() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -1212,6 +1219,12 @@ struct SlideshowView: View {
             return .handled
         case "G":
             removeRedEyeCorrection()
+            return .handled
+        case "k":
+            removeBackgroundOnCurrentImage()
+            return .handled
+        case "K":
+            restoreBackground()
             return .handled
         case "e":
             openAdjustmentsHUD()
@@ -1587,9 +1600,12 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original
+        // Priority: bgRemoved > faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original
         var baseImage: NSImage?
-        if let faceRestored = faceRestoredImages[url] {
+        if let bgRemoved = backgroundRemovedImages[url] {
+            baseImage = bgRemoved
+            windowTitle = Self.titleForImage(at: url) + " [background removed]"
+        } else if let faceRestored = faceRestoredImages[url] {
             baseImage = faceRestored
             windowTitle = Self.titleForImage(at: url) + " [faces restored]"
         } else if let redEye = redEyedImages[url] {
@@ -2435,6 +2451,49 @@ struct SlideshowView: View {
             DispatchQueue.main.async {
                 self.redEyedImages[capturedURL] = result
                 self.setDisplay(base: result, for: capturedURL)
+            }
+        }
+    }
+
+    private func restoreBackground() {
+        guard let url = imageLoader.currentImageURL else { return }
+        backgroundRemovedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func removeBackgroundOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let handler = VNImageRequestHandler(cgImage: srcCG, options: [:])
+            let req = VNGenerateForegroundInstanceMaskRequest()
+            guard (try? handler.perform([req])) != nil,
+                  let result = req.results?.first else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            guard let maskedBuffer = try? result.generateMaskedImage(
+                      ofInstances: result.allInstances,
+                      from: handler,
+                      croppedToInstancesExtent: false) else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            let ciImg = CIImage(cvPixelBuffer: maskedBuffer)
+            let ctx = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
+            guard let maskedCG = ctx.createCGImage(ciImg, from: ciImg.extent) else { return }
+            let masked = NSImage(cgImage: maskedCG, size: source.size)
+            let capturedURL = url
+            DispatchQueue.main.async {
+                self.backgroundRemovedImages[capturedURL] = masked
+                self.setDisplay(base: masked, for: capturedURL)
             }
         }
     }
