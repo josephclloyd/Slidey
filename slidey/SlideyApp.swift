@@ -527,6 +527,18 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("k", modifiers: .shift)
 
+            Divider()
+
+            Button("Remove Artifacts") {
+                NotificationCenter.default.post(name: .removeArtifacts, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: [])
+
+            Button("Restore Artifacts") {
+                NotificationCenter.default.post(name: .restoreArtifacts, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: .shift)
+
         }
     }
 }

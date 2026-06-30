@@ -141,6 +141,9 @@ struct SlideshowView: View {
     @State private var showNoFaceAlert = false
     @State private var redEyedImages: [URL: NSImage] = [:]
     @State private var backgroundRemovedImages: [URL: NSImage] = [:]
+    @State private var artifactRemovedImages: [URL: NSImage] = [:]
+    @State private var isRemovingArtifacts = false
+    @State private var artifactRemovalProgress: Double = 0
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -546,6 +549,28 @@ struct SlideshowView: View {
             }
         }
 
+        if isRemovingArtifacts {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Removing Artifacts\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView(value: artifactRemovalProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+                    Text("\(Int(artifactRemovalProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
         // Debug window overlay (toggle with 'd' key)
         if showDebugWindow {
             VStack {
@@ -849,6 +874,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreBackground)) { _ in
             ifKeyWindow { restoreBackground() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeArtifacts)) { _ in
+            ifKeyWindow { removeArtifactsOnCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreArtifacts)) { _ in
+            ifKeyWindow { restoreArtifacts() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -1226,6 +1257,12 @@ struct SlideshowView: View {
         case "K":
             restoreBackground()
             return .handled
+        case "l":
+            removeArtifactsOnCurrentImage()
+            return .handled
+        case "L":
+            restoreArtifacts()
+            return .handled
         case "e":
             openAdjustmentsHUD()
             return .handled
@@ -1600,7 +1637,7 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: bgRemoved > faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original
+        // Priority: bgRemoved > faceRestored > redEye > artifactRemoved > upscaled > sharpened > smoothed > enhanced > original
         var baseImage: NSImage?
         if let bgRemoved = backgroundRemovedImages[url] {
             baseImage = bgRemoved
@@ -1611,6 +1648,9 @@ struct SlideshowView: View {
         } else if let redEye = redEyedImages[url] {
             baseImage = redEye
             windowTitle = Self.titleForImage(at: url) + " [red-eye removed]"
+        } else if let artifactRemoved = artifactRemovedImages[url] {
+            baseImage = artifactRemoved
+            windowTitle = Self.titleForImage(at: url) + " [artifacts removed]"
         } else if let upscaled = upscaledImages[url] {
             baseImage = upscaled
             let factor = upscaleFactors[url] ?? 4
@@ -2494,6 +2534,184 @@ struct SlideshowView: View {
             DispatchQueue.main.async {
                 self.backgroundRemovedImages[capturedURL] = masked
                 self.setDisplay(base: masked, for: capturedURL)
+            }
+        }
+    }
+
+    private func restoreArtifacts() {
+        guard let url = imageLoader.currentImageURL else { return }
+        artifactRemovedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func removeArtifactsOnCurrentImage() {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
+                           smoothedImages[url] ?? enhancedImages[url] ??
+                           imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        isRemovingArtifacts = true
+        artifactRemovalProgress = 0
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let modelURL = Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlmodelc") ??
+                                  Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlpackage") else {
+                DispatchQueue.main.async { self.isRemovingArtifacts = false }
+                return
+            }
+            let cfg = MLModelConfiguration(); cfg.computeUnits = .all
+            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
+                DispatchQueue.main.async { self.isRemovingArtifacts = false }
+                return
+            }
+
+            let imgW = srcCG.width
+            let imgH = srcCG.height
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+
+            guard let readCtx = CGContext(data: nil, width: imgW, height: imgH,
+                                          bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                          space: cs, bitmapInfo: bi) else {
+                DispatchQueue.main.async { self.isRemovingArtifacts = false }
+                return
+            }
+            readCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
+            guard let pixelData = readCtx.data else {
+                DispatchQueue.main.async { self.isRemovingArtifacts = false }
+                return
+            }
+            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
+
+            let tileSize = 126
+            let tileOverlap = 16
+
+            func tileStarts(_ total: Int) -> [Int] {
+                guard total > tileSize else { return [0] }
+                var positions: [Int] = []
+                let stride = tileSize - tileOverlap
+                var pos = 0
+                while pos < total {
+                    if pos + tileSize >= total {
+                        positions.append(max(0, total - tileSize))
+                        break
+                    }
+                    positions.append(pos)
+                    pos += stride
+                }
+                return positions
+            }
+
+            let xStarts = tileStarts(imgW)
+            let yStarts = tileStarts(imgH)
+            let totalTiles = xStarts.count * yStarts.count
+
+            var accR = [Float](repeating: 0, count: imgW * imgH)
+            var accG = [Float](repeating: 0, count: imgW * imgH)
+            var accB = [Float](repeating: 0, count: imgW * imgH)
+            var accW = [Float](repeating: 0, count: imgW * imgH)
+
+            var tilesDone = 0
+
+            for y0 in yStarts {
+                for x0 in xStarts {
+                    let y1 = min(y0 + tileSize, imgH)
+                    let x1 = min(x0 + tileSize, imgW)
+                    let tileH = y1 - y0
+                    let tileW = x1 - x0
+
+                    guard let inArr = try? MLMultiArray(shape: [1, 3, 126, 126], dataType: .float32) else { continue }
+                    inArr.withUnsafeMutableBytes { buf, _ in
+                        let ptr = buf.bindMemory(to: Float.self)
+                        for row in 0..<tileSize {
+                            for col in 0..<tileSize {
+                                let srcRow = min(y0 + min(row, tileH - 1), imgH - 1)
+                                let srcCol = min(x0 + min(col, tileW - 1), imgW - 1)
+                                // BGRA byte order (byteOrder32Little + premultipliedFirst)
+                                let pixIdx = (srcRow * imgW + srcCol) * 4
+                                let pos = row * tileSize + col
+                                ptr[0 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 2]) / 255.0 // R
+                                ptr[1 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 1]) / 255.0 // G
+                                ptr[2 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 0]) / 255.0 // B
+                            }
+                        }
+                    }
+
+                    guard let inFeatures = try? MLDictionaryFeatureProvider(
+                              dictionary: ["image": MLFeatureValue(multiArray: inArr)]),
+                          let outFeatures = try? model.prediction(from: inFeatures),
+                          let outArr = outFeatures.featureValue(for: "restored_image")?.multiArrayValue else { continue }
+
+                    let rampPx = tileOverlap
+                    let isFP16 = outArr.dataType == .float16
+                    let rawPtr16 = isFP16 ? outArr.dataPointer.bindMemory(to: UInt16.self, capacity: outArr.count) : nil
+                    let rawPtr32 = isFP16 ? nil : outArr.dataPointer.bindMemory(to: Float.self, capacity: outArr.count)
+
+                    for ty in 0..<tileH {
+                        let gy = y0 + ty
+                        for tx in 0..<tileW {
+                            let gx = x0 + tx
+                            var w: Float = 1.0
+                            if rampPx > 0 {
+                                if y0 > 0 && ty < rampPx { w *= Float(ty) / Float(rampPx) }
+                                if y1 < imgH && ty >= tileH - rampPx { w *= Float(tileH - 1 - ty) / Float(rampPx) }
+                                if x0 > 0 && tx < rampPx { w *= Float(tx) / Float(rampPx) }
+                                if x1 < imgW && tx >= tileW - rampPx { w *= Float(tileW - 1 - tx) / Float(rampPx) }
+                            }
+                            let idx = gy * imgW + gx
+                            let pos = ty * tileSize + tx
+                            let r0: Float, g0: Float, b0: Float
+                            if isFP16, let ptr = rawPtr16 {
+                                r0 = Float(Float16(bitPattern: ptr[0 * tileSize * tileSize + pos]))
+                                g0 = Float(Float16(bitPattern: ptr[1 * tileSize * tileSize + pos]))
+                                b0 = Float(Float16(bitPattern: ptr[2 * tileSize * tileSize + pos]))
+                            } else if let ptr = rawPtr32 {
+                                r0 = ptr[0 * tileSize * tileSize + pos]
+                                g0 = ptr[1 * tileSize * tileSize + pos]
+                                b0 = ptr[2 * tileSize * tileSize + pos]
+                            } else {
+                                (r0, g0, b0) = (0, 0, 0)
+                            }
+                            accR[idx] += r0 * w
+                            accG[idx] += g0 * w
+                            accB[idx] += b0 * w
+                            accW[idx] += w
+                        }
+                    }
+
+                    tilesDone += 1
+                    let progress = Double(tilesDone) / Double(totalTiles)
+                    DispatchQueue.main.async { self.artifactRemovalProgress = progress }
+                }
+            }
+
+            var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
+            for i in 0..<(imgW * imgH) {
+                let dw = accW[i] > 0 ? accW[i] : 1
+                outPixels[i * 4 + 0] = UInt8(min(255, max(0, Int(accB[i] / dw * 255)))) // B
+                outPixels[i * 4 + 1] = UInt8(min(255, max(0, Int(accG[i] / dw * 255)))) // G
+                outPixels[i * 4 + 2] = UInt8(min(255, max(0, Int(accR[i] / dw * 255)))) // R
+                outPixels[i * 4 + 3] = 255 // A
+            }
+
+            let capturedURL = url
+            outPixels.withUnsafeMutableBytes { ptr in
+                guard let outCtx = CGContext(data: ptr.baseAddress, width: imgW, height: imgH,
+                                             bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                             space: cs, bitmapInfo: bi),
+                      let outCG = outCtx.makeImage() else {
+                    DispatchQueue.main.async { self.isRemovingArtifacts = false }
+                    return
+                }
+                let result = NSImage(cgImage: outCG, size: source.size)
+                DispatchQueue.main.async {
+                    self.artifactRemovedImages[capturedURL] = result
+                    self.setDisplay(base: result, for: capturedURL)
+                    self.isRemovingArtifacts = false
+                }
             }
         }
     }
