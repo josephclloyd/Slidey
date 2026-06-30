@@ -2600,13 +2600,15 @@ struct SlideshowView: View {
                     }
                 }
 
-                // Paste restored face back at crop region
+                // Paste restored face back at crop region.
+                // cropY is top-down; CGContext origin is bottom-left, so convert.
+                let pasteY = imgHeight - cropY - cropH
                 outRaw.withUnsafeMutableBytes { ptr in
                     if let restoredCtx = CGContext(data: ptr.baseAddress, width: 512, height: 512,
                                                    bitsPerComponent: 8, bytesPerRow: 512 * 4,
                                                    space: cs, bitmapInfo: bi),
                        let restoredCG = restoredCtx.makeImage() {
-                        ctx.draw(restoredCG, in: CGRect(x: cropX, y: cropY, width: cropW, height: cropH))
+                        ctx.draw(restoredCG, in: CGRect(x: cropX, y: pasteY, width: cropW, height: cropH))
                     }
                 }
 
