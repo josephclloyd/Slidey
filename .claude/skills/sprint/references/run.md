@@ -237,6 +237,8 @@ xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=N
 ```
 If it fails, extract a sub-helper (e.g. `handleEditKeyPress`) or add `// swiftlint:disable:next cyclomatic_complexity` only if extraction is genuinely worse. Also check the key binding registry in CLAUDE.md before picking a new key — several single-letter keys are already taken.
 
+**SwiftLint `file_length`/`type_body_length` — extract, never raise the threshold:** When an impl session's new feature pushes `SlideshowView.swift` near the 3500-line (or 3000 type-body) error threshold, the fix is to extract to `SlideshowView+AIEdits.swift` (change `private` to internal on anything the extension needs), not to raise the numbers in `.swiftlint.yml`. This happened in Sprint 20: an impl session bumped both thresholds instead of extracting, even though the sprint plan had explicitly flagged the imminent breach and named the extraction as the required fix. It was caught in review and repaired. Raising the threshold is a one-way ratchet that just gets re-breached by the next feature — treat any diff that touches `.swiftlint.yml`'s `file_length`/`type_body_length` values as a repair-worthy finding during review.
+
 **SlideshowView type-checker timeout:** Xcode 16.3 CI fails with "unable to type-check in reasonable time" when `coreView` or `body` accumulates too many modifier levels. The established fix:
 1. Extract view sections into `@ViewBuilder private var emptyStateContent/imageDisplayContent/overlayViews`
 2. Move the ZStack + onChange/focusable/onKeyPress chain into `private var coreView: some View`
