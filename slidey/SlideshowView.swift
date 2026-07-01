@@ -144,6 +144,9 @@ struct SlideshowView: View {
     @State var artifactRemovedImages: [URL: NSImage] = [:]
     @State var isRemovingArtifacts = false
     @State var artifactRemovalProgress: Double = 0
+    @State var colorizedImages: [URL: NSImage] = [:]
+    @State var isColorizing = false
+    @State var showColorConfirmAlert = false
 
     private var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -571,6 +574,25 @@ struct SlideshowView: View {
             }
         }
 
+        if isColorizing {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Colorizing\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(1.2)
+                        .tint(.white)
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
         // Debug window overlay (toggle with 'd' key)
         if showDebugWindow {
             VStack {
@@ -881,6 +903,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreArtifacts)) { _ in
             ifKeyWindow { restoreArtifacts() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.colorizeImage)) { _ in
+            ifKeyWindow { colorizeCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeColorization)) { _ in
+            ifKeyWindow { removeColorization() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -1024,6 +1052,12 @@ struct SlideshowView: View {
             Button("OK") {}
         } message: {
             Text("No faces were found in this image.")
+        }
+        .alert("Image Appears to Be in Color", isPresented: $showColorConfirmAlert) {
+            Button("Colorize Anyway") { colorizeCurrentImage(force: true) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
         }
     }
 
@@ -1262,6 +1296,12 @@ struct SlideshowView: View {
             return .handled
         case "L":
             restoreArtifacts()
+            return .handled
+        case "o":
+            colorizeCurrentImage()
+            return .handled
+        case "O":
+            removeColorization()
             return .handled
         case "e":
             openAdjustmentsHUD()
@@ -1637,9 +1677,12 @@ struct SlideshowView: View {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: bgRemoved > faceRestored > redEye > artifactRemoved > upscaled > sharpened > smoothed > enhanced > original
+        // Priority: colorized > bgRemoved > faceRestored > redEye > artifactRemoved > upscaled > sharpened > smoothed > enhanced > original
         var baseImage: NSImage?
-        if let bgRemoved = backgroundRemovedImages[url] {
+        if let colorized = colorizedImages[url] {
+            baseImage = colorized
+            windowTitle = Self.titleForImage(at: url) + " [colorized]"
+        } else if let bgRemoved = backgroundRemovedImages[url] {
             baseImage = bgRemoved
             windowTitle = Self.titleForImage(at: url) + " [background removed]"
         } else if let faceRestored = faceRestoredImages[url] {
