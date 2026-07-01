@@ -22,6 +22,7 @@
 		E1000002000000000000001 /* KeyboardShortcutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1000001000000000000001 /* KeyboardShortcutsView.swift */; };
 		F1000002000000000000001 /* ZoomPanController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000001000000000000001 /* ZoomPanController.swift */; };
 		F1000004000000000000001 /* SlideshowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1000003000000000000001 /* SlideshowController.swift */; };
+		G1000002000000000000001 /* SlideshowView+AIEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000001000000000000001 /* SlideshowView+AIEdits.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +53,7 @@
 		E1000001000000000000001 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
 		F1000001000000000000001 /* ZoomPanController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomPanController.swift; sourceTree = "<group>"; };
 		F1000003000000000000001 /* SlideshowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowController.swift; sourceTree = "<group>"; };
+		G1000001000000000000001 /* SlideshowView+AIEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+AIEdits.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -92,6 +94,7 @@
 				D8EF05962F1187C400ECB91A /* Resources */,
 				A1000002000000000000001 /* SlideyApp.swift */,
 				A1000004000000000000001 /* SlideshowView.swift */,
+				G1000001000000000000001 /* SlideshowView+AIEdits.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
 				A1000008000000000000001 /* RecentDirectories.swift */,
 				C1000001000000000000001 /* MusicManager.swift */,
@@ -244,6 +247,7 @@
 			files = (
 				A1000001000000000000001 /* SlideyApp.swift in Sources */,
 				A1000003000000000000001 /* SlideshowView.swift in Sources */,
+				G1000002000000000000001 /* SlideshowView+AIEdits.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,
 				A1000007000000000000001 /* RecentDirectories.swift in Sources */,
 				C1000002000000000000001 /* MusicManager.swift in Sources */,
