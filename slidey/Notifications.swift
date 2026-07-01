@@ -62,4 +62,10 @@ extension NSNotification.Name {
 
     static let removeBackground = NSNotification.Name("RemoveBackground")
     static let restoreBackground = NSNotification.Name("RestoreBackground")
+
+    static let removeArtifacts = NSNotification.Name("RemoveArtifacts")
+    static let restoreArtifacts = NSNotification.Name("RestoreArtifacts")
+
+    static let colorizeImage = NSNotification.Name("ColorizeImage")
+    static let removeColorization = NSNotification.Name("RemoveColorization")
 }

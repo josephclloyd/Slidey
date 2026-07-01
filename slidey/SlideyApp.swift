@@ -527,6 +527,30 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("k", modifiers: .shift)
 
+            Divider()
+
+            Button("Remove Artifacts") {
+                NotificationCenter.default.post(name: .removeArtifacts, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: [])
+
+            Button("Restore Artifacts") {
+                NotificationCenter.default.post(name: .restoreArtifacts, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: .shift)
+
+            Divider()
+
+            Button("Colorize (B&W to Color)") {
+                NotificationCenter.default.post(name: .colorizeImage, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: [])
+
+            Button("Remove Colorization") {
+                NotificationCenter.default.post(name: .removeColorization, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: .shift)
+
         }
     }
 }

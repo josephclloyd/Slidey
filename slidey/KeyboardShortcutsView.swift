@@ -42,6 +42,10 @@ struct KeyboardShortcutsView: View {
             ("\u{21e7}G", "Remove red-eye correction"),
             ("k", "Remove background (foreground isolation)"),
             ("\u{21e7}K", "Restore background"),
+            ("l", "Remove JPEG artifacts (SwinIR)"),
+            ("\u{21e7}L", "Restore artifacts"),
+            ("o", "Colorize B&W photo (DDColor)"),
+            ("\u{21e7}O", "Remove colorization"),
         ]),
         ("Favourites", [
             ("x", "Toggle favourite"),

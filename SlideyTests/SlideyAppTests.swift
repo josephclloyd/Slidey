@@ -712,3 +712,31 @@ final class BackgroundRemovalNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.restoreBackground.rawValue, "RestoreBackground")
     }
 }
+
+// MARK: - Colorization notification tests
+
+final class ColorizationNotificationTests: XCTestCase {
+    func testColorizeImageNotificationFires() {
+        let exp = expectation(description: "colorizeImage fires")
+        let obs = NotificationCenter.default.addObserver(forName: .colorizeImage, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .colorizeImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveColorizationNotificationFires() {
+        let exp = expectation(description: "removeColorization fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeColorization, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeColorization, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testColorizeImageNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.colorizeImage.rawValue, "ColorizeImage")
+    }
+
+    func testRemoveColorizationNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.removeColorization.rawValue, "RemoveColorization")
+    }
+}
