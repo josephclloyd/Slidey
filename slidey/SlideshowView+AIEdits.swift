@@ -99,7 +99,7 @@ extension SlideshowView {
 
     // swiftlint:disable:next function_body_length
     func removeArtifactsOnCurrentImage() {
-        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts else { return }
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
         guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
                            smoothedImages[url] ?? enhancedImages[url] ??
@@ -480,7 +480,7 @@ extension SlideshowView {
 
     // swiftlint:disable:next function_body_length
     func restoreFacesOnCurrentImage() {
-        guard !isProcessing, !isFaceRestoring else { return }
+        guard !isProcessing, !isFaceRestoring, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
         guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
                            smoothedImages[url] ?? enhancedImages[url] ??
