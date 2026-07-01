@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "Image edit compositing pipeline, key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns — updated through Sprint 20 pre-sprint"
+description: "Image edit compositing pipeline, key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns — updated through Sprint 20"
 metadata: 
   node_type: memory
   type: project
@@ -17,17 +17,23 @@ The canonical path for committing an edited NSImage in SlideshowView. It clears 
 
 ---
 
-## Compositing pipeline order (fixed as of Sprint 18)
+## Compositing pipeline order (updated Sprint 20)
 
 `updateDisplayImage` applies layers in this order:
 
-1. Base image priority: `bgRemoved > faceRestored > redEye > upscaled > sharpened > smoothed > enhanced > original`
+1. Base image priority: `colorized > bgRemoved > faceRestored > redEye > artifactRemoved > upscaled > sharpened > smoothed > enhanced > original`
 2. Flip (CIAffineTransform, horizontal then vertical)
 3. Photo effect (CIFilter, cached in `effectImages[url]`)
 4. Adjustments (Exposure/Highlights/Shadows/Vibrance/Warmth — skip during Adjustments HUD)
 5. Vignette (CIVignetteEffect — skip during Vignette HUD, applied absolute last)
 
 **How to apply:** Any new filter step must slot into this order in both `updateDisplayImage` and `setDisplay`. The HUD "skip" pattern (`!showXxxHUD` guard) prevents double-application during preview.
+
+**Known limitation (filed as #198, Sprint 20):** the "base image priority" step picks exactly
+one winner from the chain — edits don't stack. Sharpen-then-smooth shows only the
+higher-priority result (sharpen), not smooth-applied-to-sharpened. A future sprint needs to
+redesign this as an ordered stack of applied edits rather than a fixed priority pick. Read
+#198 before touching `updateDisplayImage`'s base-image selection logic.
 
 ---
 
@@ -54,10 +60,10 @@ Consistent structure across all three HUDs:
 
 ## `handleCharacterKeyPress` key registry
 
-Keys bound as of Sprint 19:
-`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background.
+Keys bound as of Sprint 20:
+`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background, `l`=artifact-removal, `L`=restore-artifacts, `o`=colorize, `O`=remove-colorization.
 
-Free slots: `l`, `o`, `w`, `y` (and uppercase variants of these).
+Free slots: `w`, `y` (and uppercase variants of these).
 
 SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep cyclomatic` after adding keys.
 
@@ -65,9 +71,23 @@ SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep
 
 ---
 
-## SlideshowView.swift size limits
+## SlideshowView.swift size limits — extraction over threshold-bumping (updated Sprint 20)
 
-As of Sprint 19 the file is ~3482 lines. `.swiftlint.yml` error threshold: 3500 (file) / 3000 (type body). The next substantial editing feature **must** extract content to a `SlideshowView+Edits.swift` extension before adding more code to the body. Change `@State private var` to `@State var` (internal) on anything the extension needs.
+As of Sprint 20 (post-extraction), `SlideshowView.swift` is 3304 lines; `.swiftlint.yml`
+thresholds are back at the original 3500 (file) / 3000 (type body). AI-edit functions
+(face restore, red-eye, background removal, artifact removal, colorization) live in
+`slidey/SlideshowView+AIEdits.swift` (that's the actual extension name — not `+Edits.swift`).
+Change `@State private var` to `@State var` (internal) and `private func` to `func` on
+anything the extension needs.
+
+**Why this matters — a recurring failure mode:** in Sprint 20, an impl session facing an
+imminent threshold breach bumped `file_length`/`type_body_length` in `.swiftlint.yml`
+(3500→3800, 3000→3200) instead of extracting, even though the sprint plan explicitly
+predicted this exact scenario and called for extraction. It was caught in review and fixed
+via a repair round. **When `SlideshowView.swift` is near 3500 lines and a new feature would
+push it over: extract to `SlideshowView+AIEdits.swift`, do not raise the SwiftLint
+thresholds.** Raising thresholds is a one-way ratchet — the next feature just re-breaches
+the new, higher number.
 
 ---
 
