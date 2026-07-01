@@ -539,6 +539,18 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("l", modifiers: .shift)
 
+            Divider()
+
+            Button("Colorize (B&W to Color)") {
+                NotificationCenter.default.post(name: .colorizeImage, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: [])
+
+            Button("Remove Colorization") {
+                NotificationCenter.default.post(name: .removeColorization, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: .shift)
+
         }
     }
 }

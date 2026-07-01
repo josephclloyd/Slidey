@@ -99,7 +99,7 @@ extension SlideshowView {
 
     // swiftlint:disable:next function_body_length
     func removeArtifactsOnCurrentImage() {
-        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts else { return }
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
         guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
                            smoothedImages[url] ?? enhancedImages[url] ??
@@ -268,9 +268,219 @@ extension SlideshowView {
         }
     }
 
+    func removeColorization() {
+        guard let url = imageLoader.currentImageURL else { return }
+        colorizedImages[url] = nil
+        updateDisplayImage()
+    }
+
+    private func imageAppearsGrayscale(_ cgImage: CGImage) -> Bool {
+        if cgImage.colorSpace?.model == .monochrome { return true }
+        let sampleSize = 64
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+        guard let ctx = CGContext(data: nil, width: sampleSize, height: sampleSize,
+                                   bitsPerComponent: 8, bytesPerRow: sampleSize * 4,
+                                   space: cs, bitmapInfo: bi) else { return false }
+        ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: sampleSize, height: sampleSize))
+        guard let data = ctx.data else { return false }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: sampleSize * sampleSize * 4)
+        var chromaSum: Int = 0
+        let total = sampleSize * sampleSize
+        for i in 0..<total {
+            let b = Int(pixels[i * 4 + 0])
+            let g = Int(pixels[i * 4 + 1])
+            let r = Int(pixels[i * 4 + 2])
+            let maxC = max(r, g, b)
+            let minC = min(r, g, b)
+            chromaSum += (maxC - minC)
+        }
+        let avgChroma = Double(chromaSum) / Double(total)
+        return avgChroma < 5.0
+    }
+
+    // swiftlint:disable:next function_body_length
+    func colorizeCurrentImage(force: Bool = false) {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = imageLoader.currentImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        if !force && !imageAppearsGrayscale(srcCG) {
+            showColorConfirmAlert = true
+            return
+        }
+
+        isColorizing = true
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let modelURL = Bundle.main.url(forResource: "DDColor_paper_tiny", withExtension: "mlmodelc") ??
+                                  Bundle.main.url(forResource: "DDColor_paper_tiny", withExtension: "mlpackage") else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+            let cfg = MLModelConfiguration(); cfg.computeUnits = .cpuAndGPU
+            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+
+            let imgW = srcCG.width
+            let imgH = srcCG.height
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+
+            guard let readCtx = CGContext(data: nil, width: imgW, height: imgH,
+                                           bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                           space: cs, bitmapInfo: bi) else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+            readCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
+            guard let pixelData = readCtx.data else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
+
+            var srcL = [Float](repeating: 0, count: imgW * imgH)
+            var srcA = [Float](repeating: 0, count: imgW * imgH)
+            var srcB = [Float](repeating: 0, count: imgW * imgH)
+
+            for i in 0..<(imgW * imgH) {
+                let bVal = Float(pixels[i * 4 + 0]) / 255.0
+                let gVal = Float(pixels[i * 4 + 1]) / 255.0
+                let rVal = Float(pixels[i * 4 + 2]) / 255.0
+
+                let rLin = rVal <= 0.04045 ? rVal / 12.92 : pow((rVal + 0.055) / 1.055, 2.4)
+                let gLin = gVal <= 0.04045 ? gVal / 12.92 : pow((gVal + 0.055) / 1.055, 2.4)
+                let bLin = bVal <= 0.04045 ? bVal / 12.92 : pow((bVal + 0.055) / 1.055, 2.4)
+
+                var x = (rLin * 0.4124564 + gLin * 0.3575761 + bLin * 0.1804375) / 0.95047
+                var y = rLin * 0.2126729 + gLin * 0.7151522 + bLin * 0.0721750
+                var z = (rLin * 0.0193339 + gLin * 0.1191920 + bLin * 0.9503041) / 1.08883
+
+                x = x > 0.008856 ? pow(x, 1.0 / 3.0) : (7.787 * x + 16.0 / 116.0)
+                y = y > 0.008856 ? pow(y, 1.0 / 3.0) : (7.787 * y + 16.0 / 116.0)
+                z = z > 0.008856 ? pow(z, 1.0 / 3.0) : (7.787 * z + 16.0 / 116.0)
+
+                srcL[i] = 116.0 * y - 16.0
+                srcA[i] = 500.0 * (x - y)
+                srcB[i] = 200.0 * (y - z)
+            }
+
+            let modelSize = 512
+            guard let inArr = try? MLMultiArray(shape: [1, 3, 512, 512], dataType: .float32) else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+
+            inArr.withUnsafeMutableBytes { buf, _ in
+                let ptr = buf.bindMemory(to: Float.self)
+                let planeSize = modelSize * modelSize
+                for row in 0..<modelSize {
+                    for col in 0..<modelSize {
+                        let srcRow = row * imgH / modelSize
+                        let srcCol = col * imgW / modelSize
+                        let lNorm = srcL[srcRow * imgW + srcCol] / 100.0
+                        let pos = row * modelSize + col
+                        ptr[0 * planeSize + pos] = lNorm
+                        ptr[1 * planeSize + pos] = lNorm
+                        ptr[2 * planeSize + pos] = lNorm
+                    }
+                }
+            }
+
+            guard let inFeatures = try? MLDictionaryFeatureProvider(
+                      dictionary: ["gray_rgb": MLFeatureValue(multiArray: inArr)]),
+                  let outFeatures = try? model.prediction(from: inFeatures),
+                  let abArr = outFeatures.featureValue(for: "ab_channels")?.multiArrayValue else {
+                DispatchQueue.main.async { self.isColorizing = false }
+                return
+            }
+
+            let isFP16 = abArr.dataType == .float16
+            let abPtr16 = isFP16 ? abArr.dataPointer.bindMemory(to: UInt16.self, capacity: abArr.count) : nil
+            let abPtr32 = isFP16 ? nil : abArr.dataPointer.bindMemory(to: Float.self, capacity: abArr.count)
+            let abPlane = modelSize * modelSize
+
+            var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
+            for row in 0..<imgH {
+                let mRow = row * modelSize / imgH
+                for col in 0..<imgW {
+                    let mCol = col * modelSize / imgW
+                    let mPos = mRow * modelSize + mCol
+                    let predA: Float
+                    let predB: Float
+                    if isFP16, let ptr = abPtr16 {
+                        predA = Float(Float16(bitPattern: ptr[0 * abPlane + mPos]))
+                        predB = Float(Float16(bitPattern: ptr[1 * abPlane + mPos]))
+                    } else if let ptr = abPtr32 {
+                        predA = ptr[0 * abPlane + mPos]
+                        predB = ptr[1 * abPlane + mPos]
+                    } else {
+                        predA = 0; predB = 0
+                    }
+
+                    let srcIdx = row * imgW + col
+                    let labL = srcL[srcIdx]
+                    let labA = predA
+                    let labB = predB
+
+                    let fy = (labL + 16.0) / 116.0
+                    let fx = labA / 500.0 + fy
+                    let fz = fy - labB / 200.0
+
+                    let xr = fx * fx * fx > 0.008856 ? fx * fx * fx : (fx - 16.0 / 116.0) / 7.787
+                    let yr = fy * fy * fy > 0.008856 ? fy * fy * fy : (fy - 16.0 / 116.0) / 7.787
+                    let zr = fz * fz * fz > 0.008856 ? fz * fz * fz : (fz - 16.0 / 116.0) / 7.787
+
+                    let xw = xr * 0.95047
+                    let yw = yr
+                    let zw = zr * 1.08883
+
+                    var rLin = xw *  3.2404542 + yw * -1.5371385 + zw * -0.4985314
+                    var gLin = xw * -0.9692660 + yw *  1.8760108 + zw *  0.0415560
+                    var bLin = xw *  0.0556434 + yw * -0.2040259 + zw *  1.0572252
+
+                    rLin = max(0, min(1, rLin))
+                    gLin = max(0, min(1, gLin))
+                    bLin = max(0, min(1, bLin))
+
+                    let rS = rLin <= 0.0031308 ? 12.92 * rLin : 1.055 * pow(rLin, 1.0 / 2.4) - 0.055
+                    let gS = gLin <= 0.0031308 ? 12.92 * gLin : 1.055 * pow(gLin, 1.0 / 2.4) - 0.055
+                    let bS = bLin <= 0.0031308 ? 12.92 * bLin : 1.055 * pow(bLin, 1.0 / 2.4) - 0.055
+
+                    let pIdx = srcIdx * 4
+                    outPixels[pIdx + 0] = UInt8(min(255, max(0, Int(bS * 255))))
+                    outPixels[pIdx + 1] = UInt8(min(255, max(0, Int(gS * 255))))
+                    outPixels[pIdx + 2] = UInt8(min(255, max(0, Int(rS * 255))))
+                    outPixels[pIdx + 3] = 255
+                }
+            }
+
+            let capturedURL = url
+            outPixels.withUnsafeMutableBytes { ptr in
+                guard let outCtx = CGContext(data: ptr.baseAddress, width: imgW, height: imgH,
+                                              bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                              space: cs, bitmapInfo: bi),
+                      let outCG = outCtx.makeImage() else {
+                    DispatchQueue.main.async { self.isColorizing = false }
+                    return
+                }
+                let result = NSImage(cgImage: outCG, size: source.size)
+                DispatchQueue.main.async {
+                    self.colorizedImages[capturedURL] = result
+                    self.setDisplay(base: result, for: capturedURL)
+                    self.isColorizing = false
+                }
+            }
+        }
+    }
+
     // swiftlint:disable:next function_body_length
     func restoreFacesOnCurrentImage() {
-        guard !isProcessing, !isFaceRestoring else { return }
+        guard !isProcessing, !isFaceRestoring, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
         guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
                            smoothedImages[url] ?? enhancedImages[url] ??
