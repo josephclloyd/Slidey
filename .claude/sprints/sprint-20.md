@@ -141,3 +141,36 @@ moves to the "needs-attention" pile and the sprint runs with 1 issue.
 - The `convert_codeformer.py` pattern from sprint 19 should be replicated: commit a
   `convert_swinir.py` / `convert_ddcolor.py` script alongside the model for reproducibility.
 - CI: both models need `lfs: true` in checkout steps (already in `build.yml` from sprint 19).
+
+## Results
+
+Released: v1.19 — 2026-07-01
+
+### Shipped
+- #164 JPEG artifact removal via SwinIR Core ML (`l` / `⇧L`) — tiled 126×126 inference with
+  linear-ramp overlap blending. PR #195, one repair round.
+- #165 B&W photo colorization via DDColor Core ML (`o` / `⇧O`) — Lab L/AB pipeline at 512×512,
+  with grayscale detection + confirmation alert for already-color images. PR #196, one repair round.
+
+### Deviations from plan
+- The extraction to `SlideshowView+AIEdits.swift` (anticipated in the pre-sprint notes above)
+  happened as a **repair fix** on #164 rather than as part of the initial implementation — the
+  impl session instead bumped SwiftLint's `file_length`/`type_body_length` thresholds to paper
+  over the overage. Caught in review, reverted, and extracted properly. `SlideshowView.swift`
+  ended the sprint at 3304 lines (down from 3702 mid-sprint), well under the original 3500 guardrail.
+- #165's impl session hit the usage quota mid-task with substantial uncommitted, buildable work
+  (core DDColor pipeline, menu/key wiring, tests) and no commits yet. Resumed the same session
+  after the quota reset rather than discarding — it finished the missing grayscale-detection
+  alert, updated CLAUDE.md, and opened the PR.
+- #165 review round 1 caught a real concurrency bug: `restoreFacesOnCurrentImage` and
+  `removeArtifactsOnCurrentImage` didn't guard against `isColorizing`, allowing a race if
+  colorization ran concurrently with those operations. Fixed in repair.
+
+### Needs attention
+None — both issues merged clean.
+
+### Stats
+- PRs merged: 3 (#194 pre-sprint models, #195, #196)
+- Repair rounds: 1 for each of #164 and #165 (both caught real issues, not false positives)
+- Total session cost: ~$10.91 across impl/review/repair sessions
+- CI wall time per PR: ~2.5–4 min
