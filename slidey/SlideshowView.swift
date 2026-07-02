@@ -52,8 +52,8 @@ struct SlideshowView: View {
     @State private var selectedDirectory: URL?
     @State private var scopedDirectory: URL?
     @State private var isFullScreen = false
-    @State private var zoomPan = ZoomPanController()
-    @State private var rotationAngle: Angle = .zero
+    @State var zoomPan = ZoomPanController()
+    @State var rotationAngle: Angle = .zero
     @State private var rotationAngles: [URL: Angle] = [:]
     @State private var lastDisplayedURL: URL?
     @State private var windowTitle: String = "Slidey"
@@ -98,7 +98,7 @@ struct SlideshowView: View {
     @State private var smoothedURLStrings: Set<String> = []
     @State private var sharpenedURLStrings: Set<String> = []
     @State private var denoiseURLLevels: [String: Double] = [:]
-    @State private var showDenoiseHUD: Bool = false
+    @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
@@ -107,7 +107,7 @@ struct SlideshowView: View {
     @State private var flippedHorizontally: Set<String> = []
     @State private var flippedVertically: Set<String> = []
     @State private var vignetteURLLevels: [String: Double] = [:]
-    @State private var showVignetteHUD: Bool = false
+    @State var showVignetteHUD: Bool = false
     @State private var vignetteIntensity: Double = 1.0
     @State private var vignetteBaseImage: NSImage?
     @State private var vignetteTask: Task<Void, Never>?
@@ -123,7 +123,7 @@ struct SlideshowView: View {
         }
     }
     @State private var adjustmentURLLevels: [String: ImageAdjustments] = [:]
-    @State private var showAdjustmentsHUD: Bool = false
+    @State var showAdjustmentsHUD: Bool = false
     @State private var adjustments: ImageAdjustments = .init()
     @State private var adjustmentsBaseImage: NSImage?
     @State private var adjustmentsTask: Task<Void, Never>?
@@ -147,8 +147,10 @@ struct SlideshowView: View {
     @State var colorizedImages: [URL: NSImage] = [:]
     @State var isColorizing = false
     @State var showColorConfirmAlert = false
+    @State var cropRegions: [String: CropRegion] = [:]
+    @State var cropController = CropController()
 
-    private var effectiveDisplayImage: NSImage? {
+    var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
     }
 
@@ -636,6 +638,7 @@ struct SlideshowView: View {
         denoiseHUD
         vignetteHUD
         adjustmentsHUD
+        cropOverlay
 
         // Before/After: "Original" label shown while holding b
         if showingOriginal {
@@ -909,6 +912,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeColorization)) { _ in
             ifKeyWindow { removeColorization() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .cropImage)) { _ in
+            ifKeyWindow { enterCropMode() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .removeCrop)) { _ in
+            ifKeyWindow { removeCropForCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -1112,6 +1121,12 @@ struct SlideshowView: View {
             return .ignored
         }
 
+        if cropController.isActive {
+            if key == .escape { cancelCrop(); return .handled }
+            if keyPress.characters == "\r" { confirmCrop(); return .handled }
+            return .ignored
+        }
+
         if key == .escape {
             if isProcessing {
                 cancelUpscale()
@@ -1302,6 +1317,12 @@ struct SlideshowView: View {
             return .handled
         case "O":
             removeColorization()
+            return .handled
+        case "w":
+            enterCropMode()
+            return .handled
+        case "W":
+            removeCropForCurrentImage()
             return .handled
         case "e":
             openAdjustmentsHUD()
@@ -1730,10 +1751,16 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
         }
-        // Apply vignette as the absolute final step (skip during HUD preview)
+        // Apply vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+        // Apply crop as the final geometry layer
+        if let cropRegion = cropRegions[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCropToImage(image, region: cropRegion) ?? image
+            windowTitle += " [cropped]"
         }
         // Update menu display to reflect active effect for this image
         UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")
@@ -1892,10 +1919,15 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
         }
-        // Vignette as final step (skip during HUD preview)
+        // Vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+        // Crop as final geometry layer
+        if let cropRegion = cropRegions[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCropToImage(image, region: cropRegion) ?? image
         }
     }
 
@@ -3123,9 +3155,13 @@ struct SlideshowView: View {
             guard let url = URL(string: key) else { return nil }
             return (url, val)
         })
+        if let data = UserDefaults.standard.data(forKey: "cropRegions"),
+           let decoded = try? JSONDecoder().decode([String: CropRegion].self, from: data) {
+            cropRegions = decoded
+        }
     }
 
-    private func saveFavourites() {
+    func saveFavourites() {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
         let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
         UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
@@ -3141,6 +3177,9 @@ struct SlideshowView: View {
         }
         let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
         UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
+        if let data = try? JSONEncoder().encode(cropRegions) {
+            UserDefaults.standard.set(data, forKey: "cropRegions")
+        }
     }
 
     @ViewBuilder private var directoryMissingOverlay: some View {

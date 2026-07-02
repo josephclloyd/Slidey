@@ -712,3 +712,210 @@ final class ValidateRenameTargetTests: XCTestCase {
         XCTAssertTrue(result!.contains("already exists"))
     }
 }
+
+// MARK: - CropRegion Tests
+
+final class CropRegionTests: XCTestCase {
+    func testFromPointsNormalizesOrder() {
+        let r = CropRegion.fromPoints(CGPoint(x: 0.8, y: 0.7), CGPoint(x: 0.2, y: 0.3))
+        XCTAssertEqual(r.x, 0.2, accuracy: 1e-10)
+        XCTAssertEqual(r.y, 0.3, accuracy: 1e-10)
+        XCTAssertEqual(r.width, 0.6, accuracy: 1e-10)
+        XCTAssertEqual(r.height, 0.4, accuracy: 1e-10)
+    }
+
+    func testClampedKeepsRegionInBounds() {
+        let r = CropRegion(x: -0.1, y: 0.8, width: 0.5, height: 0.5)
+        let c = r.clamped()
+        XCTAssertEqual(c.x, 0.0, accuracy: 1e-10)
+        XCTAssertTrue(c.x + c.width <= 1.0)
+        XCTAssertTrue(c.y + c.height <= 1.0)
+    }
+
+    func testNormalizedFlipsNegativeDimensions() {
+        let r = CropRegion(x: 0.6, y: 0.7, width: -0.4, height: -0.3)
+        let n = r.normalized()
+        XCTAssertEqual(n.x, 0.2, accuracy: 1e-10)
+        XCTAssertEqual(n.y, 0.4, accuracy: 1e-10)
+        XCTAssertEqual(n.width, 0.4, accuracy: 1e-10)
+        XCTAssertEqual(n.height, 0.3, accuracy: 1e-10)
+    }
+
+    func testIsValid() {
+        XCTAssertTrue(CropRegion(x: 0, y: 0, width: 0.5, height: 0.5).isValid)
+        XCTAssertFalse(CropRegion(x: 0, y: 0, width: 0.001, height: 0.5).isValid)
+        XCTAssertFalse(CropRegion(x: 0, y: 0, width: 0.5, height: 0.001).isValid)
+    }
+
+    func testCodableRoundTrip() throws {
+        let original = CropRegion(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CropRegion.self, from: data)
+        XCTAssertEqual(original, decoded)
+    }
+}
+
+// MARK: - CropController Coordinate Conversion Tests
+
+final class CropControllerTests: XCTestCase {
+    func testViewToNormalizedIdentityTransform() {
+        let container = CGSize(width: 800, height: 600)
+        let fitted = CGSize(width: 800, height: 600)
+        let center = CropController.viewToNormalized(
+            point: CGPoint(x: 400, y: 300),
+            containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: .zero, rotationAngle: .zero
+        )
+        XCTAssertEqual(center.x, 0.5, accuracy: 1e-10)
+        XCTAssertEqual(center.y, 0.5, accuracy: 1e-10)
+    }
+
+    func testViewToNormalizedTopLeft() {
+        let container = CGSize(width: 800, height: 600)
+        let fitted = CGSize(width: 800, height: 600)
+        let topLeft = CropController.viewToNormalized(
+            point: CGPoint(x: 0, y: 0),
+            containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: .zero, rotationAngle: .zero
+        )
+        XCTAssertEqual(topLeft.x, 0.0, accuracy: 1e-10)
+        XCTAssertEqual(topLeft.y, 0.0, accuracy: 1e-10)
+    }
+
+    func testViewToNormalizedWithZoom() {
+        let container = CGSize(width: 800, height: 600)
+        let fitted = CGSize(width: 800, height: 600)
+        let result = CropController.viewToNormalized(
+            point: CGPoint(x: 600, y: 450),
+            containerSize: container, fittedSize: fitted,
+            zoomScale: 2.0, imageOffset: .zero, rotationAngle: .zero
+        )
+        XCTAssertEqual(result.x, 0.625, accuracy: 1e-10)
+        XCTAssertEqual(result.y, 0.625, accuracy: 1e-10)
+    }
+
+    func testViewToNormalizedWithPan() {
+        let container = CGSize(width: 800, height: 600)
+        let fitted = CGSize(width: 800, height: 600)
+        let offset = CGSize(width: 100, height: -50)
+        let center = CropController.viewToNormalized(
+            point: CGPoint(x: 500, y: 250),
+            containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: offset, rotationAngle: .zero
+        )
+        XCTAssertEqual(center.x, 0.5, accuracy: 1e-10)
+        XCTAssertEqual(center.y, 0.5, accuracy: 1e-10)
+    }
+
+    func testViewToNormalizedWith90Rotation() {
+        let container = CGSize(width: 800, height: 600)
+        let image = makeBitmapImage(width: 800, height: 600)
+        let imagePixel = CGSize(width: 800, height: 600)
+        let fitted = CropController.fittedImageSize(
+            imagePixelSize: imagePixel, containerSize: container,
+            rotationAngle: Angle(degrees: 90)
+        )
+        let center = CropController.viewToNormalized(
+            point: CGPoint(x: 400, y: 300),
+            containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: .zero, rotationAngle: Angle(degrees: 90)
+        )
+        XCTAssertEqual(center.x, 0.5, accuracy: 1e-6)
+        XCTAssertEqual(center.y, 0.5, accuracy: 1e-6)
+    }
+
+    func testRoundTripConversion() {
+        let container = CGSize(width: 1024, height: 768)
+        let fitted = CGSize(width: 900, height: 600)
+        let offset = CGSize(width: 30, height: -20)
+        let zoom: CGFloat = 1.5
+        let rotation = Angle(degrees: 90)
+
+        let original = CGPoint(x: 0.3, y: 0.7)
+        let viewPoint = CropController.normalizedToView(
+            point: original, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        let recovered = CropController.viewToNormalized(
+            point: viewPoint, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        XCTAssertEqual(recovered.x, original.x, accuracy: 1e-6)
+        XCTAssertEqual(recovered.y, original.y, accuracy: 1e-6)
+    }
+
+    func testRoundTripConversion180() {
+        let container = CGSize(width: 800, height: 600)
+        let fitted = CGSize(width: 700, height: 500)
+        let rotation = Angle(degrees: 180)
+
+        let original = CGPoint(x: 0.2, y: 0.8)
+        let viewPoint = CropController.normalizedToView(
+            point: original, containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: .zero, rotationAngle: rotation
+        )
+        let recovered = CropController.viewToNormalized(
+            point: viewPoint, containerSize: container, fittedSize: fitted,
+            zoomScale: 1.0, imageOffset: .zero, rotationAngle: rotation
+        )
+        XCTAssertEqual(recovered.x, original.x, accuracy: 1e-6)
+        XCTAssertEqual(recovered.y, original.y, accuracy: 1e-6)
+    }
+
+    func testFittedImageSize() {
+        let result = CropController.fittedImageSize(
+            imagePixelSize: CGSize(width: 4000, height: 3000),
+            containerSize: CGSize(width: 800, height: 600),
+            rotationAngle: .zero
+        )
+        XCTAssertEqual(result.width, 800, accuracy: 1e-6)
+        XCTAssertEqual(result.height, 600, accuracy: 1e-6)
+    }
+
+    func testFittedImageSize90Rotation() {
+        let result = CropController.fittedImageSize(
+            imagePixelSize: CGSize(width: 4000, height: 3000),
+            containerSize: CGSize(width: 800, height: 600),
+            rotationAngle: Angle(degrees: 90)
+        )
+        let bb = rotatedBoundingBox(CGSize(width: 4000, height: 3000), by: Angle(degrees: 90))
+        let fitScale = min(800 / bb.width, 600 / bb.height)
+        XCTAssertEqual(result.width, 4000 * fitScale, accuracy: 1e-6)
+        XCTAssertEqual(result.height, 3000 * fitScale, accuracy: 1e-6)
+    }
+
+    func testConstrainAspectRatio() {
+        let start = CGPoint(x: 0.2, y: 0.3)
+        let end = CGPoint(x: 0.6, y: 0.8)
+        let constrained = CropController.constrainToAspectRatio(
+            start: start, end: end, aspectRatio: 4.0 / 3.0
+        )
+        XCTAssertEqual(constrained.x, 0.6, accuracy: 1e-10)
+        let expectedHeight = 0.4 / (4.0 / 3.0)
+        XCTAssertEqual(constrained.y, 0.3 + expectedHeight, accuracy: 1e-10)
+    }
+
+    func testHandleDragBottomRight() {
+        let controller = CropController()
+        controller.pendingRegion = CropRegion(x: 0.2, y: 0.3, width: 0.4, height: 0.3)
+        controller.regionBeforeDrag = controller.pendingRegion
+        controller.applyHandleDrag(handle: .bottomRight, to: CGPoint(x: 0.8, y: 0.9))
+        let r = controller.pendingRegion!
+        XCTAssertEqual(r.x, 0.2, accuracy: 1e-10)
+        XCTAssertEqual(r.y, 0.3, accuracy: 1e-10)
+        XCTAssertEqual(r.width, 0.6, accuracy: 1e-10)
+        XCTAssertEqual(r.height, 0.6, accuracy: 1e-10)
+    }
+
+    func testHandleDragTopLeft() {
+        let controller = CropController()
+        controller.pendingRegion = CropRegion(x: 0.2, y: 0.3, width: 0.4, height: 0.3)
+        controller.regionBeforeDrag = controller.pendingRegion
+        controller.applyHandleDrag(handle: .topLeft, to: CGPoint(x: 0.1, y: 0.1))
+        let r = controller.pendingRegion!
+        XCTAssertEqual(r.x, 0.1, accuracy: 1e-10)
+        XCTAssertEqual(r.y, 0.1, accuracy: 1e-10)
+        XCTAssertEqual(r.width, 0.5, accuracy: 1e-10)
+        XCTAssertEqual(r.height, 0.5, accuracy: 1e-10)
+    }
+}
