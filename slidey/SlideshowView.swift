@@ -94,9 +94,7 @@ struct SlideshowView: View {
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
     @State private var favouriteURLStrings: Set<String> = []
-    @State private var enhancedURLStrings: Set<String> = []
-    @State private var smoothedURLStrings: Set<String> = []
-    @State private var sharpenedURLStrings: Set<String> = []
+    @State var editStacks: [URL: EditStack] = [:]
     @State private var denoiseURLLevels: [String: Double] = [:]
     @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
@@ -1457,6 +1455,12 @@ struct SlideshowView: View {
         sharpenedImages = [:]
         upscaledImages = [:]
         upscaleFactors = [:]
+        faceRestoredImages = [:]
+        redEyedImages = [:]
+        backgroundRemovedImages = [:]
+        artifactRemovedImages = [:]
+        colorizedImages = [:]
+        effectImages = [:]
         savedZoomScales = [:]
         savedPanOffsets = [:]
         infoOverlayURLs = []
@@ -1660,6 +1664,12 @@ struct SlideshowView: View {
         sharpenedImages = sharpenedImages.filter { valid.contains($0.key) }
         upscaledImages = upscaledImages.filter { valid.contains($0.key) }
         upscaleFactors = upscaleFactors.filter { valid.contains($0.key) }
+        faceRestoredImages = faceRestoredImages.filter { valid.contains($0.key) }
+        redEyedImages = redEyedImages.filter { valid.contains($0.key) }
+        backgroundRemovedImages = backgroundRemovedImages.filter { valid.contains($0.key) }
+        artifactRemovedImages = artifactRemovedImages.filter { valid.contains($0.key) }
+        colorizedImages = colorizedImages.filter { valid.contains($0.key) }
+        editStacks = editStacks.filter { valid.contains($0.key) }
         savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
         savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
         infoOverlayURLs = infoOverlayURLs.intersection(valid)
@@ -1693,39 +1703,116 @@ struct SlideshowView: View {
         if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
     }
 
+    func cachedImage(for step: EditStep, url: URL) -> NSImage? {
+        switch step {
+        case .enhance: return enhancedImages[url]
+        case .smooth: return smoothedImages[url]
+        case .sharpen: return sharpenedImages[url]
+        case .upscale: return upscaledImages[url]
+        case .faceRestore: return faceRestoredImages[url]
+        case .redEyeRemoval: return redEyedImages[url]
+        case .backgroundRemoval: return backgroundRemovedImages[url]
+        case .artifactRemoval: return artifactRemovedImages[url]
+        case .colorize: return colorizedImages[url]
+        }
+    }
+
+    func currentComposite(for url: URL) -> NSImage? {
+        let stack = editStacks[url] ?? EditStack()
+        var result = imageLoader.currentImage
+        for step in stack.steps {
+            if let cached = cachedImage(for: step, url: url) {
+                result = cached
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    func compositeBeforeStep(_ tag: EditStepTag, for url: URL) -> NSImage? {
+        let stack = editStacks[url] ?? EditStack()
+        var result = imageLoader.currentImage
+        for step in stack.steps {
+            if step.caseTag == tag { break }
+            if let cached = cachedImage(for: step, url: url) {
+                result = cached
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    func clearCacheForStep(_ tag: EditStepTag, url: URL) {
+        switch tag {
+        case .enhance: enhancedImages[url] = nil
+        case .smooth: smoothedImages[url] = nil
+        case .sharpen: sharpenedImages[url] = nil
+        case .upscale: upscaledImages[url] = nil; upscaleFactors[url] = nil
+        case .faceRestore: faceRestoredImages[url] = nil
+        case .redEyeRemoval: redEyedImages[url] = nil
+        case .backgroundRemoval: backgroundRemovedImages[url] = nil
+        case .artifactRemoval: artifactRemovedImages[url] = nil
+        case .colorize: colorizedImages[url] = nil
+        }
+    }
+
+    func clearCachesDownstream(of tag: EditStepTag, for url: URL) {
+        guard let stack = editStacks[url] else { return }
+        guard let idx = stack.steps.firstIndex(where: { $0.caseTag == tag }) else { return }
+        for i in (idx + 1)..<stack.steps.count {
+            clearCacheForStep(stack.steps[i].caseTag, url: url)
+        }
+    }
+
+    func removeEdit(_ tag: EditStepTag) {
+        guard let url = imageLoader.currentImageURL else { return }
+        clearCachesDownstream(of: tag, for: url)
+        clearCacheForStep(tag, url: url)
+        editStacks[url]?.remove(caseTag: tag)
+        if editStacks[url]?.isEmpty == true { editStacks.removeValue(forKey: url) }
+        effectImages[url] = nil
+        saveFavourites()
+        updateDisplayImage()
+    }
+
+    private func recomputeStep(_ step: EditStep, for url: URL) {
+        switch step {
+        case .enhance: enhanceCurrentImage()
+        case .smooth(let noiseLevel): smoothCurrentImage(noiseLevel: noiseLevel)
+        case .sharpen: sharpenCurrentImage()
+        case .upscale(let factor): upscaleCurrentImage(scale: factor)
+        case .faceRestore: restoreFacesOnCurrentImage()
+        case .redEyeRemoval: applyRedEyeOnCurrentImage()
+        case .backgroundRemoval: removeBackgroundOnCurrentImage()
+        case .artifactRemoval: removeArtifactsOnCurrentImage()
+        case .colorize: colorizeCurrentImage(force: true)
+        }
+    }
+
     func updateDisplayImage() {
         guard let url = imageLoader.currentImageURL else {
             currentDisplayImage = imageLoader.currentImage
             return
         }
-        // Priority: colorized > bgRemoved > faceRestored > redEye > artifactRemoved > upscaled > sharpened > smoothed > enhanced > original
-        var baseImage: NSImage?
-        if let colorized = colorizedImages[url] {
-            baseImage = colorized
-            windowTitle = Self.titleForImage(at: url) + " [colorized]"
-        } else if let bgRemoved = backgroundRemovedImages[url] {
-            baseImage = bgRemoved
-            windowTitle = Self.titleForImage(at: url) + " [background removed]"
-        } else if let faceRestored = faceRestoredImages[url] {
-            baseImage = faceRestored
-            windowTitle = Self.titleForImage(at: url) + " [faces restored]"
-        } else if let redEye = redEyedImages[url] {
-            baseImage = redEye
-            windowTitle = Self.titleForImage(at: url) + " [red-eye removed]"
-        } else if let artifactRemoved = artifactRemovedImages[url] {
-            baseImage = artifactRemoved
-            windowTitle = Self.titleForImage(at: url) + " [artifacts removed]"
-        } else if let upscaled = upscaledImages[url] {
-            baseImage = upscaled
-            let factor = upscaleFactors[url] ?? 4
-            windowTitle = Self.titleForImage(at: url) + " [\(factor)\u{00d7} upscaled]"
-        } else {
-            if let sharpened = sharpenedImages[url] { baseImage = sharpened }
-            else if let smoothed = smoothedImages[url] { baseImage = smoothed }
-            else if let enhanced = enhancedImages[url] { baseImage = enhanced }
-            else { baseImage = imageLoader.currentImage }
-            windowTitle = Self.titleForImage(at: url)
+
+        let stack = editStacks[url] ?? EditStack()
+        var baseImage: NSImage? = imageLoader.currentImage
+        var firstUncachedStep: EditStep?
+
+        for step in stack.steps {
+            if let cached = cachedImage(for: step, url: url) {
+                baseImage = cached
+            } else if firstUncachedStep == nil {
+                firstUncachedStep = step
+            }
         }
+
+        windowTitle = Self.titleForImage(at: url)
+        let tags = stack.steps.compactMap { cachedImage(for: $0, url: url) != nil ? $0.titleTag : nil }
+        if !tags.isEmpty { windowTitle += " [\(tags.joined(separator: ", "))]" }
+
         // Apply flip and photo effect as the final compositing steps
         let isFlippedH = flippedHorizontally.contains(url.absoluteString)
         let isFlippedV = flippedVertically.contains(url.absoluteString)
@@ -1767,25 +1854,18 @@ struct SlideshowView: View {
         // Update menu display to reflect active effect for this image
         UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")
         // Re-apply persisted edits for images not yet processed in this session
-        let needsEnhance = enhancedURLStrings.contains(url.absoluteString) && enhancedImages[url] == nil
-        let needsSmooth = smoothedURLStrings.contains(url.absoluteString) && smoothedImages[url] == nil
-        let needsSharpen = sharpenedURLStrings.contains(url.absoluteString) && sharpenedImages[url] == nil
-        if needsEnhance || needsSmooth || needsSharpen {
+        if let step = firstUncachedStep {
             DispatchQueue.main.async { [url] in
                 guard self.imageLoader.currentImageURL == url else { return }
-                if needsEnhance { self.enhanceCurrentImage() }
-                if needsSmooth {
-                    let level = self.denoiseURLLevels[url.absoluteString].map { $0 / 1000.0 } ?? 0.02
-                    self.smoothCurrentImage(noiseLevel: level)
-                }
-                if needsSharpen { self.sharpenCurrentImage() }
+                self.recomputeStep(step, for: url)
             }
         }
     }
 
     private func enhanceCurrentImage() {
-        guard let originalImage = imageLoader.currentImage,
-              let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let sourceImage = currentComposite(for: url),
+              let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
@@ -1802,28 +1882,24 @@ struct SlideshowView: View {
 
         let context = CIContext()
         if let enhancedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
-            let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: originalImage.size)
-            guard let url = imageLoader.currentImageURL else { return }
+            let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: sourceImage.size)
             enhancedImages[url] = enhancedNSImage
-            enhancedURLStrings.insert(url.absoluteString)
+            clearCachesDownstream(of: .enhance, for: url)
+            editStacks[url, default: EditStack()].append(.enhance)
+            effectImages[url] = nil
             saveFavourites()
-            invalidateUpscaling(for: url)
-            setDisplay(base: enhancedNSImage, for: url)
+            updateDisplayImage()
         }
     }
 
     private func removeEnhancement() {
-        guard let url = imageLoader.currentImageURL else { return }
-        enhancedImages[url] = nil
-        enhancedURLStrings.remove(url.absoluteString)
-        saveFavourites()
-        invalidateUpscaling(for: url)
-        updateDisplayImage()
+        removeEdit(.enhance)
     }
 
     private func smoothCurrentImage(noiseLevel: Double = 0.02) {
-        guard let originalImage = currentDisplayImage ?? imageLoader.currentImage,
-              let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let sourceImage = currentComposite(for: url),
+              let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
@@ -1838,28 +1914,24 @@ struct SlideshowView: View {
 
         let context = CIContext()
         if let smoothedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
-            let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: originalImage.size)
-            guard let url = imageLoader.currentImageURL else { return }
+            let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: sourceImage.size)
             smoothedImages[url] = smoothedNSImage
-            smoothedURLStrings.insert(url.absoluteString)
+            clearCachesDownstream(of: .smooth, for: url)
+            editStacks[url, default: EditStack()].append(.smooth(noiseLevel: noiseLevel))
+            effectImages[url] = nil
             saveFavourites()
-            invalidateUpscaling(for: url)
-            setDisplay(base: smoothedNSImage, for: url)
+            updateDisplayImage()
         }
     }
 
     private func removeSmoothing() {
-        guard let url = imageLoader.currentImageURL else { return }
-        smoothedImages[url] = nil
-        smoothedURLStrings.remove(url.absoluteString)
-        saveFavourites()
-        invalidateUpscaling(for: url)
-        updateDisplayImage()
+        removeEdit(.smooth)
     }
 
     private func sharpenCurrentImage() {
-        guard let originalImage = currentDisplayImage ?? imageLoader.currentImage,
-              let cgImage = originalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let sourceImage = currentComposite(for: url),
+              let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
         }
 
@@ -1873,23 +1945,18 @@ struct SlideshowView: View {
 
         let context = CIContext()
         if let sharpenedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
-            let sharpenedNSImage = NSImage(cgImage: sharpenedCGImage, size: originalImage.size)
-            guard let url = imageLoader.currentImageURL else { return }
+            let sharpenedNSImage = NSImage(cgImage: sharpenedCGImage, size: sourceImage.size)
             sharpenedImages[url] = sharpenedNSImage
-            sharpenedURLStrings.insert(url.absoluteString)
+            clearCachesDownstream(of: .sharpen, for: url)
+            editStacks[url, default: EditStack()].append(.sharpen)
+            effectImages[url] = nil
             saveFavourites()
-            invalidateUpscaling(for: url)
-            setDisplay(base: sharpenedNSImage, for: url)
+            updateDisplayImage()
         }
     }
 
     private func removeSharpening() {
-        guard let url = imageLoader.currentImageURL else { return }
-        sharpenedImages[url] = nil
-        sharpenedURLStrings.remove(url.absoluteString)
-        saveFavourites()
-        invalidateUpscaling(for: url)
-        updateDisplayImage()
+        removeEdit(.sharpen)
     }
 
     private func applyPhotoEffect(_ filterName: String, to image: NSImage) -> NSImage? {
@@ -2157,9 +2224,7 @@ struct SlideshowView: View {
     private func openDenoiseHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
         guard !slideshow.isPlaying else { return }
-        // Start from the enhanced (or original) image, not the currently smoothed/sharpened one,
-        // so the HUD adjusts denoise from the correct base.
-        denoiseBaseImage = enhancedImages[url] ?? imageLoader.currentImage
+        denoiseBaseImage = compositeBeforeStep(.smooth, for: url)
         denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
         showDenoiseHUD = true
         applyDenoisePreview()
@@ -2193,17 +2258,17 @@ struct SlideshowView: View {
     private func applyDenoise() {
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelDenoise(); return }
-        // currentDisplayImage is the raw denoise preview (denoiseBaseImage has no photo effect applied)
         smoothedImages[url] = result
-        smoothedURLStrings.insert(url.absoluteString)
+        clearCachesDownstream(of: .smooth, for: url)
+        editStacks[url, default: EditStack()].append(.smooth(noiseLevel: denoiseLevel / 1000.0))
         denoiseURLLevels[url.absoluteString] = denoiseLevel
+        effectImages[url] = nil
         saveFavourites()
-        invalidateUpscaling(for: url)  // also clears effectImages[url]
         showDenoiseHUD = false
         denoiseTask?.cancel()
         denoiseTask = nil
         denoiseBaseImage = nil
-        updateDisplayImage()  // reapplies photo effect over the new smooth base
+        updateDisplayImage()
     }
 
     private func cancelDenoise() {
@@ -2218,8 +2283,7 @@ struct SlideshowView: View {
     private func upscaleCurrentImage(scale: Int) {
         guard !isProcessing else { return }
         guard let targetURL = imageLoader.currentImageURL else { return }
-        // Upscale the best non-upscaled version: smoothed > enhanced > original
-        guard let sourceImage = sharpenedImages[targetURL] ?? smoothedImages[targetURL] ?? enhancedImages[targetURL] ?? imageLoader.currentImage else { return }
+        guard let sourceImage = currentComposite(for: targetURL) else { return }
 
         isProcessing = true
         upscaleCancelled = false
@@ -2330,10 +2394,13 @@ struct SlideshowView: View {
                 DispatchQueue.main.async {
                     self.upscaledImages[targetURL] = result
                     self.upscaleFactors[targetURL] = scale
+                    self.clearCachesDownstream(of: .upscale, for: targetURL)
+                    self.editStacks[targetURL, default: EditStack()].append(.upscale(factor: scale))
                     self.effectImages[targetURL] = nil
                     self.upscaleProgress = 1.0
                     self.debugOutput += "SUCCESS: \(imgW)×\(imgH) → \(outW)×\(outH)\n"
                     self.isProcessing = false
+                    self.saveFavourites()
                     self.updateDisplayImage()
                 }
             } catch {
@@ -2514,17 +2581,8 @@ struct SlideshowView: View {
         upscaleCancelled = true
     }
 
-    private func invalidateUpscaling(for url: URL) {
-        upscaledImages[url] = nil
-        upscaleFactors[url] = nil
-        effectImages[url] = nil
-    }
-
     private func removeUpscaling() {
-        guard let url = imageLoader.currentImageURL else { return }
-        upscaledImages[url] = nil
-        upscaleFactors[url] = nil
-        updateDisplayImage()
+        removeEdit(.upscale)
     }
 
     private func toggleInfoOverlay() {
@@ -2671,6 +2729,12 @@ struct SlideshowView: View {
                 if let val = self.sharpenedImages.removeValue(forKey: url) { self.sharpenedImages[newURL] = val }
                 if let val = self.upscaledImages.removeValue(forKey: url) { self.upscaledImages[newURL] = val }
                 if let val = self.upscaleFactors.removeValue(forKey: url) { self.upscaleFactors[newURL] = val }
+                if let val = self.faceRestoredImages.removeValue(forKey: url) { self.faceRestoredImages[newURL] = val }
+                if let val = self.redEyedImages.removeValue(forKey: url) { self.redEyedImages[newURL] = val }
+                if let val = self.backgroundRemovedImages.removeValue(forKey: url) { self.backgroundRemovedImages[newURL] = val }
+                if let val = self.artifactRemovedImages.removeValue(forKey: url) { self.artifactRemovedImages[newURL] = val }
+                if let val = self.colorizedImages.removeValue(forKey: url) { self.colorizedImages[newURL] = val }
+                if let val = self.editStacks.removeValue(forKey: url) { self.editStacks[newURL] = val }
                 if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
                 if let val = self.savedPanOffsets.removeValue(forKey: url) { self.savedPanOffsets[newURL] = val }
                 if self.infoOverlayURLs.remove(url) != nil { self.infoOverlayURLs.insert(newURL) }
@@ -2709,6 +2773,12 @@ struct SlideshowView: View {
                         if let val = self.sharpenedImages.removeValue(forKey: newURL) { self.sharpenedImages[url] = val }
                         if let val = self.upscaledImages.removeValue(forKey: newURL) { self.upscaledImages[url] = val }
                         if let val = self.upscaleFactors.removeValue(forKey: newURL) { self.upscaleFactors[url] = val }
+                        if let val = self.faceRestoredImages.removeValue(forKey: newURL) { self.faceRestoredImages[url] = val }
+                        if let val = self.redEyedImages.removeValue(forKey: newURL) { self.redEyedImages[url] = val }
+                        if let val = self.backgroundRemovedImages.removeValue(forKey: newURL) { self.backgroundRemovedImages[url] = val }
+                        if let val = self.artifactRemovedImages.removeValue(forKey: newURL) { self.artifactRemovedImages[url] = val }
+                        if let val = self.colorizedImages.removeValue(forKey: newURL) { self.colorizedImages[url] = val }
+                        if let val = self.editStacks.removeValue(forKey: newURL) { self.editStacks[url] = val }
                         if let val = self.savedZoomScales.removeValue(forKey: newURL) { self.savedZoomScales[url] = val }
                         if let val = self.savedPanOffsets.removeValue(forKey: newURL) { self.savedPanOffsets[url] = val }
                         if self.infoOverlayURLs.remove(newURL) != nil { self.infoOverlayURLs.insert(url) }
@@ -2766,6 +2836,7 @@ struct SlideshowView: View {
                     let savedSharpened = self.sharpenedImages[url]
                     let savedUpscaled = self.upscaledImages[url]
                     let savedUpscaleFactor = self.upscaleFactors[url]
+                    let savedEditStack = self.editStacks[url]
                     let savedZoom = self.savedZoomScales[url]
                     let savedPan = self.savedPanOffsets[url]
                     let hadInfoOverlay = self.infoOverlayURLs.contains(url)
@@ -2781,6 +2852,7 @@ struct SlideshowView: View {
                         self.sharpenedImages[url] = nil
                         self.upscaledImages[url] = nil
                         self.upscaleFactors[url] = nil
+                        self.editStacks[url] = nil
                         self.savedZoomScales[url] = nil
                         self.savedPanOffsets[url] = nil
                         self.infoOverlayURLs.remove(url)
@@ -2798,6 +2870,7 @@ struct SlideshowView: View {
                                     if let v = savedSharpened { self.sharpenedImages[url] = v }
                                     if let v = savedUpscaled { self.upscaledImages[url] = v }
                                     if let v = savedUpscaleFactor { self.upscaleFactors[url] = v }
+                                    if let v = savedEditStack { self.editStacks[url] = v }
                                     if let v = savedZoom { self.savedZoomScales[url] = v }
                                     if let v = savedPan { self.savedPanOffsets[url] = v }
                                     if hadInfoOverlay { self.infoOverlayURLs.insert(url) }
@@ -2890,6 +2963,7 @@ struct SlideshowView: View {
                 self.sharpenedImages[sourceURL] = nil
                 self.upscaledImages[sourceURL] = nil
                 self.upscaleFactors[sourceURL] = nil
+                self.editStacks[sourceURL] = nil
                 self.savedZoomScales[sourceURL] = nil
                 self.savedPanOffsets[sourceURL] = nil
                 self.infoOverlayURLs.remove(sourceURL)
@@ -3141,9 +3215,13 @@ struct SlideshowView: View {
                 }
             }
         }
-        enhancedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "enhancedImages") ?? [])
-        smoothedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "smoothedImages") ?? [])
-        sharpenedURLStrings = Set(UserDefaults.standard.stringArray(forKey: "sharpenedImages") ?? [])
+        if let data = UserDefaults.standard.data(forKey: "editStacks"),
+           let decoded = try? JSONDecoder().decode([String: EditStack].self, from: data) {
+            editStacks = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, val -> (URL, EditStack)? in
+                guard let url = URL(string: key) else { return nil }
+                return (url, val)
+            })
+        }
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
         flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
         flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
@@ -3167,9 +3245,10 @@ struct SlideshowView: View {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
         let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
         UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
-        UserDefaults.standard.set(Array(enhancedURLStrings), forKey: "enhancedImages")
-        UserDefaults.standard.set(Array(smoothedURLStrings), forKey: "smoothedImages")
-        UserDefaults.standard.set(Array(sharpenedURLStrings), forKey: "sharpenedImages")
+        let editStacksDict = Dictionary(uniqueKeysWithValues: editStacks.map { ($0.key.absoluteString, $0.value) })
+        if let data = try? JSONEncoder().encode(editStacksDict) {
+            UserDefaults.standard.set(data, forKey: "editStacks")
+        }
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
         UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
         UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")

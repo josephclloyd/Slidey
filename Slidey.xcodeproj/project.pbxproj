@@ -25,6 +25,8 @@
 		G1000002000000000000001 /* SlideshowView+AIEdits.swift in Sources */ = {isa = PBXBuildFile; fileRef = G1000001000000000000001 /* SlideshowView+AIEdits.swift */; };
 		H1000002000000000000001 /* CropController.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000001000000000000001 /* CropController.swift */; };
 		H1000004000000000000001 /* SlideshowView+Crop.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003000000000000001 /* SlideshowView+Crop.swift */; };
+		I1000002000000000000001 /* EditStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = I1000001000000000000001 /* EditStack.swift */; };
+		I1000004000000000000001 /* EditStackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = I1000003000000000000001 /* EditStackTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +60,8 @@
 		G1000001000000000000001 /* SlideshowView+AIEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+AIEdits.swift"; sourceTree = "<group>"; };
 		H1000001000000000000001 /* CropController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CropController.swift; sourceTree = "<group>"; };
 		H1000003000000000000001 /* SlideshowView+Crop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Crop.swift"; sourceTree = "<group>"; };
+		I1000001000000000000001 /* EditStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditStack.swift; sourceTree = "<group>"; };
+		I1000003000000000000001 /* EditStackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditStackTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -101,6 +105,7 @@
 				G1000001000000000000001 /* SlideshowView+AIEdits.swift */,
 				H1000003000000000000001 /* SlideshowView+Crop.swift */,
 				H1000001000000000000001 /* CropController.swift */,
+				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
 				A1000008000000000000001 /* RecentDirectories.swift */,
 				C1000001000000000000001 /* MusicManager.swift */,
@@ -129,6 +134,7 @@
 				B1000004000000000000001 /* RecentDirectoriesTests.swift */,
 				B1000006000000000000001 /* SlideyAppTests.swift */,
 				B1000008000000000000001 /* SlideshowViewTests.swift */,
+				I1000003000000000000001 /* EditStackTests.swift */,
 			);
 			path = SlideyTests;
 			sourceTree = "<group>";
@@ -256,6 +262,7 @@
 				G1000002000000000000001 /* SlideshowView+AIEdits.swift in Sources */,
 				H1000004000000000000001 /* SlideshowView+Crop.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
+				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,
 				A1000007000000000000001 /* RecentDirectories.swift in Sources */,
 				C1000002000000000000001 /* MusicManager.swift in Sources */,
@@ -274,6 +281,7 @@
 				B1000003000000000000001 /* RecentDirectoriesTests.swift in Sources */,
 				B1000005000000000000001 /* SlideyAppTests.swift in Sources */,
 				B1000007000000000000001 /* SlideshowViewTests.swift in Sources */,
+				I1000004000000000000001 /* EditStackTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
