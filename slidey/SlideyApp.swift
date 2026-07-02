@@ -483,6 +483,15 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("Crop\u{2026}") {
+                NotificationCenter.default.post(name: .cropImage, object: nil)
+            }
+            Button("Remove Crop") {
+                NotificationCenter.default.post(name: .removeCrop, object: nil)
+            }
+
+            Divider()
+
             Button("Vignette\u{2026}") {
                 NotificationCenter.default.post(name: .vignetteImage, object: nil)
             }
