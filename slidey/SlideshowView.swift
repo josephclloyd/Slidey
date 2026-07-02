@@ -1760,7 +1760,9 @@ struct SlideshowView: View {
         if let cropRegion = cropRegions[url.absoluteString],
            let image = currentDisplayImage {
             currentDisplayImage = applyCropToImage(image, region: cropRegion) ?? image
-            windowTitle += " [cropped]"
+            if !windowTitle.contains(" [cropped]") {
+                windowTitle += " [cropped]"
+            }
         }
         // Update menu display to reflect active effect for this image
         UserDefaults.standard.set(imageEffects[url] ?? "", forKey: "activePhotoEffect")

@@ -862,6 +862,38 @@ final class CropControllerTests: XCTestCase {
         XCTAssertEqual(recovered.y, original.y, accuracy: 1e-6)
     }
 
+    func testRoundTripConversionCornerAt45Degrees() {
+        let container = CGSize(width: 1024, height: 768)
+        let fitted = CGSize(width: 900, height: 600)
+        let offset = CGSize(width: 10, height: -15)
+        let zoom: CGFloat = 1.2
+        let rotation = Angle(degrees: 45)
+
+        let corner = CGPoint(x: 0.0, y: 0.0)
+        let viewPoint = CropController.normalizedToView(
+            point: corner, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        let recovered = CropController.viewToNormalized(
+            point: viewPoint, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        XCTAssertEqual(recovered.x, corner.x, accuracy: 1e-6)
+        XCTAssertEqual(recovered.y, corner.y, accuracy: 1e-6)
+
+        let oppositeCorner = CGPoint(x: 1.0, y: 1.0)
+        let viewPoint2 = CropController.normalizedToView(
+            point: oppositeCorner, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        let recovered2 = CropController.viewToNormalized(
+            point: viewPoint2, containerSize: container, fittedSize: fitted,
+            zoomScale: zoom, imageOffset: offset, rotationAngle: rotation
+        )
+        XCTAssertEqual(recovered2.x, oppositeCorner.x, accuracy: 1e-6)
+        XCTAssertEqual(recovered2.y, oppositeCorner.y, accuracy: 1e-6)
+    }
+
     func testFittedImageSize() {
         let result = CropController.fittedImageSize(
             imagePixelSize: CGSize(width: 4000, height: 3000),

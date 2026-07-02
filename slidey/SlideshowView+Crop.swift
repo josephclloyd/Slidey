@@ -227,8 +227,8 @@ extension SlideshowView {
 
         cropController.dragCurrentNormalized = normalized
 
-        if cropController.activeHandle != nil {
-            cropController.applyHandleDrag(handle: cropController.activeHandle!, to: normalized)
+        if let handle = cropController.activeHandle {
+            cropController.applyHandleDrag(handle: handle, to: normalized)
         }
     }
 
