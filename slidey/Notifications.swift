@@ -68,4 +68,7 @@ extension NSNotification.Name {
 
     static let colorizeImage = NSNotification.Name("ColorizeImage")
     static let removeColorization = NSNotification.Name("RemoveColorization")
+
+    static let cropImage = NSNotification.Name("CropImage")
+    static let removeCrop = NSNotification.Name("RemoveCrop")
 }
