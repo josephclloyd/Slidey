@@ -239,6 +239,8 @@ If it fails, extract a sub-helper (e.g. `handleEditKeyPress`) or add `// swiftli
 
 **SwiftLint `file_length`/`type_body_length` — extract, never raise the threshold:** When an impl session's new feature pushes `SlideshowView.swift` near the 3500-line (or 3000 type-body) error threshold, the fix is to extract to `SlideshowView+AIEdits.swift` (change `private` to internal on anything the extension needs), not to raise the numbers in `.swiftlint.yml`. This happened in Sprint 20: an impl session bumped both thresholds instead of extracting, even though the sprint plan had explicitly flagged the imminent breach and named the extraction as the required fix. It was caught in review and repaired. Raising the threshold is a one-way ratchet that just gets re-breached by the next feature — treat any diff that touches `.swiftlint.yml`'s `file_length`/`type_body_length` values as a repair-worthy finding during review.
 
+**New `.swift` files under `slidey/` must be registered in `project.pbxproj`:** unlike `Resources/` (a `PBXFileSystemSynchronizedRootGroup` that auto-discovers new files), `slidey/` is a traditional Xcode group with explicit `PBXFileReference`/`PBXBuildFile` entries. A new source file (a new extension, a new controller class) compiles fine in isolation but fails the full build with "cannot find type/symbol in scope" until it's added to the Sources build phase. This has cost a build-failure cycle in two sprints running (Sprint 20's `SlideshowView+AIEdits.swift`, Sprint 21's `CropController.swift`/`SlideshowView+Crop.swift`/`EditStack.swift`). If a sprint issue's plan calls for a new source file, flag this explicitly in the impl spawn/redirect message so the session registers it immediately rather than discovering it via a failed build.
+
 **SlideshowView type-checker timeout:** Xcode 16.3 CI fails with "unable to type-check in reasonable time" when `coreView` or `body` accumulates too many modifier levels. The established fix:
 1. Extract view sections into `@ViewBuilder private var emptyStateContent/imageDisplayContent/overlayViews`
 2. Move the ZStack + onChange/focusable/onKeyPress chain into `private var coreView: some View`
@@ -260,6 +262,12 @@ Never silently accept a bundle — always update the PR body so both issues are 
 
 When a session hits the usage quota mid-work, the branch may not exist yet and changes are
 uncommitted in the main worktree.
+
+**Quota status can lag the actual reset by ~10-15 minutes.** `mcx status`/`mcx call _metrics
+quota_status` occasionally report a `resetsAt` timestamp that has already passed while
+`utilization` still reads 100%. This happened twice in Sprint 21. Do not retry-spawn against
+a stale 100%-with-past-reset-time reading — wait ~10-15 minutes and recheck; it resolves
+itself without any other intervention.
 
 **Zero-progress case (most common when quota hits early):** If multiple sessions all hit quota simultaneously, they typically made no commits and created no remote branches. Check with `git log <branch> ^main --oneline` — if empty, the session left nothing useful. If the build also fails, discard without further investigation:
 
