@@ -6,23 +6,17 @@ import Vision
 extension SlideshowView {
 
     func removeFaceRestoration() {
-        guard let url = imageLoader.currentImageURL else { return }
-        faceRestoredImages[url] = nil
-        updateDisplayImage()
+        removeEdit(.faceRestore)
     }
 
     func removeRedEyeCorrection() {
-        guard let url = imageLoader.currentImageURL else { return }
-        redEyedImages[url] = nil
-        updateDisplayImage()
+        removeEdit(.redEyeRemoval)
     }
 
     func applyRedEyeOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
-                           smoothedImages[url] ?? enhancedImages[url] ??
-                           imageLoader.currentImage else { return }
+        guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -43,23 +37,23 @@ extension SlideshowView {
             let capturedURL = url
             DispatchQueue.main.async {
                 self.redEyedImages[capturedURL] = result
-                self.setDisplay(base: result, for: capturedURL)
+                self.clearCachesDownstream(of: .redEyeRemoval, for: capturedURL)
+                self.editStacks[capturedURL, default: EditStack()].append(.redEyeRemoval)
+                self.effectImages[capturedURL] = nil
+                self.saveFavourites()
+                self.updateDisplayImage()
             }
         }
     }
 
     func restoreBackground() {
-        guard let url = imageLoader.currentImageURL else { return }
-        backgroundRemovedImages[url] = nil
-        updateDisplayImage()
+        removeEdit(.backgroundRemoval)
     }
 
     func removeBackgroundOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
-                           smoothedImages[url] ?? enhancedImages[url] ??
-                           imageLoader.currentImage else { return }
+        guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         DispatchQueue.global(qos: .userInitiated).async {
@@ -86,24 +80,24 @@ extension SlideshowView {
             let capturedURL = url
             DispatchQueue.main.async {
                 self.backgroundRemovedImages[capturedURL] = masked
-                self.setDisplay(base: masked, for: capturedURL)
+                self.clearCachesDownstream(of: .backgroundRemoval, for: capturedURL)
+                self.editStacks[capturedURL, default: EditStack()].append(.backgroundRemoval)
+                self.effectImages[capturedURL] = nil
+                self.saveFavourites()
+                self.updateDisplayImage()
             }
         }
     }
 
     func restoreArtifacts() {
-        guard let url = imageLoader.currentImageURL else { return }
-        artifactRemovedImages[url] = nil
-        updateDisplayImage()
+        removeEdit(.artifactRemoval)
     }
 
     // swiftlint:disable:next function_body_length
     func removeArtifactsOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
-                           smoothedImages[url] ?? enhancedImages[url] ??
-                           imageLoader.currentImage else { return }
+        guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         isRemovingArtifacts = true
@@ -261,17 +255,19 @@ extension SlideshowView {
                 let result = NSImage(cgImage: outCG, size: source.size)
                 DispatchQueue.main.async {
                     self.artifactRemovedImages[capturedURL] = result
-                    self.setDisplay(base: result, for: capturedURL)
+                    self.clearCachesDownstream(of: .artifactRemoval, for: capturedURL)
+                    self.editStacks[capturedURL, default: EditStack()].append(.artifactRemoval)
+                    self.effectImages[capturedURL] = nil
                     self.isRemovingArtifacts = false
+                    self.saveFavourites()
+                    self.updateDisplayImage()
                 }
             }
         }
     }
 
     func removeColorization() {
-        guard let url = imageLoader.currentImageURL else { return }
-        colorizedImages[url] = nil
-        updateDisplayImage()
+        removeEdit(.colorize)
     }
 
     private func imageAppearsGrayscale(_ cgImage: CGImage) -> Bool {
@@ -303,7 +299,7 @@ extension SlideshowView {
     func colorizeCurrentImage(force: Bool = false) {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = imageLoader.currentImage else { return }
+        guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         if !force && !imageAppearsGrayscale(srcCG) {
@@ -471,8 +467,12 @@ extension SlideshowView {
                 let result = NSImage(cgImage: outCG, size: source.size)
                 DispatchQueue.main.async {
                     self.colorizedImages[capturedURL] = result
-                    self.setDisplay(base: result, for: capturedURL)
+                    self.clearCachesDownstream(of: .colorize, for: capturedURL)
+                    self.editStacks[capturedURL, default: EditStack()].append(.colorize)
+                    self.effectImages[capturedURL] = nil
                     self.isColorizing = false
+                    self.saveFavourites()
+                    self.updateDisplayImage()
                 }
             }
         }
@@ -482,9 +482,7 @@ extension SlideshowView {
     func restoreFacesOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring, !isColorizing else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = upscaledImages[url] ?? sharpenedImages[url] ??
-                           smoothedImages[url] ?? enhancedImages[url] ??
-                           imageLoader.currentImage else { return }
+        guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         isFaceRestoring = true
@@ -592,8 +590,12 @@ extension SlideshowView {
             let capturedURL = url
             DispatchQueue.main.async {
                 self.faceRestoredImages[capturedURL] = result
+                self.clearCachesDownstream(of: .faceRestore, for: capturedURL)
+                self.editStacks[capturedURL, default: EditStack()].append(.faceRestore)
+                self.effectImages[capturedURL] = nil
                 self.isFaceRestoring = false
-                self.setDisplay(base: result, for: capturedURL)
+                self.saveFavourites()
+                self.updateDisplayImage()
             }
         }
     }
