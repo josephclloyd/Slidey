@@ -26,6 +26,19 @@ cat /Users/joe/Projects/xCode/slidey/CLAUDE.md
 
 Pay attention to: build command, architecture, key patterns, gotchas.
 
+### 1a. Check for a sprint plan with design guidance for this issue
+
+```bash
+grep -rl "#<N>" /Users/joe/Projects/xCode/slidey/.claude/sprints/sprint-*.md 2>/dev/null
+```
+
+If a sprint plan file references this issue, **read it in full**. Sprint plans are
+frequently written after deeper research than the raw issue text (data models, exact
+function-by-function change lists, key-binding conflict resolutions, file organization
+decisions, explicit scope boundaries) and **supersede the issue body wherever they
+conflict**. Two sprints running have had impl sessions redo work or get corrected mid-flight
+because this step was skipped — check first, not after a build failure or review round.
+
 ### 2. Fetch the issue
 
 ```bash
