@@ -120,3 +120,62 @@ touch `SlideshowView.swift`'s core display pipeline.
 - Full research trail (2 Explore agents + 1 Plan/design agent, each independently
   verified against the actual source) and all open risks/questions for Joe are recorded
   in `/Users/joe/.claude/plans/zazzy-riding-starfish.md`.
+
+## Results
+
+Released: v1.20 — 2026-07-02
+
+### Shipped
+- #168 Crop: drag to select and crop region (`w` / `⇧W`) — new `CropController` (coordinate
+  math, unit-tested) + `SlideshowView+Crop.swift`, normalized `CGRect` persistence, crop
+  applied as the final geometry layer after vignette. PR #201, one repair round.
+- #198 Photo edits now compose in the order applied instead of picking a single
+  highest-priority winner — new `EditStack`/`EditStep` ordered model replaces the fixed
+  priority chain in `updateDisplayImage()`. All 9 content edits (enhance, smooth, sharpen,
+  upscale, faceRestore, redEye, bgRemove, artifactRemove, colorize) now persist order across
+  navigation and relaunch (previously only enhance/smooth/sharpen survived relaunch). PR
+  #202, shipped clean on the first review pass.
+
+### Deviations from plan
+- Sequencing: crop shipped first, then the compositing rework — the reverse of the design
+  research's default recommendation, per Joe's explicit choice. No rework needed to crop as
+  a result; the compositing rework's review confirmed crop's layer position was untouched.
+- The `/implement` skill has no step to consult the sprint plan file — it only reads the raw
+  GitHub issue body + CLAUDE.md. For both issues, the orchestrator proactively sent a
+  follow-up message to the freshly-spawned impl session pointing it at `sprint-21.md`'s
+  detailed design (key binding correction for #168, since the issue text said `c` but that
+  conflicts with flip; the full `EditStack` data model and function-by-function change list
+  for #198). Same gap applied to the default review prompt — the orchestrator manually
+  augmented both review spawns with an explicit cross-check against the sprint plan's design
+  decisions. This caught real deviations both times (see below). **Recommend promoting this
+  into the `/implement` and review phase scripts** — see skill proposal in the diary.
+- New source files (`CropController.swift`, `SlideshowView+Crop.swift`, `EditStack.swift`)
+  are not auto-discovered by the build — `slidey/` is a traditional Xcode group (unlike
+  `Resources/`, which is a `PBXFileSystemSynchronizedRootGroup`), so new files must be
+  registered in `Slidey.xcodeproj/project.pbxproj` explicitly. Issue #168's impl session hit
+  this as a build failure and needed a resumed-session fix; issue #198's session was
+  pre-warned (via the orchestrator's redirect message) and got it right immediately.
+- Both impl sessions and the #198 review session hit the usage quota mid-work multiple
+  times. Two were zero-progress (discarded cleanly, re-spawned); two were partial-progress
+  (resumed in place via `mcx claude send`, no work lost). One quota-status read showed a
+  reset timestamp that had already passed while utilization was still reported at 100% —
+  a real propagation lag, not a one-off; resolved itself within ~15 minutes on recheck.
+
+### Review findings (both real, not false positives)
+- #168: `windowTitle += " [cropped]"` accumulated on every `updateDisplayImage()` call
+  instead of being set once (would have produced `image.jpg [cropped] [cropped] [cropped]`
+  after repeated effect changes); a force-unwrap style nit; and a missing unit test for
+  corner-point round-trip conversion at non-zero rotation — the exact risk the plan's
+  testing section had flagged in advance.
+- #198: none found by review — the sprint-plan cross-check (EditStack shape, function
+  migration completeness, crop-regression check, out-of-scope-item absence, pbxproj
+  registration, test coverage) all passed on the first pass.
+
+### Needs attention
+None — both issues merged clean.
+
+### Stats
+- PRs merged: 3 (#201, #202, plus this results/retro wrap-up)
+- Repair rounds: 1 for #168 (real findings), 0 for #198
+- CI wall time per PR: ~2–4.5 min
+- Multiple quota-hit recoveries across both issues (see Deviations above) — no work lost
