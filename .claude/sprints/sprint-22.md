@@ -26,12 +26,11 @@ planning, not part of this sprint:
 |---|-------|--------------|-------|------------|
 | 129 | Set current image as Desktop Picture | SlideyApp.swift, SlideshowView.swift, Notifications.swift | opus | — |
 | 139 | Print current image (Cmd+P) | SlideyApp.swift, SlideshowView.swift, Notifications.swift | opus | #129 |
-| 135 | Share current image via Share sheet | SlideyApp.swift, SlideshowView.swift, Notifications.swift | opus | #139 |
-| 141 | True shuffle mode for auto-advance | SlideshowController.swift, SlideyApp.swift, SlideshowView.swift (minimal) | opus | #135 |
+| 141 | True shuffle mode for auto-advance | SlideshowController.swift, SlideyApp.swift, SlideshowView.swift (minimal) | opus | #139 |
 | 100 | Star/rate current image (1–5 keys, EXIF rating) | SlideshowView.swift, ImageLoader.swift | opus | #141 |
 
-All five are serialized in one chain — per plan.md's hot-file rule, any two issues that both
-add to `SlideshowView.swift` conflict if run in parallel, and all five touch it (#129/#139/#135
+All four are serialized in one chain — per plan.md's hot-file rule, any two issues that both
+add to `SlideshowView.swift` conflict if run in parallel, and all four touch it (#129/#139
 each add a small `NotificationCenter` receiver to the `.onReceive` chain in `body`; #141
 touches it minimally if at all — kept in the chain for safety on this first larger-batch
 sprint; #100 is the most invasive, placed last).
@@ -43,10 +42,6 @@ sprint; #100 is the most invasive, placed last).
 
 **#139 (Print):** `NSPrintOperation.run()` on a temporary `NSImageView` configured with the
 current `NSImage`. Standard macOS print dialog handles page sizing.
-
-**#135 (Share):** `NSSharingServicePicker(items: [url]).show(relativeTo:of:preferredEdge:)`
-anchored to the window's content view. Menu item disabled with no image loaded (same pattern
-as the other two).
 
 **#141 (Shuffle):** Fisher-Yates shuffle queue — a `[URL]` array seeded from
 `imageLoader.imageURLs.shuffled()`, drained one URL per advance, refilled when empty. This is
@@ -68,6 +63,9 @@ favourites filter.
 
 ## Excluded (with reasons)
 
+- **#135 Share current image via Share sheet** — skipped for this sprint per Joe's request.
+  No technical blocker; the design notes above (`NSSharingServicePicker`) still apply
+  whenever it's picked back up.
 - **#174 Copy/paste adjustments between images** — the issue's own implementation notes
   propose a new `struct ImageAdjustments: Codable` that collides by name with the
   **existing** `ImageAdjustments` struct (exposure/highlights/shadows/vibrance/warmth,
