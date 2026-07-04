@@ -3041,8 +3041,8 @@ struct SlideshowView: View {
         let op = NSPrintOperation(view: printView)
         op.printInfo.horizontalPagination = .fit; op.printInfo.verticalPagination = .fit
         op.printInfo.isHorizontallyCentered = true; op.printInfo.isVerticallyCentered = true
-        op.runModal(for: myWindow ?? NSApplication.shared.keyWindow ?? NSWindow(),
-                    delegate: nil, didRun: nil, contextInfo: nil)
+        guard let window = myWindow ?? NSApplication.shared.keyWindow else { return }
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     private func showOpenWithMenu() {
