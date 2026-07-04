@@ -49,6 +49,8 @@ struct ViewMenuCommands: Commands {
 }
 
 struct SlideshowMenuCommands: Commands {
+    @AppStorage("shuffleOnAdvance") private var shuffleOnAdvance: Bool = false
+
     var body: some Commands {
         CommandMenu("Slideshow") {
             // No keyboard shortcuts here — the SlideshowView's .onKeyPress
@@ -58,6 +60,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Play / Pause Slideshow (Space)") {
                 NotificationCenter.default.post(name: .toggleSlideshow, object: nil)
             }
+            Toggle("Shuffle on Advance", isOn: $shuffleOnAdvance)
+
+            Divider()
+
             Button("Toggle Thumbnail Strip (t)") {
                 NotificationCenter.default.post(name: .toggleThumbnails, object: nil)
             }

@@ -54,7 +54,7 @@ struct SlideshowView: View {
     @State private var isFullScreen = false
     @State var zoomPan = ZoomPanController()
     @State var rotationAngle: Angle = .zero
-    @State private var rotationAngles: [URL: Angle] = [:]
+    @State var rotationAngles: [URL: Angle] = [:]
     @State private var lastDisplayedURL: URL?
     @State private var windowTitle: String = "Slidey"
     @State var enhancedImages: [URL: NSImage] = [:]
@@ -90,21 +90,22 @@ struct SlideshowView: View {
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
+    @AppStorage("shuffleOnAdvance") private var shuffleOnAdvance: Bool = false
     @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
-    @State private var favouriteURLStrings: Set<String> = []
+    @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
-    @State private var denoiseURLLevels: [String: Double] = [:]
+    @State var denoiseURLLevels: [String: Double] = [:]
     @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
-    @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
+    @State var imageEffects: [URL: String] = [:]
     @State var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
-    @State private var flippedHorizontally: Set<String> = []
-    @State private var flippedVertically: Set<String> = []
-    @State private var vignetteURLLevels: [String: Double] = [:]
+    @State var flippedHorizontally: Set<String> = []
+    @State var flippedVertically: Set<String> = []
+    @State var vignetteURLLevels: [String: Double] = [:]
     @State var showVignetteHUD: Bool = false
     @State private var vignetteIntensity: Double = 1.0
     @State private var vignetteBaseImage: NSImage?
@@ -120,7 +121,7 @@ struct SlideshowView: View {
             exposure == 0 && highlights == 0 && shadows == 0 && vibrance == 0 && warmth == 0
         }
     }
-    @State private var adjustmentURLLevels: [String: ImageAdjustments] = [:]
+    @State var adjustmentURLLevels: [String: ImageAdjustments] = [:]
     @State var showAdjustmentsHUD: Bool = false
     @State private var adjustments: ImageAdjustments = .init()
     @State private var adjustmentsBaseImage: NSImage?
@@ -988,7 +989,14 @@ struct SlideshowView: View {
             KeyboardShortcutsView()
         }
         .onChange(of: slideshowInterval) { _, _ in
-            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
+            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
+        }
+        .onChange(of: shuffleOnAdvance) { _, newValue in
+            if newValue && slideshow.isPlaying {
+                slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+            } else if !newValue {
+                slideshow.resetShuffleQueue()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
@@ -1472,23 +1480,46 @@ struct SlideshowView: View {
         imageInfoCache = [:]
         zoomPan.reset()
 
+        slideshow.resetShuffleQueue()
+
         imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
         windowTitle = "Slidey"
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
     private func toggleSlideshow() {
+        if !slideshow.isPlaying && shuffleOnAdvance {
+            slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+        }
         slideshow.toggle(
             isProcessing: isProcessing,
             imageCount: imageLoader.imageURLs.count,
             interval: slideshowInterval,
-            advance: { [imageLoader] in imageLoader.nextImage() },
+            advance: makeAdvanceClosure(),
             shouldStop: { [imageLoader] in
                 let loopEnabled = UserDefaults.standard.object(forKey: "slideshowLoop") as? Bool ?? true
                 return !loopEnabled && imageLoader.currentIndex >= imageLoader.imageURLs.count - 1
             },
             onStart: autoPlayMusic ? { [musicManager] in musicManager.resumeIfConfigured() } : nil
         )
+    }
+
+    private func makeAdvanceClosure() -> () -> Void {
+        { [imageLoader, slideshow] in
+            let shuffleEnabled = UserDefaults.standard.bool(forKey: "shuffleOnAdvance")
+            if shuffleEnabled {
+                if slideshow.shuffleQueue.isEmpty {
+                    slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+                }
+                if let url = slideshow.nextShuffleURL(), let idx = imageLoader.imageURLs.firstIndex(of: url) {
+                    imageLoader.jumpTo(index: idx)
+                } else {
+                    imageLoader.nextImage()
+                }
+            } else {
+                imageLoader.nextImage()
+            }
+        }
     }
 
     /// Consumes a URL from `pendingOpens` (set by AppDelegate when Launch
@@ -1705,7 +1736,7 @@ struct SlideshowView: View {
             applySmartZoomIfNeeded(for: url, image: image)
         }
         // Reset the auto-advance clock on every navigation so the next tick is always `interval` from now.
-        if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
+        if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
     }
 
     func cachedImage(for step: EditStep, url: URL) -> NSImage? {
@@ -3234,65 +3265,6 @@ struct SlideshowView: View {
             }
         } else {
             imageLoader.urlFilter = nil
-        }
-    }
-
-    private func loadFavourites() {
-        if let saved = UserDefaults.standard.stringArray(forKey: "favouriteImages") {
-            favouriteURLStrings = Set(saved)
-        }
-        if let saved = UserDefaults.standard.dictionary(forKey: "rotationAngles") as? [String: Double] {
-            for (key, val) in saved {
-                if let url = URL(string: key) {
-                    rotationAngles[url] = Angle(degrees: val)
-                }
-            }
-        }
-        if let data = UserDefaults.standard.data(forKey: "editStacks"),
-           let decoded = try? JSONDecoder().decode([String: EditStack].self, from: data) {
-            editStacks = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, val -> (URL, EditStack)? in
-                guard let url = URL(string: key) else { return nil }
-                return (url, val)
-            })
-        }
-        denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
-        flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
-        flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
-        vignetteURLLevels = (UserDefaults.standard.dictionary(forKey: "vignetteURLLevels") as? [String: Double]) ?? [:]
-        if let data = UserDefaults.standard.data(forKey: "adjustmentURLLevels"),
-           let decoded = try? JSONDecoder().decode([String: ImageAdjustments].self, from: data) {
-            adjustmentURLLevels = decoded
-        }
-        let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
-        imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
-            guard let url = URL(string: key) else { return nil }
-            return (url, val)
-        })
-        if let data = UserDefaults.standard.data(forKey: "cropRegions"),
-           let decoded = try? JSONDecoder().decode([String: CropRegion].self, from: data) {
-            cropRegions = decoded
-        }
-    }
-
-    func saveFavourites() {
-        UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
-        let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
-        UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
-        let editStacksDict = Dictionary(uniqueKeysWithValues: editStacks.map { ($0.key.absoluteString, $0.value) })
-        if let data = try? JSONEncoder().encode(editStacksDict) {
-            UserDefaults.standard.set(data, forKey: "editStacks")
-        }
-        UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
-        UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
-        UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
-        UserDefaults.standard.set(vignetteURLLevels, forKey: "vignetteURLLevels")
-        if let data = try? JSONEncoder().encode(adjustmentURLLevels) {
-            UserDefaults.standard.set(data, forKey: "adjustmentURLLevels")
-        }
-        let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
-        UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
-        if let data = try? JSONEncoder().encode(cropRegions) {
-            UserDefaults.standard.set(data, forKey: "cropRegions")
         }
     }
 

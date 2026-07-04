@@ -299,6 +299,72 @@ final class SlideshowControllerTests: XCTestCase {
         XCTAssertFalse(controller.isPlaying)
         XCTAssertEqual(advanceCount, 2)
     }
+
+    // MARK: - Shuffle Queue
+
+    func testSeedShuffleQueueContainsAllURLs() {
+        let controller = SlideshowController()
+        let urls = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        controller.seedShuffleQueue(from: urls)
+        XCTAssertEqual(Set(controller.shuffleQueue), Set(urls))
+    }
+
+    func testSeedShuffleQueueExcludingCurrentPutsItLast() {
+        let controller = SlideshowController()
+        let urls = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        let current = urls[2]
+        controller.seedShuffleQueue(from: urls, excluding: current)
+        XCTAssertEqual(controller.shuffleQueue.count, 5)
+        XCTAssertEqual(controller.shuffleQueue.last, current)
+    }
+
+    func testNextShuffleURLDrainsQueue() {
+        let controller = SlideshowController()
+        let urls = (0..<3).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        controller.seedShuffleQueue(from: urls)
+        var consumed: [URL] = []
+        while let url = controller.nextShuffleURL() {
+            consumed.append(url)
+        }
+        XCTAssertEqual(Set(consumed), Set(urls))
+        XCTAssertTrue(controller.shuffleQueue.isEmpty)
+    }
+
+    func testNextShuffleURLReturnsNilWhenEmpty() {
+        let controller = SlideshowController()
+        XCTAssertNil(controller.nextShuffleURL())
+    }
+
+    func testResetShuffleQueueClearsQueue() {
+        let controller = SlideshowController()
+        let urls = (0..<3).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        controller.seedShuffleQueue(from: urls)
+        XCTAssertFalse(controller.shuffleQueue.isEmpty)
+        controller.resetShuffleQueue()
+        XCTAssertTrue(controller.shuffleQueue.isEmpty)
+    }
+
+    func testShuffleQueueNeverRepeatsUntilDrained() {
+        let controller = SlideshowController()
+        let urls = (0..<10).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        controller.seedShuffleQueue(from: urls)
+        var seen = Set<URL>()
+        while let url = controller.nextShuffleURL() {
+            XCTAssertFalse(seen.contains(url), "Duplicate URL before queue was fully drained")
+            seen.insert(url)
+        }
+        XCTAssertEqual(seen, Set(urls))
+    }
+
+    func testReseedAfterDrainProducesFullSet() {
+        let controller = SlideshowController()
+        let urls = (0..<5).map { URL(fileURLWithPath: "/tmp/img\($0).jpg") }
+        controller.seedShuffleQueue(from: urls)
+        while controller.nextShuffleURL() != nil {}
+        controller.seedShuffleQueue(from: urls)
+        XCTAssertEqual(controller.shuffleQueue.count, 5)
+        XCTAssertEqual(Set(controller.shuffleQueue), Set(urls))
+    }
 }
 
 // MARK: - Launch State Guardrails
