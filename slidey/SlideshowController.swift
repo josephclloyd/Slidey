@@ -5,6 +5,24 @@ final class SlideshowController {
     var isPlaying = false
     private var timer: Timer?
     private var shouldStop: (() -> Bool)?
+    private(set) var shuffleQueue: [URL] = []
+
+    func seedShuffleQueue(from urls: [URL], excluding current: URL? = nil) {
+        shuffleQueue = urls.shuffled()
+        if let current, let idx = shuffleQueue.firstIndex(of: current) {
+            shuffleQueue.remove(at: idx)
+            shuffleQueue.append(current)
+        }
+    }
+
+    func nextShuffleURL() -> URL? {
+        guard !shuffleQueue.isEmpty else { return nil }
+        return shuffleQueue.removeFirst()
+    }
+
+    func resetShuffleQueue() {
+        shuffleQueue = []
+    }
 
     func toggle(isProcessing: Bool, imageCount: Int, interval: Double, advance: @escaping () -> Void, shouldStop: (() -> Bool)? = nil, onStart: (() -> Void)? = nil) {
         if isPlaying {
