@@ -76,8 +76,8 @@ struct SlideshowView: View {
     @State private var upscaleProgress: Double = 0
     @State private var isDragOver = false
     @State private var slideshow = SlideshowController()
-    @State private var savedToast: String?
-    @State private var savedToastIsError: Bool = false
+    @State var savedToast: String?
+    @State var savedToastIsError: Bool = false
     @State private var showThumbnails = false
     @State private var infoOverlayURLs: Set<URL> = []
     @State private var imageInfoCache: [URL: ImageInfo] = [:]
@@ -148,6 +148,8 @@ struct SlideshowView: View {
     @State var showColorConfirmAlert = false
     @State var cropRegions: [String: CropRegion] = [:]
     @State var cropController = CropController()
+    @State var imageRatings: [URL: Int] = [:]
+    @AppStorage("minimumRatingFilter") var minimumRatingFilter: Int = 0
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -180,15 +182,15 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
-                Text("★")
+                Text("\u{2605}")
                     .font(.system(size: 48))
                     .foregroundColor(.white.opacity(0.5))
-                Text("No favourites in this directory")
+                Text("No images match the current filter")
                     .font(.title2)
                     .foregroundColor(.white.opacity(0.7))
-                Text("Press x to favourite images, then v to filter")
+                Text(showFavouritesOnly ? "Press x to favourite images, then v to filter" : "Rate images with 1\u{2013}5, then filter from the Slideshow menu")
                     .font(.body)
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -432,6 +434,9 @@ struct SlideshowView: View {
                         }
                         if let factor = upscaleFactors[url] {
                             Text("Upscaled \(factor)\u{00d7}")
+                        }
+                        if let r = imageRatings[url], r > 0 {
+                            Text(String(repeating: "\u{2605}", count: r) + String(repeating: "\u{2606}", count: 5 - r))
                         }
                     }
                     .font(.system(.body, design: .monospaced))
@@ -766,6 +771,7 @@ struct SlideshowView: View {
                 imageLoader.applySort()
             }
         }
+        .onChange(of: minimumRatingFilter) { _, _ in updateFilter() }
         .onAppear {
             imageLoader.sortOrder = sortOrder
             loadFavourites()
@@ -1344,6 +1350,9 @@ struct SlideshowView: View {
         case " ":
             toggleSlideshow()
             return .handled
+        case "0", "1", "2", "3", "4", "5":
+            if let digit = Int(keyPress.characters) { setRating(digit) }
+            return .handled
         default:
             if zoomPan.zoomScale <= 1.0 {
                 imageLoader.nextImage()
@@ -1478,11 +1487,13 @@ struct SlideshowView: View {
         savedPanOffsets = [:]
         infoOverlayURLs = []
         imageInfoCache = [:]
+        imageRatings = [:]
         zoomPan.reset()
 
         slideshow.resetShuffleQueue()
 
         imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
+        loadRatingsForDirectory()
         windowTitle = "Slidey"
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
@@ -1706,6 +1717,7 @@ struct SlideshowView: View {
         artifactRemovedImages = artifactRemovedImages.filter { valid.contains($0.key) }
         colorizedImages = colorizedImages.filter { valid.contains($0.key) }
         editStacks = editStacks.filter { valid.contains($0.key) }
+        imageRatings = imageRatings.filter { valid.contains($0.key) }
         savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
         savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
         infoOverlayURLs = infoOverlayURLs.intersection(valid)
@@ -2771,6 +2783,7 @@ struct SlideshowView: View {
                 if let val = self.artifactRemovedImages.removeValue(forKey: url) { self.artifactRemovedImages[newURL] = val }
                 if let val = self.colorizedImages.removeValue(forKey: url) { self.colorizedImages[newURL] = val }
                 if let val = self.editStacks.removeValue(forKey: url) { self.editStacks[newURL] = val }
+                if let val = self.imageRatings.removeValue(forKey: url) { self.imageRatings[newURL] = val }
                 if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
                 if let val = self.savedPanOffsets.removeValue(forKey: url) { self.savedPanOffsets[newURL] = val }
                 if self.infoOverlayURLs.remove(url) != nil { self.infoOverlayURLs.insert(newURL) }
@@ -2781,7 +2794,7 @@ struct SlideshowView: View {
                     self.favouriteURLStrings.insert(newURL.absoluteString)
                     self.saveFavourites()
                     if self.showFavouritesOnly {
-                        self.updateFavouritesFilter()
+                        self.updateFilter()
                     }
                 }
 
@@ -2815,6 +2828,7 @@ struct SlideshowView: View {
                         if let val = self.artifactRemovedImages.removeValue(forKey: newURL) { self.artifactRemovedImages[url] = val }
                         if let val = self.colorizedImages.removeValue(forKey: newURL) { self.colorizedImages[url] = val }
                         if let val = self.editStacks.removeValue(forKey: newURL) { self.editStacks[url] = val }
+                        if let val = self.imageRatings.removeValue(forKey: newURL) { self.imageRatings[url] = val }
                         if let val = self.savedZoomScales.removeValue(forKey: newURL) { self.savedZoomScales[url] = val }
                         if let val = self.savedPanOffsets.removeValue(forKey: newURL) { self.savedPanOffsets[url] = val }
                         if self.infoOverlayURLs.remove(newURL) != nil { self.infoOverlayURLs.insert(url) }
@@ -2824,7 +2838,7 @@ struct SlideshowView: View {
                         if self.favouriteURLStrings.remove(renamedKey) != nil {
                             self.favouriteURLStrings.insert(url.absoluteString)
                             self.saveFavourites()
-                            if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                            if self.showFavouritesOnly { self.updateFilter() }
                         }
 
                         if self.lastDisplayedURL == newURL { self.lastDisplayedURL = url }
@@ -2873,6 +2887,7 @@ struct SlideshowView: View {
                     let savedUpscaled = self.upscaledImages[url]
                     let savedUpscaleFactor = self.upscaleFactors[url]
                     let savedEditStack = self.editStacks[url]
+                    let savedRating = self.imageRatings[url]
                     let savedZoom = self.savedZoomScales[url]
                     let savedPan = self.savedPanOffsets[url]
                     let hadInfoOverlay = self.infoOverlayURLs.contains(url)
@@ -2889,6 +2904,7 @@ struct SlideshowView: View {
                         self.upscaledImages[url] = nil
                         self.upscaleFactors[url] = nil
                         self.editStacks[url] = nil
+                        self.imageRatings[url] = nil
                         self.savedZoomScales[url] = nil
                         self.savedPanOffsets[url] = nil
                         self.infoOverlayURLs.remove(url)
@@ -2907,6 +2923,7 @@ struct SlideshowView: View {
                                     if let v = savedUpscaled { self.upscaledImages[url] = v }
                                     if let v = savedUpscaleFactor { self.upscaleFactors[url] = v }
                                     if let v = savedEditStack { self.editStacks[url] = v }
+                                    if let v = savedRating { self.imageRatings[url] = v }
                                     if let v = savedZoom { self.savedZoomScales[url] = v }
                                     if let v = savedPan { self.savedPanOffsets[url] = v }
                                     if hadInfoOverlay { self.infoOverlayURLs.insert(url) }
@@ -2914,7 +2931,7 @@ struct SlideshowView: View {
                                     if wasFavourite {
                                         self.favouriteURLStrings.insert(url.absoluteString)
                                         self.saveFavourites()
-                                        if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                                        if self.showFavouritesOnly { self.updateFilter() }
                                     }
                                     self.rotationAngle = self.currentURLRotation()
                                     self.updateDisplayImage()
@@ -3000,6 +3017,7 @@ struct SlideshowView: View {
                 self.upscaledImages[sourceURL] = nil
                 self.upscaleFactors[sourceURL] = nil
                 self.editStacks[sourceURL] = nil
+                self.imageRatings[sourceURL] = nil
                 self.savedZoomScales[sourceURL] = nil
                 self.savedPanOffsets[sourceURL] = nil
                 self.infoOverlayURLs.remove(sourceURL)
@@ -3236,7 +3254,7 @@ struct SlideshowView: View {
         }
         saveFavourites()
         if showFavouritesOnly {
-            updateFavouritesFilter()
+            updateFilter()
         }
         let message = wasFavourite ? "Unfavourited" : "★ Favourited"
         savedToast = message
@@ -3248,7 +3266,7 @@ struct SlideshowView: View {
 
     private func toggleShowFavouritesOnly() {
         showFavouritesOnly.toggle()
-        updateFavouritesFilter()
+        updateFilter()
         let message = showFavouritesOnly ? "★ Favourites only" : "Showing all images"
         savedToast = message
         savedToastIsError = false
@@ -3257,14 +3275,20 @@ struct SlideshowView: View {
         }
     }
 
-    private func updateFavouritesFilter() {
-        if showFavouritesOnly {
-            let favs = favouriteURLStrings
-            imageLoader.urlFilter = { url in
-                favs.contains(url.absoluteString)
-            }
-        } else {
+    func updateFilter() {
+        let wantFavs = showFavouritesOnly
+        let minRating = minimumRatingFilter
+        let favs = favouriteURLStrings
+        let ratings = imageRatings
+
+        if !wantFavs && minRating <= 0 {
             imageLoader.urlFilter = nil
+        } else {
+            imageLoader.urlFilter = { url in
+                if wantFavs && !favs.contains(url.absoluteString) { return false }
+                if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
+                return true
+            }
         }
     }
 

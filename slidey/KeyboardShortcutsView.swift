@@ -47,9 +47,11 @@ struct KeyboardShortcutsView: View {
             ("o", "Colorize B&W photo (DDColor)"),
             ("\u{21e7}O", "Remove colorization"),
         ]),
-        ("Favourites", [
+        ("Favourites & Rating", [
             ("x", "Toggle favourite"),
             ("v", "Show favourites only"),
+            ("1\u{2013}5", "Set star rating"),
+            ("0", "Clear star rating"),
         ]),
         ("Slideshow", [
             ("Space", "Play / pause slideshow"),
