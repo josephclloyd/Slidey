@@ -318,6 +318,13 @@ struct FileMenuCommands: Commands {
             Button("Set as Desktop Picture") {
                 NotificationCenter.default.post(name: .setDesktopPicture, object: nil)
             }
+
+            Divider()
+
+            Button("Print\u{2026}") {
+                NotificationCenter.default.post(name: .printImage, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: .command)
         }
     }
 
