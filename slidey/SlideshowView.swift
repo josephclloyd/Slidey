@@ -968,6 +968,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openWith)) { _ in
             ifKeyWindow { showOpenWithMenu() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.setDesktopPicture)) { _ in
+            ifKeyWindow { setAsDesktopPicture() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
             ifKeyWindow { toggleFavourite() }
         }
@@ -3010,6 +3013,22 @@ struct SlideshowView: View {
     private func openCurrentImageInDefaultApp() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func setAsDesktopPicture() {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let screen = NSScreen.main else { return }
+        do {
+            try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+            let message = "Set as desktop picture"
+            savedToast = message
+            savedToastIsError = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                if savedToast == message { savedToast = nil }
+            }
+        } catch {
+            showErrorToast("Failed to set desktop picture")
+        }
     }
 
     private func showOpenWithMenu() {
