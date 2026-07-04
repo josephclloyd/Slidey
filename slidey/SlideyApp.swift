@@ -312,6 +312,12 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .moveToFolder, object: nil)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Set as Desktop Picture") {
+                NotificationCenter.default.post(name: .setDesktopPicture, object: nil)
+            }
         }
     }
 
