@@ -654,7 +654,6 @@ struct SlideshowView: View {
         }
     }
 
-
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
@@ -970,6 +969,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.setDesktopPicture)) { _ in
             ifKeyWindow { setAsDesktopPicture() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.printImage)) { _ in
+            ifKeyWindow { printCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
             ifKeyWindow { toggleFavourite() }
@@ -3029,6 +3031,18 @@ struct SlideshowView: View {
         } catch {
             showErrorToast("Failed to set desktop picture: \(error.localizedDescription)")
         }
+    }
+
+    private func printCurrentImage() {
+        guard let image = effectiveDisplayImage else { return }
+        let printView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        printView.image = image
+        printView.imageScaling = .scaleProportionallyUpOrDown
+        let op = NSPrintOperation(view: printView)
+        op.printInfo.horizontalPagination = .fit; op.printInfo.verticalPagination = .fit
+        op.printInfo.isHorizontallyCentered = true; op.printInfo.isVerticallyCentered = true
+        guard let window = myWindow ?? NSApplication.shared.keyWindow else { return }
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     private func showOpenWithMenu() {
