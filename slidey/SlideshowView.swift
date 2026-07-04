@@ -3027,7 +3027,7 @@ struct SlideshowView: View {
                 if savedToast == message { savedToast = nil }
             }
         } catch {
-            showErrorToast("Failed to set desktop picture")
+            showErrorToast("Failed to set desktop picture: \(error.localizedDescription)")
         }
     }
 
