@@ -49,6 +49,9 @@ struct ViewMenuCommands: Commands {
 }
 
 struct SlideshowMenuCommands: Commands {
+    @AppStorage("shuffleOnAdvance") private var shuffleOnAdvance: Bool = false
+    @AppStorage("minimumRatingFilter") private var minimumRatingFilter: Int = 0
+
     var body: some Commands {
         CommandMenu("Slideshow") {
             // No keyboard shortcuts here — the SlideshowView's .onKeyPress
@@ -58,6 +61,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Play / Pause Slideshow (Space)") {
                 NotificationCenter.default.post(name: .toggleSlideshow, object: nil)
             }
+            Toggle("Shuffle on Advance", isOn: $shuffleOnAdvance)
+
+            Divider()
+
             Button("Toggle Thumbnail Strip (t)") {
                 NotificationCenter.default.post(name: .toggleThumbnails, object: nil)
             }
@@ -72,6 +79,17 @@ struct SlideshowMenuCommands: Commands {
             }
             Button("Show Favourites Only (v)") {
                 NotificationCenter.default.post(name: .toggleFavouritesOnly, object: nil)
+            }
+
+            Divider()
+
+            Picker("Filter by Rating", selection: $minimumRatingFilter) {
+                Text("Off").tag(0)
+                Text("\u{2265} \u{2605}").tag(1)
+                Text("\u{2265} \u{2605}\u{2605}").tag(2)
+                Text("\u{2265} \u{2605}\u{2605}\u{2605}").tag(3)
+                Text("\u{2265} \u{2605}\u{2605}\u{2605}\u{2605}").tag(4)
+                Text("\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}").tag(5)
             }
         }
     }
@@ -312,6 +330,19 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .moveToFolder, object: nil)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Set as Desktop Picture") {
+                NotificationCenter.default.post(name: .setDesktopPicture, object: nil)
+            }
+
+            Divider()
+
+            Button("Print\u{2026}") {
+                NotificationCenter.default.post(name: .printImage, object: nil)
+            }
+            .keyboardShortcut("p", modifiers: .command)
         }
     }
 

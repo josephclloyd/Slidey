@@ -54,7 +54,7 @@ struct SlideshowView: View {
     @State private var isFullScreen = false
     @State var zoomPan = ZoomPanController()
     @State var rotationAngle: Angle = .zero
-    @State private var rotationAngles: [URL: Angle] = [:]
+    @State var rotationAngles: [URL: Angle] = [:]
     @State private var lastDisplayedURL: URL?
     @State private var windowTitle: String = "Slidey"
     @State var enhancedImages: [URL: NSImage] = [:]
@@ -62,22 +62,22 @@ struct SlideshowView: View {
     @State var sharpenedImages: [URL: NSImage] = [:]
     @State var upscaledImages: [URL: NSImage] = [:]
     @State private var upscaleFactors: [URL: Int] = [:]
-    @State private var activeUpscaleScale: Int = 4
+    @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
     @State var isProcessing = false
-    @State private var debugOutput = ""
-    @State private var showDebugWindow = false
+    @State var debugOutput = ""
+    @State var showDebugWindow = false
     @State private var showFilename = false
-    @State private var upscaleCancelled = false
-    @State private var upscaleProgress: Double = 0
+    @State var upscaleCancelled = false
+    @State var upscaleProgress: Double = 0
     @State private var isDragOver = false
     @State private var slideshow = SlideshowController()
-    @State private var savedToast: String?
-    @State private var savedToastIsError: Bool = false
+    @State var savedToast: String?
+    @State var savedToastIsError: Bool = false
     @State private var showThumbnails = false
     @State private var infoOverlayURLs: Set<URL> = []
     @State private var imageInfoCache: [URL: ImageInfo] = [:]
@@ -90,21 +90,22 @@ struct SlideshowView: View {
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
+    @AppStorage("shuffleOnAdvance") private var shuffleOnAdvance: Bool = false
     @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
     @State private var showKeyboardShortcuts = false
-    @State private var favouriteURLStrings: Set<String> = []
+    @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
-    @State private var denoiseURLLevels: [String: Double] = [:]
+    @State var denoiseURLLevels: [String: Double] = [:]
     @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
-    @State private var imageEffects: [URL: String] = [:]      // active CIPhotoEffect* name per URL
+    @State var imageEffects: [URL: String] = [:]
     @State var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
-    @State private var flippedHorizontally: Set<String> = []
-    @State private var flippedVertically: Set<String> = []
-    @State private var vignetteURLLevels: [String: Double] = [:]
+    @State var flippedHorizontally: Set<String> = []
+    @State var flippedVertically: Set<String> = []
+    @State var vignetteURLLevels: [String: Double] = [:]
     @State var showVignetteHUD: Bool = false
     @State private var vignetteIntensity: Double = 1.0
     @State private var vignetteBaseImage: NSImage?
@@ -120,7 +121,7 @@ struct SlideshowView: View {
             exposure == 0 && highlights == 0 && shadows == 0 && vibrance == 0 && warmth == 0
         }
     }
-    @State private var adjustmentURLLevels: [String: ImageAdjustments] = [:]
+    @State var adjustmentURLLevels: [String: ImageAdjustments] = [:]
     @State var showAdjustmentsHUD: Bool = false
     @State private var adjustments: ImageAdjustments = .init()
     @State private var adjustmentsBaseImage: NSImage?
@@ -132,7 +133,7 @@ struct SlideshowView: View {
     @State private var mouseMonitor: Any?
     @State private var keyUpMonitor: Any?
     @State private var cursorShowTask: Task<Void, Never>?
-    @State private var showingOriginal: Bool = false
+    @State var showingOriginal: Bool = false
     @State var faceRestoredImages: [URL: NSImage] = [:]
     @State var isFaceRestoring = false
     @State var faceRestoreProgress: Double = 0
@@ -147,6 +148,8 @@ struct SlideshowView: View {
     @State var showColorConfirmAlert = false
     @State var cropRegions: [String: CropRegion] = [:]
     @State var cropController = CropController()
+    @State var imageRatings: [URL: Int] = [:]
+    @AppStorage("minimumRatingFilter") var minimumRatingFilter: Int = 0
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -179,15 +182,15 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if showFavouritesOnly && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
-                Text("★")
+                Text("\u{2605}")
                     .font(.system(size: 48))
                     .foregroundColor(.white.opacity(0.5))
-                Text("No favourites in this directory")
+                Text("No images match the current filter")
                     .font(.title2)
                     .foregroundColor(.white.opacity(0.7))
-                Text("Press x to favourite images, then v to filter")
+                Text(showFavouritesOnly ? "Press x to favourite images, then v to filter" : "Rate images with 1\u{2013}5, then filter from the Slideshow menu")
                     .font(.body)
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -372,8 +375,66 @@ struct SlideshowView: View {
     }
 
     @ViewBuilder
+    private var imageInfoOverlay: some View {
+        if let url = imageLoader.currentImageURL,
+           infoOverlayURLs.contains(url),
+           let info = imageInfoCache[url] {
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let upscaled = upscaledImages[url] {
+                            let upW = Int(upscaled.size.width)
+                            let upH = Int(upscaled.size.height)
+                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
+                        } else {
+                            Text("\(info.width) \u{00d7} \(info.height) px")
+                        }
+                        Text(info.fileSizeText)
+                        Text(info.dateTakenText)
+                        if let camera = info.cameraText {
+                            Text(camera)
+                        }
+                        if let factor = upscaleFactors[url] {
+                            Text("Upscaled \(factor)\u{00d7}")
+                        }
+                        if let r = imageRatings[url], r > 0 {
+                            Text(String(repeating: "\u{2605}", count: r) + String(repeating: "\u{2606}", count: 5 - r))
+                        }
+                    }
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.leading, 20)
+                    .padding(.top, 20)
+                    Spacer()
+                }
+                Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder
     private var overlayViews: some View {
-        // Thumbnail strip overlay (bottom)
+        thumbnailOverlay
+        filenameOverlay
+        imageInfoOverlay
+        toastOverlay
+        trackInfoOverlay
+        directoryMissingOverlay
+        progressOverlays
+        debugOverlay
+        denoiseHUD
+        vignetteHUD
+        adjustmentsHUD
+        cropOverlay
+        beforeAfterLabel
+    }
+
+    @ViewBuilder
+    private var thumbnailOverlay: some View {
         if showThumbnails && !imageLoader.imageURLs.isEmpty {
             VStack {
                 Spacer()
@@ -383,8 +444,10 @@ struct SlideshowView: View {
                 }
             }
         }
+    }
 
-        // Filename + counter overlay
+    @ViewBuilder
+    private var filenameOverlay: some View {
         if showFilename, let url = imageLoader.currentImageURL {
             VStack {
                 Spacer()
@@ -409,45 +472,10 @@ struct SlideshowView: View {
                 }
             }
         }
+    }
 
-        // Image info overlay (top-left)
-        if let url = imageLoader.currentImageURL,
-           infoOverlayURLs.contains(url),
-           let info = imageInfoCache[url] {
-            VStack {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let upscaled = upscaledImages[url] {
-                            let upW = Int(upscaled.size.width)
-                            let upH = Int(upscaled.size.height)
-                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
-                        } else {
-                            Text("\(info.width) \u{00d7} \(info.height) px")
-                        }
-                        Text(info.fileSizeText)
-                        Text(info.dateTakenText)
-                        if let camera = info.cameraText {
-                            Text(camera)
-                        }
-                        if let factor = upscaleFactors[url] {
-                            Text("Upscaled \(factor)\u{00d7}")
-                        }
-                    }
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.black.opacity(0.6))
-                    .cornerRadius(6)
-                    .padding(.leading, 20)
-                    .padding(.top, 20)
-                    Spacer()
-                }
-                Spacer()
-            }
-        }
-
-        // Save confirmation / error toast (lower-right)
+    @ViewBuilder
+    private var toastOverlay: some View {
         if let savedToast {
             VStack {
                 Spacer()
@@ -466,8 +494,10 @@ struct SlideshowView: View {
             }
             .transition(.opacity)
         }
+    }
 
-        // Track info overlay (top-right, shown briefly on track change)
+    @ViewBuilder
+    private var trackInfoOverlay: some View {
         if musicManager.showTrackOverlay, let title = musicManager.currentTrackTitle {
             VStack {
                 HStack {
@@ -493,167 +523,7 @@ struct SlideshowView: View {
             }
             .transition(.opacity)
         }
-
-        directoryMissingOverlay
-
-        // Progress indicator overlay
-        if isProcessing {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("AI Upscaling Image (\(activeUpscaleScale)x)…")
-                        .font(.headline)
-                        .foregroundColor(.white)
-
-                    ProgressView(value: upscaleProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                        .accessibilityLabel("Upscale progress")
-                        .accessibilityValue("\(Int(upscaleProgress * 100)) percent")
-
-                    Text("\(Int(upscaleProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                        .accessibilityHidden(true)
-
-                    Button("Cancel", action: cancelUpscale)
-                        .buttonStyle(.bordered)
-                        .tint(.white)
-                        .accessibilityLabel("Cancel upscaling")
-                        .accessibilityHint("Stops the AI upscaling process")
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isFaceRestoring {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Restoring Faces\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView(value: faceRestoreProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                    Text("\(Int(faceRestoreProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isRemovingArtifacts {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Removing Artifacts\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView(value: artifactRemovalProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                    Text("\(Int(artifactRemovalProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isColorizing {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Colorizing\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(1.2)
-                        .tint(.white)
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        // Debug window overlay (toggle with 'd' key)
-        if showDebugWindow {
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Upscaling Debug Output")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button("Close") {
-                            showDebugWindow = false
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Close debug window")
-                    }
-
-                    ScrollView {
-                        Text(debugOutput)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(height: 300)
-
-                    if isProcessing {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                            .tint(.white)
-                    }
-                }
-                .padding(20)
-                .background(.black.opacity(0.9))
-                .cornerRadius(12)
-                .frame(width: 700)
-                .padding(.bottom, 40)
-            }
-        }
-
-        denoiseHUD
-        vignetteHUD
-        adjustmentsHUD
-        cropOverlay
-
-        // Before/After: "Original" label shown while holding b
-        if showingOriginal {
-            VStack {
-                Text("Original")
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.black.opacity(0.7))
-                    .cornerRadius(6)
-                    .padding(.top, 20)
-                Spacer()
-            }
-        }
     }
-
 
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
@@ -699,7 +569,7 @@ struct SlideshowView: View {
         .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
     }
 
-    private var coreView: some View {
+    private var coreViewBase: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
@@ -726,13 +596,9 @@ struct SlideshowView: View {
             DispatchQueue.main.async { onImageURLsEmptyChanged(isEmpty) }
         }
         .onChange(of: imageLoader.imageURLs) { _, newURLs in
-            // Drop any per-URL session state for files that no longer exist
-            // in the directory (deleted on disk, or we switched folders).
             DispatchQueue.main.async { onImageURLsChanged(newURLs) }
         }
         .onChange(of: imageLoader.currentIndex) { _, _ in
-            // Defer mutations to after the view update to suppress
-            // "Publishing changes from within view updates" warnings from @Observable.
             DispatchQueue.main.async { onCurrentIndexChanged() }
         }
         .onChange(of: isFullScreen) { _, fullScreen in
@@ -752,6 +618,10 @@ struct SlideshowView: View {
                 window.level = .floating
             }
         }
+    }
+
+    private var coreView: some View {
+        coreViewBase
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
@@ -766,6 +636,7 @@ struct SlideshowView: View {
                 imageLoader.applySort()
             }
         }
+        .onChange(of: minimumRatingFilter) { _, _ in updateFilter() }
         .onAppear {
             imageLoader.sortOrder = sortOrder
             loadFavourites()
@@ -968,6 +839,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openWith)) { _ in
             ifKeyWindow { showOpenWithMenu() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.setDesktopPicture)) { _ in
+            ifKeyWindow { setAsDesktopPicture() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.printImage)) { _ in
+            ifKeyWindow { printCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
             ifKeyWindow { toggleFavourite() }
         }
@@ -983,7 +860,14 @@ struct SlideshowView: View {
             KeyboardShortcutsView()
         }
         .onChange(of: slideshowInterval) { _, _ in
-            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
+            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
+        }
+        .onChange(of: shuffleOnAdvance) { _, newValue in
+            if newValue && slideshow.isPlaying {
+                slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+            } else if !newValue {
+                slideshow.resetShuffleQueue()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
             if let window = notification.object as? NSWindow, window == myWindow {
@@ -1331,6 +1215,9 @@ struct SlideshowView: View {
         case " ":
             toggleSlideshow()
             return .handled
+        case "0", "1", "2", "3", "4", "5":
+            if let digit = Int(keyPress.characters) { setRating(digit) }
+            return .handled
         default:
             if zoomPan.zoomScale <= 1.0 {
                 imageLoader.nextImage()
@@ -1465,25 +1352,50 @@ struct SlideshowView: View {
         savedPanOffsets = [:]
         infoOverlayURLs = []
         imageInfoCache = [:]
+        imageRatings = [:]
         zoomPan.reset()
 
+        slideshow.resetShuffleQueue()
+
         imageLoader.loadImagesFromDirectory(url: url, jumpTo: targetURL)
+        loadRatingsForDirectory()
         windowTitle = "Slidey"
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
     private func toggleSlideshow() {
+        if !slideshow.isPlaying && shuffleOnAdvance {
+            slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+        }
         slideshow.toggle(
             isProcessing: isProcessing,
             imageCount: imageLoader.imageURLs.count,
             interval: slideshowInterval,
-            advance: { [imageLoader] in imageLoader.nextImage() },
+            advance: makeAdvanceClosure(),
             shouldStop: { [imageLoader] in
                 let loopEnabled = UserDefaults.standard.object(forKey: "slideshowLoop") as? Bool ?? true
                 return !loopEnabled && imageLoader.currentIndex >= imageLoader.imageURLs.count - 1
             },
             onStart: autoPlayMusic ? { [musicManager] in musicManager.resumeIfConfigured() } : nil
         )
+    }
+
+    private func makeAdvanceClosure() -> () -> Void {
+        { [imageLoader, slideshow] in
+            let shuffleEnabled = UserDefaults.standard.bool(forKey: "shuffleOnAdvance")
+            if shuffleEnabled {
+                if slideshow.shuffleQueue.isEmpty {
+                    slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
+                }
+                if let url = slideshow.nextShuffleURL(), let idx = imageLoader.imageURLs.firstIndex(of: url) {
+                    imageLoader.jumpTo(index: idx)
+                } else {
+                    imageLoader.nextImage()
+                }
+            } else {
+                imageLoader.nextImage()
+            }
+        }
     }
 
     /// Consumes a URL from `pendingOpens` (set by AppDelegate when Launch
@@ -1670,6 +1582,7 @@ struct SlideshowView: View {
         artifactRemovedImages = artifactRemovedImages.filter { valid.contains($0.key) }
         colorizedImages = colorizedImages.filter { valid.contains($0.key) }
         editStacks = editStacks.filter { valid.contains($0.key) }
+        imageRatings = imageRatings.filter { valid.contains($0.key) }
         savedZoomScales = savedZoomScales.filter { valid.contains($0.key) }
         savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
         infoOverlayURLs = infoOverlayURLs.intersection(valid)
@@ -1700,7 +1613,7 @@ struct SlideshowView: View {
             applySmartZoomIfNeeded(for: url, image: image)
         }
         // Reset the auto-advance clock on every navigation so the next tick is always `interval` from now.
-        if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval) { [imageLoader] in imageLoader.nextImage() } }
+        if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
     }
 
     func cachedImage(for step: EditStep, url: URL) -> NSImage? {
@@ -2577,7 +2490,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func cancelUpscale() {
+    func cancelUpscale() {
         upscaleCancelled = true
     }
 
@@ -2735,6 +2648,7 @@ struct SlideshowView: View {
                 if let val = self.artifactRemovedImages.removeValue(forKey: url) { self.artifactRemovedImages[newURL] = val }
                 if let val = self.colorizedImages.removeValue(forKey: url) { self.colorizedImages[newURL] = val }
                 if let val = self.editStacks.removeValue(forKey: url) { self.editStacks[newURL] = val }
+                if let val = self.imageRatings.removeValue(forKey: url) { self.imageRatings[newURL] = val }
                 if let val = self.savedZoomScales.removeValue(forKey: url) { self.savedZoomScales[newURL] = val }
                 if let val = self.savedPanOffsets.removeValue(forKey: url) { self.savedPanOffsets[newURL] = val }
                 if self.infoOverlayURLs.remove(url) != nil { self.infoOverlayURLs.insert(newURL) }
@@ -2745,7 +2659,7 @@ struct SlideshowView: View {
                     self.favouriteURLStrings.insert(newURL.absoluteString)
                     self.saveFavourites()
                     if self.showFavouritesOnly {
-                        self.updateFavouritesFilter()
+                        self.updateFilter()
                     }
                 }
 
@@ -2779,6 +2693,7 @@ struct SlideshowView: View {
                         if let val = self.artifactRemovedImages.removeValue(forKey: newURL) { self.artifactRemovedImages[url] = val }
                         if let val = self.colorizedImages.removeValue(forKey: newURL) { self.colorizedImages[url] = val }
                         if let val = self.editStacks.removeValue(forKey: newURL) { self.editStacks[url] = val }
+                        if let val = self.imageRatings.removeValue(forKey: newURL) { self.imageRatings[url] = val }
                         if let val = self.savedZoomScales.removeValue(forKey: newURL) { self.savedZoomScales[url] = val }
                         if let val = self.savedPanOffsets.removeValue(forKey: newURL) { self.savedPanOffsets[url] = val }
                         if self.infoOverlayURLs.remove(newURL) != nil { self.infoOverlayURLs.insert(url) }
@@ -2788,7 +2703,7 @@ struct SlideshowView: View {
                         if self.favouriteURLStrings.remove(renamedKey) != nil {
                             self.favouriteURLStrings.insert(url.absoluteString)
                             self.saveFavourites()
-                            if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                            if self.showFavouritesOnly { self.updateFilter() }
                         }
 
                         if self.lastDisplayedURL == newURL { self.lastDisplayedURL = url }
@@ -2837,6 +2752,7 @@ struct SlideshowView: View {
                     let savedUpscaled = self.upscaledImages[url]
                     let savedUpscaleFactor = self.upscaleFactors[url]
                     let savedEditStack = self.editStacks[url]
+                    let savedRating = self.imageRatings[url]
                     let savedZoom = self.savedZoomScales[url]
                     let savedPan = self.savedPanOffsets[url]
                     let hadInfoOverlay = self.infoOverlayURLs.contains(url)
@@ -2853,6 +2769,7 @@ struct SlideshowView: View {
                         self.upscaledImages[url] = nil
                         self.upscaleFactors[url] = nil
                         self.editStacks[url] = nil
+                        self.imageRatings[url] = nil
                         self.savedZoomScales[url] = nil
                         self.savedPanOffsets[url] = nil
                         self.infoOverlayURLs.remove(url)
@@ -2871,6 +2788,7 @@ struct SlideshowView: View {
                                     if let v = savedUpscaled { self.upscaledImages[url] = v }
                                     if let v = savedUpscaleFactor { self.upscaleFactors[url] = v }
                                     if let v = savedEditStack { self.editStacks[url] = v }
+                                    if let v = savedRating { self.imageRatings[url] = v }
                                     if let v = savedZoom { self.savedZoomScales[url] = v }
                                     if let v = savedPan { self.savedPanOffsets[url] = v }
                                     if hadInfoOverlay { self.infoOverlayURLs.insert(url) }
@@ -2878,7 +2796,7 @@ struct SlideshowView: View {
                                     if wasFavourite {
                                         self.favouriteURLStrings.insert(url.absoluteString)
                                         self.saveFavourites()
-                                        if self.showFavouritesOnly { self.updateFavouritesFilter() }
+                                        if self.showFavouritesOnly { self.updateFilter() }
                                     }
                                     self.rotationAngle = self.currentURLRotation()
                                     self.updateDisplayImage()
@@ -2964,6 +2882,7 @@ struct SlideshowView: View {
                 self.upscaledImages[sourceURL] = nil
                 self.upscaleFactors[sourceURL] = nil
                 self.editStacks[sourceURL] = nil
+                self.imageRatings[sourceURL] = nil
                 self.savedZoomScales[sourceURL] = nil
                 self.savedPanOffsets[sourceURL] = nil
                 self.infoOverlayURLs.remove(sourceURL)
@@ -3010,6 +2929,34 @@ struct SlideshowView: View {
     private func openCurrentImageInDefaultApp() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func setAsDesktopPicture() {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let screen = NSScreen.main else { return }
+        do {
+            try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+            let message = "Set as desktop picture"
+            savedToast = message
+            savedToastIsError = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                if savedToast == message { savedToast = nil }
+            }
+        } catch {
+            showErrorToast("Failed to set desktop picture: \(error.localizedDescription)")
+        }
+    }
+
+    private func printCurrentImage() {
+        guard let image = effectiveDisplayImage else { return }
+        let printView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
+        printView.image = image
+        printView.imageScaling = .scaleProportionallyUpOrDown
+        let op = NSPrintOperation(view: printView)
+        op.printInfo.horizontalPagination = .fit; op.printInfo.verticalPagination = .fit
+        op.printInfo.isHorizontallyCentered = true; op.printInfo.isVerticallyCentered = true
+        guard let window = myWindow ?? NSApplication.shared.keyWindow else { return }
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     private func showOpenWithMenu() {
@@ -3172,7 +3119,7 @@ struct SlideshowView: View {
         }
         saveFavourites()
         if showFavouritesOnly {
-            updateFavouritesFilter()
+            updateFilter()
         }
         let message = wasFavourite ? "Unfavourited" : "★ Favourited"
         savedToast = message
@@ -3184,7 +3131,7 @@ struct SlideshowView: View {
 
     private func toggleShowFavouritesOnly() {
         showFavouritesOnly.toggle()
-        updateFavouritesFilter()
+        updateFilter()
         let message = showFavouritesOnly ? "★ Favourites only" : "Showing all images"
         savedToast = message
         savedToastIsError = false
@@ -3193,73 +3140,20 @@ struct SlideshowView: View {
         }
     }
 
-    private func updateFavouritesFilter() {
-        if showFavouritesOnly {
-            let favs = favouriteURLStrings
-            imageLoader.urlFilter = { url in
-                favs.contains(url.absoluteString)
-            }
-        } else {
+    func updateFilter() {
+        let wantFavs = showFavouritesOnly
+        let minRating = minimumRatingFilter
+        let favs = favouriteURLStrings
+        let ratings = imageRatings
+
+        if !wantFavs && minRating <= 0 {
             imageLoader.urlFilter = nil
-        }
-    }
-
-    private func loadFavourites() {
-        if let saved = UserDefaults.standard.stringArray(forKey: "favouriteImages") {
-            favouriteURLStrings = Set(saved)
-        }
-        if let saved = UserDefaults.standard.dictionary(forKey: "rotationAngles") as? [String: Double] {
-            for (key, val) in saved {
-                if let url = URL(string: key) {
-                    rotationAngles[url] = Angle(degrees: val)
-                }
+        } else {
+            imageLoader.urlFilter = { url in
+                if wantFavs && !favs.contains(url.absoluteString) { return false }
+                if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
+                return true
             }
-        }
-        if let data = UserDefaults.standard.data(forKey: "editStacks"),
-           let decoded = try? JSONDecoder().decode([String: EditStack].self, from: data) {
-            editStacks = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, val -> (URL, EditStack)? in
-                guard let url = URL(string: key) else { return nil }
-                return (url, val)
-            })
-        }
-        denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
-        flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
-        flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
-        vignetteURLLevels = (UserDefaults.standard.dictionary(forKey: "vignetteURLLevels") as? [String: Double]) ?? [:]
-        if let data = UserDefaults.standard.data(forKey: "adjustmentURLLevels"),
-           let decoded = try? JSONDecoder().decode([String: ImageAdjustments].self, from: data) {
-            adjustmentURLLevels = decoded
-        }
-        let rawEffects = (UserDefaults.standard.dictionary(forKey: "photoEffects") as? [String: String]) ?? [:]
-        imageEffects = Dictionary(uniqueKeysWithValues: rawEffects.compactMap { key, val -> (URL, String)? in
-            guard let url = URL(string: key) else { return nil }
-            return (url, val)
-        })
-        if let data = UserDefaults.standard.data(forKey: "cropRegions"),
-           let decoded = try? JSONDecoder().decode([String: CropRegion].self, from: data) {
-            cropRegions = decoded
-        }
-    }
-
-    func saveFavourites() {
-        UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
-        let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
-        UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
-        let editStacksDict = Dictionary(uniqueKeysWithValues: editStacks.map { ($0.key.absoluteString, $0.value) })
-        if let data = try? JSONEncoder().encode(editStacksDict) {
-            UserDefaults.standard.set(data, forKey: "editStacks")
-        }
-        UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
-        UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
-        UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
-        UserDefaults.standard.set(vignetteURLLevels, forKey: "vignetteURLLevels")
-        if let data = try? JSONEncoder().encode(adjustmentURLLevels) {
-            UserDefaults.standard.set(data, forKey: "adjustmentURLLevels")
-        }
-        let effectsDict = Dictionary(uniqueKeysWithValues: imageEffects.map { ($0.key.absoluteString, $0.value) })
-        UserDefaults.standard.set(effectsDict, forKey: "photoEffects")
-        if let data = try? JSONEncoder().encode(cropRegions) {
-            UserDefaults.standard.set(data, forKey: "cropRegions")
         }
     }
 

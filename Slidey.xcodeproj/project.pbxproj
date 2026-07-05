@@ -27,6 +27,9 @@
 		H1000004000000000000001 /* SlideshowView+Crop.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1000003000000000000001 /* SlideshowView+Crop.swift */; };
 		I1000002000000000000001 /* EditStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = I1000001000000000000001 /* EditStack.swift */; };
 		I1000004000000000000001 /* EditStackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = I1000003000000000000001 /* EditStackTests.swift */; };
+		J1000002000000000000001 /* SlideshowView+Persistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = J1000001000000000000001 /* SlideshowView+Persistence.swift */; };
+		K1000004000000000000001 /* RatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K1000003000000000000001 /* RatingTests.swift */; };
+		K1000002000000000000001 /* SlideshowView+Rating.swift in Sources */ = {isa = PBXBuildFile; fileRef = K1000001000000000000001 /* SlideshowView+Rating.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +65,9 @@
 		H1000003000000000000001 /* SlideshowView+Crop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Crop.swift"; sourceTree = "<group>"; };
 		I1000001000000000000001 /* EditStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditStack.swift; sourceTree = "<group>"; };
 		I1000003000000000000001 /* EditStackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditStackTests.swift; sourceTree = "<group>"; };
+		J1000001000000000000001 /* SlideshowView+Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Persistence.swift"; sourceTree = "<group>"; };
+		K1000001000000000000001 /* SlideshowView+Rating.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Rating.swift"; sourceTree = "<group>"; };
+		K1000003000000000000001 /* RatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -104,6 +110,8 @@
 				A1000004000000000000001 /* SlideshowView.swift */,
 				G1000001000000000000001 /* SlideshowView+AIEdits.swift */,
 				H1000003000000000000001 /* SlideshowView+Crop.swift */,
+				J1000001000000000000001 /* SlideshowView+Persistence.swift */,
+				K1000001000000000000001 /* SlideshowView+Rating.swift */,
 				H1000001000000000000001 /* CropController.swift */,
 				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
@@ -135,6 +143,7 @@
 				B1000006000000000000001 /* SlideyAppTests.swift */,
 				B1000008000000000000001 /* SlideshowViewTests.swift */,
 				I1000003000000000000001 /* EditStackTests.swift */,
+				K1000003000000000000001 /* RatingTests.swift */,
 			);
 			path = SlideyTests;
 			sourceTree = "<group>";
@@ -261,6 +270,8 @@
 				A1000003000000000000001 /* SlideshowView.swift in Sources */,
 				G1000002000000000000001 /* SlideshowView+AIEdits.swift in Sources */,
 				H1000004000000000000001 /* SlideshowView+Crop.swift in Sources */,
+				J1000002000000000000001 /* SlideshowView+Persistence.swift in Sources */,
+				K1000002000000000000001 /* SlideshowView+Rating.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
 				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,
@@ -282,6 +293,7 @@
 				B1000005000000000000001 /* SlideyAppTests.swift in Sources */,
 				B1000007000000000000001 /* SlideshowViewTests.swift in Sources */,
 				I1000004000000000000001 /* EditStackTests.swift in Sources */,
+				K1000004000000000000001 /* RatingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
