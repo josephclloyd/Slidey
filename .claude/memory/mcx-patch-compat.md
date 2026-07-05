@@ -1,6 +1,6 @@
 ---
 name: mcx-patch-compat
-description: mcx spawn fails when claude not on PATH — use claudeBinary config; patch-update fails on Claude 2.1.152+
+description: mcx spawn fails when claude not on PATH — use claudeBinary config; patch-update fails on Claude 2.1.152+. Config verified still required as of Sprint 22 (2026-07-05) — every sprint's pre-flight checks confirm the patched binary is still active.
 metadata: 
   node_type: memory
   type: project
