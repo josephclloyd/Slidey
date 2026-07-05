@@ -62,18 +62,18 @@ struct SlideshowView: View {
     @State var sharpenedImages: [URL: NSImage] = [:]
     @State var upscaledImages: [URL: NSImage] = [:]
     @State private var upscaleFactors: [URL: Int] = [:]
-    @State private var activeUpscaleScale: Int = 4
+    @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
     @State private var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
     @State var isProcessing = false
-    @State private var debugOutput = ""
-    @State private var showDebugWindow = false
+    @State var debugOutput = ""
+    @State var showDebugWindow = false
     @State private var showFilename = false
-    @State private var upscaleCancelled = false
-    @State private var upscaleProgress: Double = 0
+    @State var upscaleCancelled = false
+    @State var upscaleProgress: Double = 0
     @State private var isDragOver = false
     @State private var slideshow = SlideshowController()
     @State var savedToast: String?
@@ -133,7 +133,7 @@ struct SlideshowView: View {
     @State private var mouseMonitor: Any?
     @State private var keyUpMonitor: Any?
     @State private var cursorShowTask: Task<Void, Never>?
-    @State private var showingOriginal: Bool = false
+    @State var showingOriginal: Bool = false
     @State var faceRestoredImages: [URL: NSImage] = [:]
     @State var isFaceRestoring = false
     @State var faceRestoreProgress: Double = 0
@@ -418,7 +418,23 @@ struct SlideshowView: View {
 
     @ViewBuilder
     private var overlayViews: some View {
-        // Thumbnail strip overlay (bottom)
+        thumbnailOverlay
+        filenameOverlay
+        imageInfoOverlay
+        toastOverlay
+        trackInfoOverlay
+        directoryMissingOverlay
+        progressOverlays
+        debugOverlay
+        denoiseHUD
+        vignetteHUD
+        adjustmentsHUD
+        cropOverlay
+        beforeAfterLabel
+    }
+
+    @ViewBuilder
+    private var thumbnailOverlay: some View {
         if showThumbnails && !imageLoader.imageURLs.isEmpty {
             VStack {
                 Spacer()
@@ -428,8 +444,10 @@ struct SlideshowView: View {
                 }
             }
         }
+    }
 
-        // Filename + counter overlay
+    @ViewBuilder
+    private var filenameOverlay: some View {
         if showFilename, let url = imageLoader.currentImageURL {
             VStack {
                 Spacer()
@@ -454,10 +472,10 @@ struct SlideshowView: View {
                 }
             }
         }
+    }
 
-        imageInfoOverlay
-
-        // Save confirmation / error toast (lower-right)
+    @ViewBuilder
+    private var toastOverlay: some View {
         if let savedToast {
             VStack {
                 Spacer()
@@ -476,8 +494,10 @@ struct SlideshowView: View {
             }
             .transition(.opacity)
         }
+    }
 
-        // Track info overlay (top-right, shown briefly on track change)
+    @ViewBuilder
+    private var trackInfoOverlay: some View {
         if musicManager.showTrackOverlay, let title = musicManager.currentTrackTitle {
             VStack {
                 HStack {
@@ -502,165 +522,6 @@ struct SlideshowView: View {
                 Spacer()
             }
             .transition(.opacity)
-        }
-
-        directoryMissingOverlay
-
-        // Progress indicator overlay
-        if isProcessing {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("AI Upscaling Image (\(activeUpscaleScale)x)…")
-                        .font(.headline)
-                        .foregroundColor(.white)
-
-                    ProgressView(value: upscaleProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                        .accessibilityLabel("Upscale progress")
-                        .accessibilityValue("\(Int(upscaleProgress * 100)) percent")
-
-                    Text("\(Int(upscaleProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                        .accessibilityHidden(true)
-
-                    Button("Cancel", action: cancelUpscale)
-                        .buttonStyle(.bordered)
-                        .tint(.white)
-                        .accessibilityLabel("Cancel upscaling")
-                        .accessibilityHint("Stops the AI upscaling process")
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isFaceRestoring {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Restoring Faces\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView(value: faceRestoreProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                    Text("\(Int(faceRestoreProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isRemovingArtifacts {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Removing Artifacts\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView(value: artifactRemovalProgress)
-                        .progressViewStyle(.linear)
-                        .tint(.white)
-                        .frame(width: 220)
-                    Text("\(Int(artifactRemovalProgress * 100))%")
-                        .font(.system(.subheadline, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        if isColorizing {
-            VStack {
-                Spacer()
-                VStack(spacing: 15) {
-                    Text("Colorizing\u{2026}")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .scaleEffect(1.2)
-                        .tint(.white)
-                }
-                .padding(30)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .padding(.bottom, 100)
-            }
-        }
-
-        // Debug window overlay (toggle with 'd' key)
-        if showDebugWindow {
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("Upscaling Debug Output")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button("Close") {
-                            showDebugWindow = false
-                        }
-                        .buttonStyle(.bordered)
-                        .accessibilityLabel("Close debug window")
-                    }
-
-                    ScrollView {
-                        Text(debugOutput)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(height: 300)
-
-                    if isProcessing {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                            .tint(.white)
-                    }
-                }
-                .padding(20)
-                .background(.black.opacity(0.9))
-                .cornerRadius(12)
-                .frame(width: 700)
-                .padding(.bottom, 40)
-            }
-        }
-
-        denoiseHUD
-        vignetteHUD
-        adjustmentsHUD
-        cropOverlay
-
-        // Before/After: "Original" label shown while holding b
-        if showingOriginal {
-            VStack {
-                Text("Original")
-                    .font(.system(.callout, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.black.opacity(0.7))
-                    .cornerRadius(6)
-                    .padding(.top, 20)
-                Spacer()
-            }
         }
     }
 
@@ -2629,7 +2490,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func cancelUpscale() {
+    func cancelUpscale() {
         upscaleCancelled = true
     }
 
