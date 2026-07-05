@@ -102,3 +102,73 @@ favourites filter.
 `0`–`5` for rating (issue #100's own spec). No new single-letter bindings needed for the
 other four issues (menu-only or existing-key-adjacent). Confirmed `0`-`5` are unused in the
 current `handleCharacterKeyPress` registry.
+
+## Results
+
+Released: v1.21 — 2026-07-05
+
+### Shipped
+- #129 Set current image as Desktop Picture (File menu) — PR #204, 2 minor repair rounds
+  (error toast missing `localizedDescription`, toast delay 2.0s vs 2.5s convention). Hit the
+  automated max-review-round cap on genuinely minor, already-fixed findings — orchestrator
+  manually verified both fixes and overrode the `needs-attention` transition to `done`.
+- #139 Print current image (Cmd+P) — PR #205, 1 repair round (real bug: `NSWindow()` fallback
+  orphaned the print sheet; fixed to guard-and-return matching `showOpenWithMenu`).
+- #141 True shuffle mode for auto-advance — PR #207, 0 repair rounds, clean on first review.
+  Fisher-Yates queue lives in `SlideshowController.swift` with 7 new unit tests.
+- #100 Star/rate current image via EXIF (`0`-`5` keys) — PR #208, 1 repair round (missing
+  tests, invalid XMP value `""` instead of `"0"` on clear — would have corrupted metadata in
+  Lightroom/exiftool, no-op guard missing causing unnecessary disk writes). First feature in
+  the app writing to the original file (atomic via temp file + `replaceItem`). Needed 3
+  separate CI-only type-checker-timeout fixes (see Deviations) before review could even start.
+
+### Deviations from plan
+- Skipped #135 (Share sheet) per Joe's request after planning — no technical reason, just
+  deferred.
+- **`/implement`'s new sprint-plan-check step (added in Sprint 21's retro) had a real gap**:
+  it only greps already-merged `sprint-*.md` files, but the *current* sprint's plan lives
+  only on the unmerged `sprint-N` branch until retro time — so it never actually found
+  `sprint-22.md` for any of this sprint's four issues. Worked around by manually sending each
+  freshly-spawned impl session the relevant plan excerpt via `mcx claude send`. A proper fix
+  (checking `origin/sprint-$(cat .claude/sprints/.active)` via `git show`) was drafted but
+  reverted before committing — mid-sprint, in the shared main-checkout working directory,
+  it risked being swept into the active impl session's own commit. Belongs on a `meta/`
+  branch between sprints; not applied this sprint. See skill proposals below.
+- Discovered `repair.ts` doesn't clear `repair_session_id` when review sends a PR back for
+  a second repair round — the phase call returned `in-flight` pointing at the round-1 repair
+  session instead of spawning round 2. Worked around each time by manually clearing the state
+  key before retrying. Same "don't fix phase scripts mid-sprint" reasoning applies.
+- #100 (star/rate) needed **three separate rounds** of the documented `SlideshowView.swift`
+  type-checker-timeout fix (CLAUDE.md's known Xcode 16.3 gotcha) before CI went green — the
+  first extraction (`imageInfoOverlay`) was necessary but insufficient; a second, more
+  aggressive pass split all of `overlayViews` into ~13 separate `@ViewBuilder` vars, which
+  fixed that expression but revealed the real bottleneck was `coreView`'s modifier chain
+  (already ~15 `.onChange` handlers before this feature); the third round split `coreView`
+  into `coreViewBase` + `coreView`. Root cause misdiagnosed twice before reading the actual
+  code directly settled it. `SlideshowView.swift` ends the sprint at 3361 lines (down from
+  3531 mid-sprint), with substantial headroom for future sprints.
+- One orchestrator mistake: `git add -A` on a manual commit (persisting an impl session's
+  quota-interrupted-but-verified fix) accidentally swept in the untracked `.mcx/` daemon log
+  directory. Caught and fixed in a follow-up commit; `.mcx/` is now gitignored, so this can't
+  recur. All subsequent repair-session prompts were given an explicit "use `git add` with
+  specific filenames" instruction as a result.
+- Two quota-status readings showed a `resetsAt` timestamp already in the past while
+  `utilization` still reported 100% — consistent with Sprint 21's retro note that this lags
+  by ~10-15 minutes; both resolved on recheck without further action.
+- Filed #206 (File menu items should have a real disabled state, via `@FocusedValue`) as a
+  follow-up after both #129 and #139 hit the same "always-enabled-with-no-op-guard" pattern
+  in review — accepted as intentional precedent both times rather than fixed ad hoc per-issue.
+
+### Needs attention
+None — all four issues merged clean (one required an orchestrator override of an
+automated `needs-attention` transition that was itself a false-positive round-cap, not a
+real blocker; documented above).
+
+### Stats
+- PRs merged: 4 (#204, #205, #207, #208), plus this results/retro wrap-up
+- Repair rounds: #129 — 2 (both minor); #139 — 1 (real bug); #141 — 0; #100 — 1 (real bugs)
+  plus 3 rounds of CI-only type-checker-timeout fixes (not review repair rounds)
+- Follow-up issues filed: #206 (File menu disabled-state sweep)
+- `SlideshowView.swift`: 3467 → 3361 lines net across the sprint (extractions outpaced
+  additions — `SlideshowView+Persistence.swift` and further `overlayViews`/`coreView`
+  splits freed more headroom than the four features added)
