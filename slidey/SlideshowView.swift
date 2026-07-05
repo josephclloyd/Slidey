@@ -569,7 +569,7 @@ struct SlideshowView: View {
         .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
     }
 
-    private var coreView: some View {
+    private var coreViewBase: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
@@ -596,13 +596,9 @@ struct SlideshowView: View {
             DispatchQueue.main.async { onImageURLsEmptyChanged(isEmpty) }
         }
         .onChange(of: imageLoader.imageURLs) { _, newURLs in
-            // Drop any per-URL session state for files that no longer exist
-            // in the directory (deleted on disk, or we switched folders).
             DispatchQueue.main.async { onImageURLsChanged(newURLs) }
         }
         .onChange(of: imageLoader.currentIndex) { _, _ in
-            // Defer mutations to after the view update to suppress
-            // "Publishing changes from within view updates" warnings from @Observable.
             DispatchQueue.main.async { onCurrentIndexChanged() }
         }
         .onChange(of: isFullScreen) { _, fullScreen in
@@ -622,6 +618,10 @@ struct SlideshowView: View {
                 window.level = .floating
             }
         }
+    }
+
+    private var coreView: some View {
+        coreViewBase
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
         }
