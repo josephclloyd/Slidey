@@ -6,6 +6,7 @@ extension SlideshowView {
     func setRating(_ rating: Int) {
         guard let url = imageLoader.currentImageURL else { return }
         let clamped = max(0, min(5, rating))
+        guard clamped != (imageRatings[url] ?? 0) else { return }
         let previous = imageRatings[url]
 
         if clamped == 0 {
@@ -70,7 +71,7 @@ private func readAllRatings(for urls: [URL]) -> [URL: Int] {
     return result
 }
 
-private func readRatingFromFile(_ url: URL) -> Int? {
+func readRatingFromFile(_ url: URL) -> Int? {
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
           let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil) else {
         return nil
@@ -85,7 +86,7 @@ private func readRatingFromFile(_ url: URL) -> Int? {
     return nil
 }
 
-private func writeRatingToFile(url: URL, rating: Int) throws {
+func writeRatingToFile(url: URL, rating: Int) throws {
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
           let uti = CGImageSourceGetType(source) else {
         throw RatingError.cannotReadSource
@@ -111,7 +112,7 @@ private func writeRatingToFile(url: URL, rating: Int) throws {
     let success: Bool
     if rating == 0 {
         success = CGImageMetadataSetValueWithPath(
-            metadata, nil, "xmp:Rating" as CFString, "" as CFTypeRef
+            metadata, nil, "xmp:Rating" as CFString, "0" as CFTypeRef
         )
     } else {
         success = CGImageMetadataSetValueWithPath(
@@ -153,7 +154,7 @@ private func writeRatingToFile(url: URL, rating: Int) throws {
     )
 }
 
-private enum RatingError: LocalizedError {
+enum RatingError: LocalizedError {
     case cannotReadSource
     case cannotCreateMetadata
     case cannotSetTag
