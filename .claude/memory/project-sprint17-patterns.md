@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "Image edit compositing pipeline (EditStack model), key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns, pbxproj file registration — updated through Sprint 21"
+description: "Image edit compositing pipeline (EditStack model), key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns, pbxproj file registration, coreView/overlayViews type-checker limits — updated through Sprint 22"
 metadata: 
   node_type: memory
   type: project
@@ -71,10 +71,10 @@ Consistent structure across all three HUDs:
 
 ## `handleCharacterKeyPress` key registry
 
-Keys bound as of Sprint 21:
-`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background, `l`=artifact-removal, `L`=restore-artifacts, `o`=colorize, `O`=remove-colorization, `w`=crop, `W`=remove-crop.
+Keys bound as of Sprint 22:
+`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background, `l`=artifact-removal, `L`=restore-artifacts, `o`=colorize, `O`=remove-colorization, `w`=crop, `W`=remove-crop, `0`=clear-rating, `1`-`5`=set-rating.
 
-Free slots: `y`/`Y` only.
+Free slots: `y`/`Y` only. Digits `6`-`9` are also free (only `0`-`5` are used, per the 0-5 star rating scale).
 
 SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep cyclomatic` after adding keys.
 
@@ -102,7 +102,7 @@ the new, higher number.
 
 ---
 
-## New Swift source files must be registered in project.pbxproj (recurring, Sprints 20-21)
+## New Swift source files must be registered in project.pbxproj (recurring, Sprints 20-22)
 
 `slidey/` is a **traditional Xcode group** with explicit `PBXFileReference` +
 `PBXBuildFile` entries — unlike `Resources/`, which is a `PBXFileSystemSynchronizedRootGroup`
@@ -111,13 +111,46 @@ a new controller class, etc.) will compile fine in isolation but fail the full b
 "cannot find type/symbol in scope" until it's explicitly added to
 `Slidey.xcodeproj/project.pbxproj`'s Sources build phase.
 
-**Why this matters:** this has bitten an impl session in two sprints running — Sprint 20's
-`SlideshowView+AIEdits.swift` and Sprint 21's `CropController.swift`/`SlideshowView+Crop.swift`/
-`EditStack.swift` all needed this fix, sometimes discovered only after a build failure ate a
-repair cycle. **When creating a new file under `slidey/`: immediately add matching
-`PBXFileReference` + `PBXBuildFile` entries to `project.pbxproj`, following the pattern of
-an existing recently-added file (e.g. search for `SlideshowView+Crop.swift`'s entries as a
-template) — do not wait for the build to fail first.**
+**Why this matters:** this has bitten an impl session in three sprints running — Sprint 20's
+`SlideshowView+AIEdits.swift`, Sprint 21's `CropController.swift`/`SlideshowView+Crop.swift`/
+`EditStack.swift`, and Sprint 22's `SlideshowView+Persistence.swift`/`SlideshowView+Rating.swift`
+all needed this fix, sometimes discovered only after a build failure ate a repair cycle.
+**When creating a new file under `slidey/`: immediately add matching `PBXFileReference` +
+`PBXBuildFile` entries to `project.pbxproj`, following the pattern of an existing
+recently-added file (e.g. search for `SlideshowView+Crop.swift`'s entries as a template) —
+do not wait for the build to fail first.** In Sprint 22 this warning was included proactively
+in the impl session's initial spawn message (rather than waiting for a build failure) and the
+session got it right on the first attempt — that's the pattern to repeat going forward.
+
+---
+
+## `coreView`/`overlayViews` type-checker timeout is a *standing* risk, not per-feature (Sprint 22)
+
+CLAUDE.md documents the Xcode 16.3 type-checker timeout gotcha ("unable to type-check this
+expression in reasonable time") for `coreView`/`body`/`overlayViews`. As of Sprint 22, treat
+this as **structurally near its limit at all times**, not just a risk for unusually complex
+features. `coreView`'s modifier chain already had ~15 `.onChange` handlers before Sprint 22
+started; adding even one small, simple one (`.onChange(of: minimumRatingFilter)`, from the
+star-rating feature) was enough to tip it over.
+
+**Two independent extraction targets, not one:**
+1. `overlayViews`'s inline content (split into ~13 separate `@ViewBuilder private var`s in
+   Sprint 22 — `imageInfoOverlay`, `thumbnailOverlay`, `filenameOverlay`, etc.)
+2. `coreView`'s own **modifier chain length** (split into `coreViewBase` — ZStack + `.overlay`
+   + `.onDrop` + roughly half the `.onChange` handlers — and `coreView`, which chains the
+   remaining modifiers onto `coreViewBase`)
+
+**Why this matters — misdiagnosis costs rounds:** in Sprint 22, the type-checker error's
+reported line number shifts as earlier code shrinks, and it consistently points at `coreView`'s
+`ZStack {` opening line regardless of whether the *actual* problem is inside the ZStack body
+(`overlayViews`) or in the modifier chain *after* the ZStack. Extracting `overlayViews`
+content alone was necessary but insufficient — the error persisted (at a shifted line) because
+the modifier chain itself was still too long. **Do not assume the first extraction worked
+just because the line number changed — recheck CI, and if it's still the same class of error,
+read `coreView`'s full modifier chain directly to count `.onChange`/`.onReceive`/similar
+calls before extracting further.** If a sprint plans any feature that adds a new modifier to
+`coreView`, budget for a possible chain-split repair round, the same way `SlideshowView.swift`'s
+file-length limit is already budgeted for.
 
 ---
 
