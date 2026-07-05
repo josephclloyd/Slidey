@@ -1,3 +1,4 @@
+import SwiftUI
 import AppKit
 import CoreImage
 import CoreML
@@ -596,6 +597,164 @@ extension SlideshowView {
                 self.isFaceRestoring = false
                 self.saveFavourites()
                 self.updateDisplayImage()
+            }
+        }
+    }
+
+    @ViewBuilder
+    var progressOverlays: some View {
+        if isProcessing {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("AI Upscaling Image (\(activeUpscaleScale)x)\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    ProgressView(value: upscaleProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+                        .accessibilityLabel("Upscale progress")
+                        .accessibilityValue("\(Int(upscaleProgress * 100)) percent")
+
+                    Text("\(Int(upscaleProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                        .accessibilityHidden(true)
+
+                    Button("Cancel", action: cancelUpscale)
+                        .buttonStyle(.bordered)
+                        .tint(.white)
+                        .accessibilityLabel("Cancel upscaling")
+                        .accessibilityHint("Stops the AI upscaling process")
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
+        if isFaceRestoring {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Restoring Faces\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView(value: faceRestoreProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+                    Text("\(Int(faceRestoreProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
+        if isRemovingArtifacts {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Removing Artifacts\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView(value: artifactRemovalProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 220)
+                    Text("\(Int(artifactRemovalProgress * 100))%")
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+
+        if isColorizing {
+            VStack {
+                Spacer()
+                VStack(spacing: 15) {
+                    Text("Colorizing\u{2026}")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(1.2)
+                        .tint(.white)
+                }
+                .padding(30)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .padding(.bottom, 100)
+            }
+        }
+    }
+
+    @ViewBuilder
+    var debugOverlay: some View {
+        if showDebugWindow {
+            VStack {
+                Spacer()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Upscaling Debug Output")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button("Close") {
+                            showDebugWindow = false
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel("Close debug window")
+                    }
+
+                    ScrollView {
+                        Text(debugOutput)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(height: 300)
+
+                    if isProcessing {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                            .tint(.white)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.9))
+                .cornerRadius(12)
+                .frame(width: 700)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    @ViewBuilder
+    var beforeAfterLabel: some View {
+        if showingOriginal {
+            VStack {
+                Text("Original")
+                    .font(.system(.callout, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.7))
+                    .cornerRadius(6)
+                    .padding(.top, 20)
+                Spacer()
             }
         }
     }
