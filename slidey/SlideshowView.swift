@@ -375,45 +375,7 @@ struct SlideshowView: View {
     }
 
     @ViewBuilder
-    private var overlayViews: some View {
-        // Thumbnail strip overlay (bottom)
-        if showThumbnails && !imageLoader.imageURLs.isEmpty {
-            VStack {
-                Spacer()
-                ThumbnailStrip(imageLoader: imageLoader, favouriteURLStrings: favouriteURLStrings) { index in
-                    guard !isProcessing else { return }
-                    imageLoader.jumpTo(index: index)
-                }
-            }
-        }
-
-        // Filename + counter overlay
-        if showFilename, let url = imageLoader.currentImageURL {
-            VStack {
-                Spacer()
-                HStack {
-                    HStack(spacing: 12) {
-                        Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white)
-                        let counter = "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)"
-                        Text(showFavouritesOnly ? "★ \(counter)" : counter)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.7))
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.6))
-                    .cornerRadius(6)
-                    .padding(.leading, 20)
-                    .padding(.bottom, 20)
-                    Spacer()
-                }
-            }
-        }
-
-        // Image info overlay (top-left)
+    private var imageInfoOverlay: some View {
         if let url = imageLoader.currentImageURL,
            infoOverlayURLs.contains(url),
            let info = imageInfoCache[url] {
@@ -452,6 +414,48 @@ struct SlideshowView: View {
                 Spacer()
             }
         }
+    }
+
+    @ViewBuilder
+    private var overlayViews: some View {
+        // Thumbnail strip overlay (bottom)
+        if showThumbnails && !imageLoader.imageURLs.isEmpty {
+            VStack {
+                Spacer()
+                ThumbnailStrip(imageLoader: imageLoader, favouriteURLStrings: favouriteURLStrings) { index in
+                    guard !isProcessing else { return }
+                    imageLoader.jumpTo(index: index)
+                }
+            }
+        }
+
+        // Filename + counter overlay
+        if showFilename, let url = imageLoader.currentImageURL {
+            VStack {
+                Spacer()
+                HStack {
+                    HStack(spacing: 12) {
+                        Text(favouriteURLStrings.contains(url.absoluteString) ? "★ \(url.lastPathComponent)" : url.lastPathComponent)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white)
+                        let counter = "\(imageLoader.currentIndex + 1) / \(imageLoader.imageURLs.count)"
+                        Text(showFavouritesOnly ? "★ \(counter)" : counter)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.7))
+                            .monospacedDigit()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.leading, 20)
+                    .padding(.bottom, 20)
+                    Spacer()
+                }
+            }
+        }
+
+        imageInfoOverlay
 
         // Save confirmation / error toast (lower-right)
         if let savedToast {
