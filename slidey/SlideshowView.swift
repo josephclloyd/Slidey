@@ -431,6 +431,27 @@ struct SlideshowView: View {
         adjustmentsHUD
         cropOverlay
         beforeAfterLabel
+        slideshowProgressBar
+    }
+
+    @ViewBuilder
+    private var slideshowProgressBar: some View {
+        if slideshow.isPlaying, let startDate = slideshow.lastAdvanceDate {
+            TimelineView(.animation) { context in
+                let elapsed = context.date.timeIntervalSince(startDate)
+                let fraction = min(elapsed / slideshowInterval, 1.0)
+                VStack {
+                    Spacer()
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(.white.opacity(0.5))
+                            .frame(width: geo.size.width * fraction, height: 3)
+                    }
+                    .frame(height: 3)
+                }
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder
