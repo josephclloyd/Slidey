@@ -250,13 +250,25 @@ final class FileMenuNotificationTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
 
+    func testExportVisibleImagesNotificationFires() {
+        let expectation = expectation(description: "exportVisibleImages notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .exportVisibleImages, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .exportVisibleImages, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
     func testCopyMoveNotificationNamesMatchExpectedStrings() {
         XCTAssertEqual(NSNotification.Name.copyToFolder.rawValue, "CopyToFolder")
         XCTAssertEqual(NSNotification.Name.moveToFolder.rawValue, "MoveToFolder")
+        XCTAssertEqual(NSNotification.Name.exportVisibleImages.rawValue, "ExportVisibleImages")
     }
 
     func testCopyMoveNotificationNamesAreUnique() {
-        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash]
+        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash, .exportVisibleImages]
         let uniqueNames = Set(names)
         XCTAssertEqual(uniqueNames.count, names.count)
     }

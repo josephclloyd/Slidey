@@ -860,6 +860,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToFolder)) { _ in
             ifKeyWindow { moveCurrentImageToFolder() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportVisibleImages)) { _ in
+            ifKeyWindow { exportVisibleImages() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
         }
@@ -2892,6 +2895,48 @@ struct SlideshowView: View {
                 }
             } catch {
                 self.showErrorToast("Copy failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func exportVisibleImages() {
+        let urls = imageLoader.imageURLs
+        guard !urls.isEmpty else { return }
+        pickDestinationFolder { destDir in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var successCount = 0
+                var failCount = 0
+                let total = urls.count
+                for (index, sourceURL) in urls.enumerated() {
+                    let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
+                    do {
+                        if FileManager.default.fileExists(atPath: destURL.path) {
+                            try FileManager.default.removeItem(at: destURL)
+                        }
+                        try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                        successCount += 1
+                    } catch {
+                        failCount += 1
+                    }
+                    let progress = "Exported \(index + 1) of \(total)"
+                    DispatchQueue.main.async {
+                        self.savedToast = progress
+                        self.savedToastIsError = false
+                    }
+                }
+                DispatchQueue.main.async {
+                    if failCount > 0 {
+                        self.showErrorToast("Exported \(successCount) of \(total) — \(failCount) failed")
+                    } else {
+                        let folderName = destDir.lastPathComponent
+                        let message = "Exported \(successCount) images to \(folderName)"
+                        self.savedToast = message
+                        self.savedToastIsError = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            if self.savedToast == message { self.savedToast = nil }
+                        }
+                    }
+                }
             }
         }
     }
