@@ -1,6 +1,17 @@
 import SwiftUI
 import AppKit
 
+struct HasCurrentImageKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
+extension FocusedValues {
+    var hasCurrentImage: Bool? {
+        get { self[HasCurrentImageKey.self] }
+        set { self[HasCurrentImageKey.self] = newValue }
+    }
+}
+
 @main
 struct SlideyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -260,6 +271,9 @@ struct SettingsView: View {
 struct FileMenuCommands: Commands {
     @ObservedObject var recentDirectories: RecentDirectories
     @Environment(\.openWindow) private var openWindow
+    @FocusedValue(\.hasCurrentImage) private var hasCurrentImage
+
+    private var imageLoaded: Bool { hasCurrentImage ?? false }
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -292,6 +306,7 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .saveEditedImage, object: nil)
             }
             .keyboardShortcut("s", modifiers: .command)
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -299,25 +314,30 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .revealInFinder, object: nil)
             }
             .keyboardShortcut("r", modifiers: .command)
+            .disabled(!imageLoaded)
 
             Button("Open in Preview") {
                 NotificationCenter.default.post(name: .openInPreview, object: nil)
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Button("Open With\u{2026}") {
                 NotificationCenter.default.post(name: .openWith, object: nil)
             }
+            .disabled(!imageLoaded)
 
             Button("Rename\u{2026}") {
                 NotificationCenter.default.post(name: .renameImage, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Button("Move to Trash") {
                 NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }
             .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -325,17 +345,20 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyToFolder, object: nil)
             }
             .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(!imageLoaded)
 
             Button("Move to Folder\u{2026}") {
                 NotificationCenter.default.post(name: .moveToFolder, object: nil)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Divider()
 
             Button("Set as Desktop Picture") {
                 NotificationCenter.default.post(name: .setDesktopPicture, object: nil)
             }
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -343,6 +366,7 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .printImage, object: nil)
             }
             .keyboardShortcut("p", modifiers: .command)
+            .disabled(!imageLoaded)
         }
     }
 
