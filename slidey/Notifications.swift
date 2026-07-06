@@ -28,6 +28,7 @@ extension NSNotification.Name {
     static let moveToTrash = NSNotification.Name("MoveToTrash")
     static let copyToFolder = NSNotification.Name("CopyToFolder")
     static let moveToFolder = NSNotification.Name("MoveToFolder")
+    static let exportVisibleImages = NSNotification.Name("ExportVisibleImages")
     static let renameImage = NSNotification.Name("RenameImage")
     static let copyImage = NSNotification.Name("CopyImage")
     static let copyFilePath = NSNotification.Name("CopyFilePath")
@@ -46,6 +47,9 @@ extension NSNotification.Name {
 
     static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
     static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
+    static let toggleFullScreen = NSNotification.Name("ToggleFullScreen")
+    static let zoomIn = NSNotification.Name("ZoomIn")
+    static let zoomOut = NSNotification.Name("ZoomOut")
 
     static let flipHorizontal = NSNotification.Name("FlipHorizontal")
     static let flipVertical = NSNotification.Name("FlipVertical")

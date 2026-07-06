@@ -431,6 +431,27 @@ struct SlideshowView: View {
         adjustmentsHUD
         cropOverlay
         beforeAfterLabel
+        slideshowProgressBar
+    }
+
+    @ViewBuilder
+    private var slideshowProgressBar: some View {
+        if slideshow.isPlaying, let startDate = slideshow.lastAdvanceDate {
+            TimelineView(.animation) { context in
+                let elapsed = context.date.timeIntervalSince(startDate)
+                let fraction = min(elapsed / slideshowInterval, 1.0)
+                VStack {
+                    Spacer()
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(.white.opacity(0.5))
+                            .frame(width: geo.size.width * fraction, height: 3)
+                    }
+                    .frame(height: 3)
+                }
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     @ViewBuilder
@@ -543,7 +564,8 @@ struct SlideshowView: View {
                     onRightClick: {
                         guard !isProcessing else { return }
                         imageLoader.previousImage()
-                    }
+                    },
+                    dragURL: imageLoader.currentImageURL
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(imageAccessibilityLabel)
@@ -739,6 +761,20 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
+            ifKeyWindow { toggleFullScreen() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomIn)) { _ in
+            ifKeyWindow {
+                zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomOut)) { _ in
+            ifKeyWindow {
+                zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
+                if zoomPan.zoomScale <= 1.0 { zoomPan.reset() }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipHorizontal)) { _ in
             ifKeyWindow { flipCurrentImageHorizontal() }
         }
@@ -823,6 +859,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToFolder)) { _ in
             ifKeyWindow { moveCurrentImageToFolder() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportVisibleImages)) { _ in
+            ifKeyWindow { exportVisibleImages() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
@@ -950,6 +989,7 @@ struct SlideshowView: View {
         } message: {
             Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
         }
+        .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
 
     /// Run `action` only if this view's window is the key window AND no
@@ -1012,8 +1052,8 @@ struct SlideshowView: View {
         if key == .escape {
             if isProcessing {
                 cancelUpscale()
-            } else {
-                toggleFullScreen()
+            } else if isFullScreen {
+                exitFullScreen()
             }
             return .handled
         }
@@ -2855,6 +2895,48 @@ struct SlideshowView: View {
                 }
             } catch {
                 self.showErrorToast("Copy failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func exportVisibleImages() {
+        let urls = imageLoader.imageURLs
+        guard !urls.isEmpty else { return }
+        pickDestinationFolder { destDir in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var successCount = 0
+                var failCount = 0
+                let total = urls.count
+                for (index, sourceURL) in urls.enumerated() {
+                    let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
+                    do {
+                        if FileManager.default.fileExists(atPath: destURL.path) {
+                            try FileManager.default.removeItem(at: destURL)
+                        }
+                        try FileManager.default.copyItem(at: sourceURL, to: destURL)
+                        successCount += 1
+                    } catch {
+                        failCount += 1
+                    }
+                    let progress = "Exported \(index + 1) of \(total)"
+                    DispatchQueue.main.async {
+                        self.savedToast = progress
+                        self.savedToastIsError = false
+                    }
+                }
+                DispatchQueue.main.async {
+                    if failCount > 0 {
+                        self.showErrorToast("Exported \(successCount) of \(total) — \(failCount) failed")
+                    } else {
+                        let folderName = destDir.lastPathComponent
+                        let message = "Exported \(successCount) images to \(folderName)"
+                        self.savedToast = message
+                        self.savedToastIsError = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            if self.savedToast == message { self.savedToast = nil }
+                        }
+                    }
+                }
             }
         }
     }

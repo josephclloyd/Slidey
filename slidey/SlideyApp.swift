@@ -1,6 +1,17 @@
 import SwiftUI
 import AppKit
 
+struct HasCurrentImageKey: FocusedValueKey {
+    typealias Value = Bool
+}
+
+extension FocusedValues {
+    var hasCurrentImage: Bool? {
+        get { self[HasCurrentImageKey.self] }
+        set { self[HasCurrentImageKey.self] = newValue }
+    }
+}
+
 @main
 struct SlideyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -34,15 +45,32 @@ struct ViewMenuCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
+            Button("Enter Full Screen") {
+                NotificationCenter.default.post(name: .toggleFullScreen, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: [.control, .command])
+
+            Divider()
+
+            Button("Zoom In") {
+                NotificationCenter.default.post(name: .zoomIn, object: nil)
+            }
+            .keyboardShortcut("+", modifiers: .command)
+
+            Button("Zoom Out") {
+                NotificationCenter.default.post(name: .zoomOut, object: nil)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+
+            Button("Smart Zoom (z)") {
+                NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
+            }
+
             Divider()
             Picker("Sort By", selection: $sortOrder) {
                 ForEach(AppSortOrder.allCases) { order in
                     Text(order.displayName).tag(order)
                 }
-            }
-            Divider()
-            Button("Smart Zoom (z)") {
-                NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
             }
         }
     }
@@ -260,6 +288,9 @@ struct SettingsView: View {
 struct FileMenuCommands: Commands {
     @ObservedObject var recentDirectories: RecentDirectories
     @Environment(\.openWindow) private var openWindow
+    @FocusedValue(\.hasCurrentImage) private var hasCurrentImage
+
+    private var imageLoaded: Bool { hasCurrentImage ?? false }
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -292,6 +323,7 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .saveEditedImage, object: nil)
             }
             .keyboardShortcut("s", modifiers: .command)
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -299,25 +331,30 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .revealInFinder, object: nil)
             }
             .keyboardShortcut("r", modifiers: .command)
+            .disabled(!imageLoaded)
 
             Button("Open in Preview") {
                 NotificationCenter.default.post(name: .openInPreview, object: nil)
             }
             .keyboardShortcut("o", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Button("Open With\u{2026}") {
                 NotificationCenter.default.post(name: .openWith, object: nil)
             }
+            .disabled(!imageLoaded)
 
             Button("Rename\u{2026}") {
                 NotificationCenter.default.post(name: .renameImage, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Button("Move to Trash") {
                 NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }
             .keyboardShortcut(.delete, modifiers: .command)
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -325,17 +362,26 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyToFolder, object: nil)
             }
             .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(!imageLoaded)
 
             Button("Move to Folder\u{2026}") {
                 NotificationCenter.default.post(name: .moveToFolder, object: nil)
             }
             .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
+
+            Button("Export Visible Images\u{2026}") {
+                NotificationCenter.default.post(name: .exportVisibleImages, object: nil)
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
 
             Divider()
 
             Button("Set as Desktop Picture") {
                 NotificationCenter.default.post(name: .setDesktopPicture, object: nil)
             }
+            .disabled(!imageLoaded)
 
             Divider()
 
@@ -343,6 +389,7 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .printImage, object: nil)
             }
             .keyboardShortcut("p", modifiers: .command)
+            .disabled(!imageLoaded)
         }
     }
 

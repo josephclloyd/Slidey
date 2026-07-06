@@ -13,8 +13,8 @@ struct KeyboardShortcutsView: View {
             ("↑ ↓ ← →", "Pan (when zoomed)"),
         ]),
         ("Display", [
-            ("+ / =", "Zoom in"),
-            ("- / _", "Zoom out"),
+            ("⌘+ / + / =", "Zoom in"),
+            ("⌘- / - / _", "Zoom out"),
             ("s", "Scale to native size (1:1)"),
             ("f", "Scale to fill screen"),
             ("r", "Rotate clockwise"),
@@ -56,7 +56,8 @@ struct KeyboardShortcutsView: View {
         ("Slideshow", [
             ("Space", "Play / pause slideshow"),
             ("t", "Toggle thumbnail strip"),
-            ("Escape", "Toggle fullscreen"),
+            ("⌃⌘F", "Toggle fullscreen"),
+            ("Escape", "Exit fullscreen / cancel"),
         ]),
         ("File", [
             ("⌘O", "Open directory"),

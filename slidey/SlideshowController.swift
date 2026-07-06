@@ -3,6 +3,7 @@ import Foundation
 @Observable
 final class SlideshowController {
     var isPlaying = false
+    private(set) var lastAdvanceDate: Date?
     private var timer: Timer?
     private var shouldStop: (() -> Bool)?
     private(set) var shuffleQueue: [URL] = []
@@ -45,14 +46,17 @@ final class SlideshowController {
         timer?.invalidate()
         timer = nil
         shouldStop = nil
+        lastAdvanceDate = nil
     }
 
     func reschedule(interval: Double, advance: @escaping () -> Void) {
         timer?.invalidate()
+        lastAdvanceDate = Date()
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             if self?.shouldStop?() == true {
                 self?.stop()
             } else {
+                self?.lastAdvanceDate = Date()
                 advance()
             }
         }

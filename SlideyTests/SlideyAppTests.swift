@@ -250,13 +250,25 @@ final class FileMenuNotificationTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
 
+    func testExportVisibleImagesNotificationFires() {
+        let expectation = expectation(description: "exportVisibleImages notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .exportVisibleImages, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .exportVisibleImages, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
     func testCopyMoveNotificationNamesMatchExpectedStrings() {
         XCTAssertEqual(NSNotification.Name.copyToFolder.rawValue, "CopyToFolder")
         XCTAssertEqual(NSNotification.Name.moveToFolder.rawValue, "MoveToFolder")
+        XCTAssertEqual(NSNotification.Name.exportVisibleImages.rawValue, "ExportVisibleImages")
     }
 
     func testCopyMoveNotificationNamesAreUnique() {
-        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash]
+        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash, .exportVisibleImages]
         let uniqueNames = Set(names)
         XCTAssertEqual(uniqueNames.count, names.count)
     }
@@ -738,5 +750,45 @@ final class ColorizationNotificationTests: XCTestCase {
 
     func testRemoveColorizationNotificationNameMatchesExpectedString() {
         XCTAssertEqual(NSNotification.Name.removeColorization.rawValue, "RemoveColorization")
+    }
+}
+
+// MARK: - Fullscreen and zoom notification tests
+
+final class FullScreenZoomNotificationTests: XCTestCase {
+    func testToggleFullScreenNotificationFires() {
+        let exp = expectation(description: "toggleFullScreen fires")
+        let obs = NotificationCenter.default.addObserver(forName: .toggleFullScreen, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .toggleFullScreen, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testToggleFullScreenNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.toggleFullScreen.rawValue, "ToggleFullScreen")
+    }
+
+    func testZoomInNotificationFires() {
+        let exp = expectation(description: "zoomIn fires")
+        let obs = NotificationCenter.default.addObserver(forName: .zoomIn, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .zoomIn, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testZoomInNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.zoomIn.rawValue, "ZoomIn")
+    }
+
+    func testZoomOutNotificationFires() {
+        let exp = expectation(description: "zoomOut fires")
+        let obs = NotificationCenter.default.addObserver(forName: .zoomOut, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .zoomOut, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testZoomOutNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.zoomOut.rawValue, "ZoomOut")
     }
 }
