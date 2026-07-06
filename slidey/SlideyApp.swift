@@ -370,6 +370,12 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("m", modifiers: [.command, .shift])
             .disabled(!imageLoaded)
 
+            Button("Export Visible Images\u{2026}") {
+                NotificationCenter.default.post(name: .exportVisibleImages, object: nil)
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Set as Desktop Picture") {

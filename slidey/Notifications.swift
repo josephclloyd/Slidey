@@ -28,6 +28,7 @@ extension NSNotification.Name {
     static let moveToTrash = NSNotification.Name("MoveToTrash")
     static let copyToFolder = NSNotification.Name("CopyToFolder")
     static let moveToFolder = NSNotification.Name("MoveToFolder")
+    static let exportVisibleImages = NSNotification.Name("ExportVisibleImages")
     static let renameImage = NSNotification.Name("RenameImage")
     static let copyImage = NSNotification.Name("CopyImage")
     static let copyFilePath = NSNotification.Name("CopyFilePath")
