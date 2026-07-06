@@ -172,8 +172,11 @@ by daemon restarts — only the in-memory tracking state is lost.
 Before spawning, track the issue:
 
 ```bash
-mcx track "#14"   # creates the work_items row, returns work item ID
+mcx track 14   # creates the work_items row, returns work item ID
 ```
+
+**Bare number, no `#` prefix** — `mcx track "#14"` fails with `Error: Invalid number: #14`.
+Hit in both Sprint 7 and Sprint 23; this is the corrected form.
 
 After tracking, confirm:
 
@@ -289,7 +292,17 @@ git branch --show-current
 
 # 2. Verify the build passes with the uncommitted changes
 xcodebuild -scheme Slidey -project Slidey.xcodeproj build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -3
+```
 
+**Before committing, check for unused/unwired code the interrupted session left behind.**
+Building successfully does not mean the diff is complete — Sprint 23's #206 session was cut
+off after adding `@FocusedValue`/computed-property plumbing to a second `Commands` struct
+that was never wired to any `.disabled()` call and was out of the issue's stated scope.
+`grep` for each new symbol's usages; if a new property/binding has zero call sites, remove
+it rather than committing dead code or trying to guess what the session intended to do with
+it. Re-run the build (and full test suite) after trimming.
+
+```bash
 # 3a. If the branch already exists (session branched but didn't commit):
 #     Switch to it (changes carry over since branch is at same SHA as main)
 git checkout <branch-name>
@@ -368,8 +381,10 @@ CI cannot execute the bundled `realesrgan-ncnn-vulkan` binary — it only confir
 After a `spawn` action:
 ```bash
 # Record the real session ID (impl.ts writes a pending sentinel; replace it)
-mcx work-item state set "#N" session_id <real-id>
-mcx work-item state set "#N" worktree_path <path>
+# `mcx work-item state set` is not a real CLI command (hit in Sprint 7 and Sprint 23) —
+# the actual mechanism is the _work_items virtual server's phase_state_set tool:
+mcx call _work_items phase_state_set '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"session_id","value":"<real-id>"}'
+mcx call _work_items phase_state_set '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"worktree_path","value":"<path>"}'
 ```
 
 Before calling `bye` on any session, verify the branch was pushed:
