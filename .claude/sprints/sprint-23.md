@@ -99,4 +99,50 @@ touch `handleCharacterKeyPress`'s registry directly. No other new bindings this 
 
 ## Results
 
-(filled in at review/retro time)
+Released: v1.22 — 2026-07-06
+
+### Shipped
+- #133 Slideshow progress bar — PR #211, 0 repair rounds, clean on first review.
+- #137 Drag current image out to Finder/other apps — PR #212, 0 repair rounds, clean on
+  first review.
+- #206 File menu items real disabled state via `@FocusedValue` — PR #213, 0 review repair
+  rounds, but needed a manual quota-hit recovery mid-impl (see Deviations).
+- #209 Align keyboard shortcuts to Apple/macOS standards (fullscreen, zoom) — PR #214,
+  0 repair rounds, clean on first review.
+- #102 Export filtered/favourited image set to a folder — PR #215, 1 repair round (real
+  bug: `exportVisibleImages()`'s copy loop ran synchronously on the main thread inside
+  `NSOpenPanel.begin`'s completion handler, freezing the UI and preventing the progress
+  toast from updating between iterations for multi-file exports; fixed by dispatching the
+  copy loop to `DispatchQueue.global(qos: .userInitiated)` with toast updates dispatched
+  back to main).
+
+### Deviations from plan
+- **#206 impl session hit the extra-usage quota mid-task** (`"You're out of extra usage ·
+  resets 1:40pm"`), leaving the `file-menu-disabled-state` branch created locally with two
+  files modified but uncommitted (`SlideshowView.swift`, `SlideyApp.swift`). Recovered per
+  run.md's partial-progress procedure: verified the build passed with the uncommitted
+  changes, then found the session had left unused, unwired `@FocusedValue`/`imageLoaded`
+  plumbing added to `EditMenuCommands` (out of #206's stated File-menu-only scope, and never
+  connected to any `.disabled()` call) — trimmed that dead code, reran build + full test
+  suite (306 passed), then committed, pushed, and opened PR #213 manually. Quota had fully
+  reset (5hr utilization back to 3%) by the time review ran a few minutes later.
+- **PR #213's merge commit failed CI on `main` once** (`DirectoryMissingTests.
+  testDirectoryRecoveryAfterReappearing`), unrelated to the PR's diff (pure `@FocusedValue`
+  menu wiring) — the very next push (#214's merge) passed the same suite cleanly. Filed as
+  #216 rather than investigated live, per the "file every problem" rule; did not block
+  tagging since main's current HEAD (after #215) is green.
+- No `mcx phase run` / `repair.ts` state-clearing issues this sprint (both flagged in Sprint
+  22's retro as candidates for a `meta/` fix) — not hit, but not yet fixed either; still
+  pending a between-sprints `meta/` branch.
+
+### Needs attention
+None — all five issues merged clean. #216 (flaky test) filed as a follow-up, not a blocker.
+
+### Stats
+- PRs merged: 5 (#211, #212, #213, #214, #215), plus this results/retro wrap-up
+- Repair rounds: #133 — 0; #137 — 0; #206 — 0 (1 manual quota-hit recovery, not a review
+  round); #209 — 0; #102 — 1 (real bug)
+- Follow-up issues filed: #216 (flaky `DirectoryMissingTests` CI failure)
+- `SlideshowView.swift`: 3361 → 3443 lines net across the sprint
+- Total orchestration cost: ~$8.35 across 12 spawned sessions (6 impl/repair on opus, 6
+  review on sonnet)
