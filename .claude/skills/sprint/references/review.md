@@ -12,7 +12,14 @@ so there's a named anchor for the work, and update the README changelog.
 gh run list --branch main --limit 3
 ```
 
-If main CI is red, do not tag. Surface to Joe and stop.
+If the **latest** run on `main` is red, do not tag. Surface to Joe and stop.
+
+If an **older** run failed but a later run on top of the same history passed (the failing
+test is unrelated to that PR's diff), don't stop to investigate live — that's very likely
+CI flakiness, not a regression. Confirm by checking that the next push's run passed the
+same test suite cleanly, file an issue for the flaky test (per the "file every problem"
+rule), and proceed using the latest run's result. Only investigate live if the failure
+recurs on a subsequent run too.
 
 ## 2. Gather what shipped
 
