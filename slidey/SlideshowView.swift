@@ -972,6 +972,7 @@ struct SlideshowView: View {
         } message: {
             Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
         }
+        .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
 
     /// Run `action` only if this view's window is the key window AND no
