@@ -761,6 +761,20 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
+            ifKeyWindow { toggleFullScreen() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomIn)) { _ in
+            ifKeyWindow {
+                zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomOut)) { _ in
+            ifKeyWindow {
+                zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
+                if zoomPan.zoomScale <= 1.0 { zoomPan.reset() }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipHorizontal)) { _ in
             ifKeyWindow { flipCurrentImageHorizontal() }
         }
@@ -1035,8 +1049,8 @@ struct SlideshowView: View {
         if key == .escape {
             if isProcessing {
                 cancelUpscale()
-            } else {
-                toggleFullScreen()
+            } else if isFullScreen {
+                exitFullScreen()
             }
             return .handled
         }

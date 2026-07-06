@@ -45,15 +45,32 @@ struct ViewMenuCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .toolbar) {
+            Button("Enter Full Screen") {
+                NotificationCenter.default.post(name: .toggleFullScreen, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: [.control, .command])
+
+            Divider()
+
+            Button("Zoom In") {
+                NotificationCenter.default.post(name: .zoomIn, object: nil)
+            }
+            .keyboardShortcut("+", modifiers: .command)
+
+            Button("Zoom Out") {
+                NotificationCenter.default.post(name: .zoomOut, object: nil)
+            }
+            .keyboardShortcut("-", modifiers: .command)
+
+            Button("Smart Zoom (z)") {
+                NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
+            }
+
             Divider()
             Picker("Sort By", selection: $sortOrder) {
                 ForEach(AppSortOrder.allCases) { order in
                     Text(order.displayName).tag(order)
                 }
-            }
-            Divider()
-            Button("Smart Zoom (z)") {
-                NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
             }
         }
     }

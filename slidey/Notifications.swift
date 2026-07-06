@@ -46,6 +46,9 @@ extension NSNotification.Name {
 
     static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
     static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
+    static let toggleFullScreen = NSNotification.Name("ToggleFullScreen")
+    static let zoomIn = NSNotification.Name("ZoomIn")
+    static let zoomOut = NSNotification.Name("ZoomOut")
 
     static let flipHorizontal = NSNotification.Name("FlipHorizontal")
     static let flipVertical = NSNotification.Name("FlipVertical")
