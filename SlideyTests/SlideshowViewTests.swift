@@ -126,10 +126,23 @@ final class SlideshowControllerTests: XCTestCase {
         XCTAssertFalse(controller.isPlaying)
     }
 
+    func testInitialLastAdvanceDateIsNil() {
+        let controller = SlideshowController()
+        XCTAssertNil(controller.lastAdvanceDate)
+    }
+
     func testStartSetsIsPlaying() {
         let controller = SlideshowController()
         controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
         XCTAssertTrue(controller.isPlaying)
+    }
+
+    func testStartSetsLastAdvanceDate() {
+        let controller = SlideshowController()
+        let before = Date()
+        controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
+        XCTAssertNotNil(controller.lastAdvanceDate)
+        XCTAssertGreaterThanOrEqual(controller.lastAdvanceDate!, before)
     }
 
     func testStopClearsIsPlaying() {
@@ -137,6 +150,24 @@ final class SlideshowControllerTests: XCTestCase {
         controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
         controller.stop()
         XCTAssertFalse(controller.isPlaying)
+    }
+
+    func testStopClearsLastAdvanceDate() {
+        let controller = SlideshowController()
+        controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
+        XCTAssertNotNil(controller.lastAdvanceDate)
+        controller.stop()
+        XCTAssertNil(controller.lastAdvanceDate)
+    }
+
+    func testRescheduleUpdatesLastAdvanceDate() {
+        let controller = SlideshowController()
+        controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
+        let firstDate = controller.lastAdvanceDate!
+        Thread.sleep(forTimeInterval: 0.01)
+        controller.reschedule(interval: 3.0, advance: {})
+        XCTAssertNotNil(controller.lastAdvanceDate)
+        XCTAssertGreaterThan(controller.lastAdvanceDate!, firstDate)
     }
 
     func testStopWhenNotPlayingIsNoop() {
