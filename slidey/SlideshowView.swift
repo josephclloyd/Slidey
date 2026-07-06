@@ -564,7 +564,8 @@ struct SlideshowView: View {
                     onRightClick: {
                         guard !isProcessing else { return }
                         imageLoader.previousImage()
-                    }
+                    },
+                    dragURL: imageLoader.currentImageURL
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(imageAccessibilityLabel)

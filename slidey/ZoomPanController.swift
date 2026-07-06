@@ -124,6 +124,8 @@ struct ClickCatcher: NSViewRepresentable {
     let onRightClick: () -> Void
     let onZoom: (CGFloat) -> Void
     let onScroll: (CGFloat, CGFloat) -> Void
+    var dragURL: URL? = nil
+    var canDrag: Bool = false
 
     func makeNSView(context: Context) -> ClickCatcherView {
         let view = ClickCatcherView()
@@ -131,6 +133,8 @@ struct ClickCatcher: NSViewRepresentable {
         view.onRightClick = onRightClick
         view.onZoom = onZoom
         view.onScroll = onScroll
+        view.dragURL = dragURL
+        view.canDrag = canDrag
         return view
     }
 
@@ -139,21 +143,77 @@ struct ClickCatcher: NSViewRepresentable {
         nsView.onRightClick = onRightClick
         nsView.onZoom = onZoom
         nsView.onScroll = onScroll
+        nsView.dragURL = dragURL
+        nsView.canDrag = canDrag
     }
 }
 
-class ClickCatcherView: NSView {
+class ClickCatcherView: NSView, NSDraggingSource {
     var onLeftClick: (() -> Void)?
     var onRightClick: (() -> Void)?
     var onZoom: ((CGFloat) -> Void)?
     var onScroll: ((CGFloat, CGFloat) -> Void)?
+    var dragURL: URL?
+    var canDrag: Bool = false
+
+    private var mouseDownEvent: NSEvent?
+    private var mouseDownLocation: NSPoint?
+    private var didStartDrag = false
+
+    func draggingSession(
+        _ session: NSDraggingSession,
+        sourceOperationMaskFor context: NSDraggingContext
+    ) -> NSDragOperation {
+        .copy
+    }
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) {
             onRightClick?()
+            return
+        }
+        if canDrag, dragURL != nil {
+            mouseDownEvent = event
+            mouseDownLocation = event.locationInWindow
+            didStartDrag = false
         } else {
             onLeftClick?()
         }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard canDrag, !didStartDrag,
+              let startLocation = mouseDownLocation,
+              let url = dragURL,
+              let downEvent = mouseDownEvent else { return }
+        let current = event.locationInWindow
+        let dx = current.x - startLocation.x
+        let dy = current.y - startLocation.y
+        guard sqrt(dx * dx + dy * dy) > 4 else { return }
+
+        didStartDrag = true
+        mouseDownLocation = nil
+        mouseDownEvent = nil
+
+        let draggingItem = NSDraggingItem(pasteboardWriter: url as NSURL)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        let iconSize = NSSize(width: 64, height: 64)
+        icon.size = iconSize
+        let viewPoint = convert(event.locationInWindow, from: nil)
+        draggingItem.setDraggingFrame(
+            NSRect(x: viewPoint.x - 32, y: viewPoint.y - 32, width: 64, height: 64),
+            contents: icon
+        )
+        beginDraggingSession(with: [draggingItem], event: downEvent, source: self)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if mouseDownLocation != nil, !didStartDrag {
+            onLeftClick?()
+        }
+        mouseDownLocation = nil
+        mouseDownEvent = nil
+        didStartDrag = false
     }
 
     override func rightMouseDown(with event: NSEvent) {
@@ -186,6 +246,7 @@ struct ImageDisplayView: View {
     @Binding var rotationAngle: Angle
     let onLeftClick: () -> Void
     let onRightClick: () -> Void
+    var dragURL: URL? = nil
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
@@ -205,7 +266,9 @@ struct ImageDisplayView: View {
                     onLeftClick: onLeftClick,
                     onRightClick: onRightClick,
                     onZoom: { applyZoom($0) },
-                    onScroll: { applyPan(dx: $0, dy: $1) }
+                    onScroll: { applyPan(dx: $0, dy: $1) },
+                    dragURL: dragURL,
+                    canDrag: abs(zoomScale - 1.0) < 0.01
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
