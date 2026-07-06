@@ -13,13 +13,13 @@ extension SlideshowView {
                 }
             }
         }
-        if let data = UserDefaults.standard.data(forKey: "editStacks"),
-           let decoded = try? JSONDecoder().decode([String: EditStack].self, from: data) {
-            editStacks = Dictionary(uniqueKeysWithValues: decoded.compactMap { key, val -> (URL, EditStack)? in
-                guard let url = URL(string: key) else { return nil }
-                return (url, val)
-            })
-        }
+        // editStacks is intentionally not restored: it records which edits were applied
+        // (enhance, smooth, upscale, AI edits, etc.) but the rendered results themselves
+        // are session-only caches that are never persisted. Reloading the recipe without
+        // the rendered output silently re-triggers recomputation of every step on load,
+        // including expensive AI edits (upscale, faceRestore, colorize) that shouldn't run
+        // without the user asking. Drop any previously-persisted value so it doesn't linger.
+        UserDefaults.standard.removeObject(forKey: "editStacks")
         denoiseURLLevels = (UserDefaults.standard.dictionary(forKey: "denoiseURLLevels") as? [String: Double]) ?? [:]
         flippedHorizontally = Set(UserDefaults.standard.stringArray(forKey: "flippedHorizontally") ?? [])
         flippedVertically = Set(UserDefaults.standard.stringArray(forKey: "flippedVertically") ?? [])
@@ -43,10 +43,7 @@ extension SlideshowView {
         UserDefaults.standard.set(Array(favouriteURLStrings), forKey: "favouriteImages")
         let rotDict = Dictionary(uniqueKeysWithValues: rotationAngles.map { ($0.key.absoluteString, $0.value.degrees) })
         UserDefaults.standard.set(rotDict, forKey: "rotationAngles")
-        let editStacksDict = Dictionary(uniqueKeysWithValues: editStacks.map { ($0.key.absoluteString, $0.value) })
-        if let data = try? JSONEncoder().encode(editStacksDict) {
-            UserDefaults.standard.set(data, forKey: "editStacks")
-        }
+        // editStacks is deliberately not persisted — see loadFavourites().
         UserDefaults.standard.set(denoiseURLLevels, forKey: "denoiseURLLevels")
         UserDefaults.standard.set(Array(flippedHorizontally), forKey: "flippedHorizontally")
         UserDefaults.standard.set(Array(flippedVertically), forKey: "flippedVertically")
