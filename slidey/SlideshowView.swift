@@ -65,7 +65,7 @@ struct SlideshowView: View {
     @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
-    @State private var currentDisplayImage: NSImage?
+    @State var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
     @State var isProcessing = false
@@ -75,7 +75,7 @@ struct SlideshowView: View {
     @State var upscaleCancelled = false
     @State var upscaleProgress: Double = 0
     @State private var isDragOver = false
-    @State private var slideshow = SlideshowController()
+    @State var slideshow = SlideshowController()
     @State var savedToast: String?
     @State var savedToastIsError: Bool = false
     @State private var showThumbnails = false
@@ -150,6 +150,13 @@ struct SlideshowView: View {
     @State var cropController = CropController()
     @State var imageRatings: [URL: Int] = [:]
     @AppStorage("minimumRatingFilter") var minimumRatingFilter: Int = 0
+
+    @State var curvesURLLevels: [String: CurvesData] = [:]
+    @State var showCurvesHUD: Bool = false
+    @State var curvesData: CurvesData = .init()
+    @State var curvesChannel: CurveChannel = .all
+    @State var curvesBaseImage: NSImage?
+    @State var curvesTask: Task<Void, Never>?
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -429,6 +436,7 @@ struct SlideshowView: View {
         denoiseHUD
         vignetteHUD
         adjustmentsHUD
+        curvesHUD
         cropOverlay
         beforeAfterLabel
         slideshowProgressBar
@@ -650,7 +658,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -786,6 +794,9 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.adjustmentsImage)) { _ in
             ifKeyWindow { openAdjustmentsHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.curvesImage)) { _ in
+            ifKeyWindow { openCurvesHUD() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreFaces)) { _ in
             ifKeyWindow { restoreFacesOnCurrentImage() }
@@ -1043,6 +1054,18 @@ struct SlideshowView: View {
             return .ignored
         }
 
+        if showCurvesHUD {
+            if key == .escape {
+                cancelCurvesHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyCurvesToImage()
+                return .handled
+            }
+            return .ignored
+        }
+
         if cropController.isActive {
             if key == .escape { cancelCrop(); return .handled }
             if keyPress.characters == "\r" { confirmCrop(); return .handled }
@@ -1248,6 +1271,9 @@ struct SlideshowView: View {
             return .handled
         case "e":
             openAdjustmentsHUD()
+            return .handled
+        case "E":
+            openCurvesHUD()
             return .handled
         case "b":
             showingOriginal = true
@@ -1791,6 +1817,11 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
         }
+        // Apply curves (skip during HUD preview)
+        if !showCurvesHUD, let curves = curvesURLLevels[url.absoluteString], !curves.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCurves(curves, to: image) ?? image
+        }
         // Apply vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
@@ -1940,6 +1971,11 @@ struct SlideshowView: View {
         if !showAdjustmentsHUD, let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity,
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
+        }
+        // Curves (skip during HUD preview)
+        if !showCurvesHUD, let curves = curvesURLLevels[url.absoluteString], !curves.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCurves(curves, to: image) ?? image
         }
         // Vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,

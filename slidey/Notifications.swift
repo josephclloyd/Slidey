@@ -58,6 +58,8 @@ extension NSNotification.Name {
 
     static let adjustmentsImage = NSNotification.Name("AdjustmentsImage")
 
+    static let curvesImage = NSNotification.Name("CurvesImage")
+
     static let restoreFaces = NSNotification.Name("RestoreFaces")
     static let removeFaceRestoration = NSNotification.Name("RemoveFaceRestoration")
 
