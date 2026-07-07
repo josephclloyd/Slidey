@@ -80,4 +80,7 @@ extension NSNotification.Name {
 
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
+
+    static let batchApplyAll = NSNotification.Name("BatchApplyAll")
+    static let batchApplyFavourites = NSNotification.Name("BatchApplyFavourites")
 }
