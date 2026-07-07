@@ -792,3 +792,64 @@ final class FullScreenZoomNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.zoomOut.rawValue, "ZoomOut")
     }
 }
+
+// MARK: - Curves data model tests
+
+final class CurvePointsTests: XCTestCase {
+    func testDefaultIsIdentity() {
+        let pts = CurvePoints()
+        XCTAssertTrue(pts.isIdentity)
+    }
+
+    func testStaticIdentityMatchesDefault() {
+        XCTAssertEqual(CurvePoints.identity, CurvePoints())
+    }
+
+    func testModifiedPointIsNotIdentity() {
+        var pts = CurvePoints()
+        pts.p2 = CGPoint(x: 0.5, y: 0.7)
+        XCTAssertFalse(pts.isIdentity)
+    }
+
+    func testAsArrayReturnsAllFivePoints() {
+        let pts = CurvePoints()
+        XCTAssertEqual(pts.asArray.count, 5)
+        XCTAssertEqual(pts.asArray[0], CGPoint(x: 0, y: 0))
+        XCTAssertEqual(pts.asArray[4], CGPoint(x: 1, y: 1))
+    }
+}
+
+final class CurvesDataTests: XCTestCase {
+    func testDefaultIsIdentity() {
+        let data = CurvesData()
+        XCTAssertTrue(data.isIdentity)
+    }
+
+    func testModifiedAllChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.all.p2 = CGPoint(x: 0.5, y: 0.8)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedRedChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.red.p1 = CGPoint(x: 0.25, y: 0.4)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedGreenChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.green.p3 = CGPoint(x: 0.75, y: 0.6)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedBlueChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.blue.p4 = CGPoint(x: 1, y: 0.9)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testCurvesNotificationName() {
+        XCTAssertEqual(NSNotification.Name.curvesImage.rawValue, "CurvesImage")
+    }
+}

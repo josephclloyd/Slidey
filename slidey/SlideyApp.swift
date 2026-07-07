@@ -578,6 +578,10 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
             }
 
+            Button("Curves\u{2026}") {
+                NotificationCenter.default.post(name: .curvesImage, object: nil)
+            }
+
             Divider()
 
             Button("Restore Faces") {
