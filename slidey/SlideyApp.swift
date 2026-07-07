@@ -642,6 +642,16 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("o", modifiers: .shift)
 
+            Divider()
+
+            Button("Apply Edits to All Images\u{2026}") {
+                NotificationCenter.default.post(name: .batchApplyAll, object: nil)
+            }
+
+            Button("Apply Edits to Favourites\u{2026}") {
+                NotificationCenter.default.post(name: .batchApplyFavourites, object: nil)
+            }
+
         }
     }
 }

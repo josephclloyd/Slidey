@@ -1000,6 +1000,12 @@ struct SlideshowView: View {
         } message: {
             Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyAll)) { _ in
+            ifKeyWindow { batchApplyEdits(favouritesOnly: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyFavourites)) { _ in
+            ifKeyWindow { batchApplyEdits(favouritesOnly: true) }
+        }
         .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
 

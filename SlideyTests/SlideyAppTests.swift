@@ -793,6 +793,37 @@ final class FullScreenZoomNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Batch apply notification tests
+
+final class BatchApplyNotificationTests: XCTestCase {
+    func testBatchApplyAllNotificationFires() {
+        let exp = expectation(description: "batchApplyAll fires")
+        let obs = NotificationCenter.default.addObserver(forName: .batchApplyAll, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .batchApplyAll, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testBatchApplyFavouritesNotificationFires() {
+        let exp = expectation(description: "batchApplyFavourites fires")
+        let obs = NotificationCenter.default.addObserver(forName: .batchApplyFavourites, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .batchApplyFavourites, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testBatchApplyNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.batchApplyAll.rawValue, "BatchApplyAll")
+        XCTAssertEqual(NSNotification.Name.batchApplyFavourites.rawValue, "BatchApplyFavourites")
+    }
+
+    func testBatchApplyNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.batchApplyAll, .batchApplyFavourites]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
 // MARK: - Curves data model tests
 
 final class CurvePointsTests: XCTestCase {
