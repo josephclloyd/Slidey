@@ -829,6 +829,7 @@ final class DirectoryMissingTests: XCTestCase {
         }
 
         let recoveryExp = expectation(description: "directoryMissing becomes false")
+        recoveryExp.assertForOverFulfill = false
         let recoveryCancellable = loader.$directoryMissing
             .dropFirst()
             .filter { !$0 }

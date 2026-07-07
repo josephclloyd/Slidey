@@ -78,7 +78,7 @@ class ImageLoader: ObservableObject {
 
         DispatchQueue.main.async {
             self.stopWatching()
-            self.directoryMissing = false
+            if self.directoryMissing { self.directoryMissing = false }
             self.directoryURL = url
             self.cache.removeAll()
             self.allImageURLs = urls
@@ -383,6 +383,7 @@ class ImageLoader: ObservableObject {
             var isDir: ObjCBool = false
             let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
             if exists && isDir.boolValue {
+                timer.cancel()
                 DispatchQueue.main.async {
                     self.stopRecoveryPolling()
                     self.directoryMissing = false
