@@ -123,6 +123,8 @@ extension SlideshowView {
 
             if let d = sourceDenoise {
                 denoiseURLLevels[key] = d
+            } else {
+                denoiseURLLevels.removeValue(forKey: key)
             }
 
             if let rotation = sourceRotation {
