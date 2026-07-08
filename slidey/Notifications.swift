@@ -78,6 +78,9 @@ extension NSNotification.Name {
     static let cropImage = NSNotification.Name("CropImage")
     static let removeCrop = NSNotification.Name("RemoveCrop")
 
+    static let straightenImage = NSNotification.Name("StraightenImage")
+    static let removeStraighten = NSNotification.Name("RemoveStraighten")
+
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
 

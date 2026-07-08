@@ -568,6 +568,15 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .removeCrop, object: nil)
             }
 
+            Button("Straighten\u{2026}") {
+                NotificationCenter.default.post(name: .straightenImage, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: [])
+            Button("Remove Straighten") {
+                NotificationCenter.default.post(name: .removeStraighten, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: .shift)
+
             Divider()
 
             Button("Vignette\u{2026}") {

@@ -35,6 +35,8 @@ struct KeyboardShortcutsView: View {
             ("⇧U", "Remove upscaling"),
             ("b (hold)", "Preview original (before/after)"),
             ("Edit > Vignette\u{2026}", "Open Vignette HUD"),
+            ("y", "Open Straighten HUD"),
+            ("\u{21e7}Y", "Remove straighten"),
             ("e", "Open Adjustments HUD"),
             ("\u{21e7}E", "Open Curves HUD"),
             ("p", "Restore faces via AI (CodeFormer)"),
