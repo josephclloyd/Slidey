@@ -118,6 +118,87 @@ final class ZoomPanControllerTests: XCTestCase {
     }
 }
 
+// MARK: - SwipeTracker Tests
+
+final class SwipeTrackerTests: XCTestCase {
+    func testInitialState() {
+        let tracker = SwipeTracker()
+        XCTAssertEqual(tracker.accumulatedX, 0)
+        XCTAssertEqual(tracker.accumulatedY, 0)
+        XCTAssertFalse(tracker.triggered)
+    }
+
+    func testSwipeLeftTriggersNext() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let result = tracker.accumulate(dx: -60, dy: 5)
+        XCTAssertEqual(result, true)
+        XCTAssertTrue(tracker.triggered)
+    }
+
+    func testSwipeRightTriggersPrevious() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let result = tracker.accumulate(dx: 60, dy: -5)
+        XCTAssertEqual(result, false)
+        XCTAssertTrue(tracker.triggered)
+    }
+
+    func testBelowThresholdDoesNotTrigger() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let result = tracker.accumulate(dx: -30, dy: 2)
+        XCTAssertNil(result)
+        XCTAssertFalse(tracker.triggered)
+    }
+
+    func testVerticalSwipeDoesNotTrigger() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let result = tracker.accumulate(dx: -30, dy: 80)
+        XCTAssertNil(result)
+        XCTAssertFalse(tracker.triggered)
+    }
+
+    func testGradualAccumulation() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        XCTAssertNil(tracker.accumulate(dx: -15, dy: 2))
+        XCTAssertNil(tracker.accumulate(dx: -15, dy: 1))
+        XCTAssertNil(tracker.accumulate(dx: -15, dy: 1))
+        let result = tracker.accumulate(dx: -10, dy: 0)
+        XCTAssertEqual(result, true)
+    }
+
+    func testTriggersOnlyOnce() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let first = tracker.accumulate(dx: -60, dy: 0)
+        XCTAssertEqual(first, true)
+        let second = tracker.accumulate(dx: -60, dy: 0)
+        XCTAssertNil(second)
+    }
+
+    func testBeganResetsState() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        _ = tracker.accumulate(dx: -60, dy: 0)
+        XCTAssertTrue(tracker.triggered)
+
+        tracker.began()
+        XCTAssertFalse(tracker.triggered)
+        XCTAssertEqual(tracker.accumulatedX, 0)
+        XCTAssertEqual(tracker.accumulatedY, 0)
+    }
+
+    func testDiagonalBelowRatioDoesNotTrigger() {
+        var tracker = SwipeTracker()
+        tracker.began()
+        let result = tracker.accumulate(dx: -55, dy: 55)
+        XCTAssertNil(result)
+    }
+}
+
 // MARK: - SlideshowController Tests
 
 final class SlideshowControllerTests: XCTestCase {

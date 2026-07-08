@@ -545,7 +545,12 @@ struct SlideshowView: View {
                         guard !isProcessing else { return }
                         imageLoader.previousImage()
                     },
-                    dragURL: imageLoader.currentImageURL
+                    dragURL: imageLoader.currentImageURL,
+                    onSwipeNavigate: { isNext in
+                        guard !isProcessing else { return }
+                        if isNext { imageLoader.nextImage() } else { imageLoader.previousImage() }
+                    },
+                    swipeEnabled: abs(zoomPan.zoomScale - 1.0) < 0.01 && !cropController.isActive
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(imageAccessibilityLabel)
