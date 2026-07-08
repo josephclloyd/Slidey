@@ -37,11 +37,11 @@ extension SlideshowView {
             image = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
 
-        image = applyRotationIfNeeded(image)
-
         if let cropRegion = cropRegions[url.absoluteString] {
             image = applyCropToImage(image, region: cropRegion) ?? image
         }
+
+        image = applyRotationIfNeeded(image)
 
         let ext = url.pathExtension.lowercased()
         let baseName = url.deletingPathExtension().lastPathComponent
