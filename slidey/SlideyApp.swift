@@ -450,6 +450,18 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyFilePath, object: nil)
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Copy Adjustments") {
+                NotificationCenter.default.post(name: .copyAdjustments, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+
+            Button("Paste Adjustments") {
+                NotificationCenter.default.post(name: .pasteAdjustments, object: nil)
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option])
         }
 
         CommandGroup(after: .pasteboard) {

@@ -824,6 +824,88 @@ final class BatchApplyNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Copy/paste adjustments notification tests
+
+final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
+    func testCopyAdjustmentsNotificationFires() {
+        let exp = expectation(description: "copyAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .copyAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .copyAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testPasteAdjustmentsNotificationFires() {
+        let exp = expectation(description: "pasteAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .pasteAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .pasteAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testCopyPasteAdjustmentsNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.copyAdjustments.rawValue, "CopyAdjustments")
+        XCTAssertEqual(NSNotification.Name.pasteAdjustments.rawValue, "PasteAdjustments")
+    }
+
+    func testCopyPasteAdjustmentsNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.copyAdjustments, .pasteAdjustments]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+
+    func testCopiedAdjustmentsStoresAllFields() {
+        let adj = SlideshowView.ImageAdjustments(exposure: 0.5, highlights: -0.3, shadows: 0.2, vibrance: 0.4, warmth: -0.1)
+        let curves = CurvesData()
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: adj,
+            curves: curves,
+            vignetteIntensity: 0.8,
+            denoiseLevel: 50.0,
+            rotationAngle: .degrees(90),
+            flipH: true,
+            flipV: false,
+            effect: "CIPhotoEffectMono",
+            straightenAngle: 2.5
+        )
+        XCTAssertNil(copied.editStack)
+        XCTAssertEqual(copied.adjustments?.exposure ?? 0, 0.5, accuracy: 0.001)
+        XCTAssertEqual(copied.vignetteIntensity ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(copied.denoiseLevel ?? 0, 50.0, accuracy: 0.001)
+        XCTAssertEqual(copied.rotationAngle, .degrees(90))
+        XCTAssertTrue(copied.flipH)
+        XCTAssertFalse(copied.flipV)
+        XCTAssertEqual(copied.effect, "CIPhotoEffectMono")
+        XCTAssertEqual(copied.straightenAngle ?? 0, 2.5, accuracy: 0.001)
+    }
+
+    func testCopiedAdjustmentsWithNilFields() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: nil,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: nil
+        )
+        XCTAssertNil(copied.editStack)
+        XCTAssertNil(copied.adjustments)
+        XCTAssertNil(copied.curves)
+        XCTAssertNil(copied.vignetteIntensity)
+        XCTAssertNil(copied.denoiseLevel)
+        XCTAssertNil(copied.rotationAngle)
+        XCTAssertFalse(copied.flipH)
+        XCTAssertFalse(copied.flipV)
+        XCTAssertNil(copied.effect)
+        XCTAssertNil(copied.straightenAngle)
+    }
+}
+
 // MARK: - Curves data model tests
 
 final class CurvePointsTests: XCTestCase {
