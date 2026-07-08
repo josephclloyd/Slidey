@@ -131,6 +131,28 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(EditStep.upscale(factor: 2).caseTag, .upscale)
     }
 
+    func testBatchableStepsExcludeSlowOperations() {
+        var stack = EditStack()
+        stack.append(.enhance)
+        stack.append(.smooth(noiseLevel: 0.02))
+        stack.append(.sharpen)
+        stack.append(.upscale(factor: 4))
+        stack.append(.faceRestore)
+        stack.append(.redEyeRemoval)
+        stack.append(.backgroundRemoval)
+        stack.append(.artifactRemoval)
+        stack.append(.colorize)
+
+        let slowTags: Set<EditStepTag> = [.upscale, .faceRestore, .redEyeRemoval, .backgroundRemoval, .artifactRemoval, .colorize]
+        var filtered = EditStack()
+        for step in stack.steps where !slowTags.contains(step.caseTag) {
+            filtered.append(step)
+        }
+
+        XCTAssertEqual(filtered.steps.count, 3)
+        XCTAssertEqual(filtered.steps.map(\.caseTag), [.enhance, .smooth, .sharpen])
+    }
+
     func testOrderPreservedAcrossOperations() {
         var stack = EditStack()
         stack.append(.sharpen)

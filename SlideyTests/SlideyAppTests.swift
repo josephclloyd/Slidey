@@ -792,3 +792,95 @@ final class FullScreenZoomNotificationTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.zoomOut.rawValue, "ZoomOut")
     }
 }
+
+// MARK: - Batch apply notification tests
+
+final class BatchApplyNotificationTests: XCTestCase {
+    func testBatchApplyAllNotificationFires() {
+        let exp = expectation(description: "batchApplyAll fires")
+        let obs = NotificationCenter.default.addObserver(forName: .batchApplyAll, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .batchApplyAll, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testBatchApplyFavouritesNotificationFires() {
+        let exp = expectation(description: "batchApplyFavourites fires")
+        let obs = NotificationCenter.default.addObserver(forName: .batchApplyFavourites, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .batchApplyFavourites, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testBatchApplyNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.batchApplyAll.rawValue, "BatchApplyAll")
+        XCTAssertEqual(NSNotification.Name.batchApplyFavourites.rawValue, "BatchApplyFavourites")
+    }
+
+    func testBatchApplyNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.batchApplyAll, .batchApplyFavourites]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
+// MARK: - Curves data model tests
+
+final class CurvePointsTests: XCTestCase {
+    func testDefaultIsIdentity() {
+        let pts = CurvePoints()
+        XCTAssertTrue(pts.isIdentity)
+    }
+
+    func testStaticIdentityMatchesDefault() {
+        XCTAssertEqual(CurvePoints.identity, CurvePoints())
+    }
+
+    func testModifiedPointIsNotIdentity() {
+        var pts = CurvePoints()
+        pts.p2 = CGPoint(x: 0.5, y: 0.7)
+        XCTAssertFalse(pts.isIdentity)
+    }
+
+    func testAsArrayReturnsAllFivePoints() {
+        let pts = CurvePoints()
+        XCTAssertEqual(pts.asArray.count, 5)
+        XCTAssertEqual(pts.asArray[0], CGPoint(x: 0, y: 0))
+        XCTAssertEqual(pts.asArray[4], CGPoint(x: 1, y: 1))
+    }
+}
+
+final class CurvesDataTests: XCTestCase {
+    func testDefaultIsIdentity() {
+        let data = CurvesData()
+        XCTAssertTrue(data.isIdentity)
+    }
+
+    func testModifiedAllChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.all.p2 = CGPoint(x: 0.5, y: 0.8)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedRedChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.red.p1 = CGPoint(x: 0.25, y: 0.4)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedGreenChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.green.p3 = CGPoint(x: 0.75, y: 0.6)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testModifiedBlueChannelIsNotIdentity() {
+        var data = CurvesData()
+        data.blue.p4 = CGPoint(x: 1, y: 0.9)
+        XCTAssertFalse(data.isIdentity)
+    }
+
+    func testCurvesNotificationName() {
+        XCTAssertEqual(NSNotification.Name.curvesImage.rawValue, "CurvesImage")
+    }
+}

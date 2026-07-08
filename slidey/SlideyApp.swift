@@ -568,6 +568,15 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .removeCrop, object: nil)
             }
 
+            Button("Straighten\u{2026}") {
+                NotificationCenter.default.post(name: .straightenImage, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: [])
+            Button("Remove Straighten") {
+                NotificationCenter.default.post(name: .removeStraighten, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: .shift)
+
             Divider()
 
             Button("Vignette\u{2026}") {
@@ -576,6 +585,10 @@ struct EditMenuCommands: Commands {
 
             Button("Adjustments\u{2026}") {
                 NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+            }
+
+            Button("Curves\u{2026}") {
+                NotificationCenter.default.post(name: .curvesImage, object: nil)
             }
 
             Divider()
@@ -637,6 +650,16 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .removeColorization, object: nil)
             }
             .keyboardShortcut("o", modifiers: .shift)
+
+            Divider()
+
+            Button("Apply Edits to All Images\u{2026}") {
+                NotificationCenter.default.post(name: .batchApplyAll, object: nil)
+            }
+
+            Button("Apply Edits to Favourites\u{2026}") {
+                NotificationCenter.default.post(name: .batchApplyFavourites, object: nil)
+            }
 
         }
     }

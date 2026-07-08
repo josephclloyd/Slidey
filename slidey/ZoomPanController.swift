@@ -5,6 +5,35 @@ enum PanDirection {
     case left, right, up, down
 }
 
+// MARK: - SwipeTracker
+
+struct SwipeTracker {
+    private(set) var accumulatedX: CGFloat = 0
+    private(set) var accumulatedY: CGFloat = 0
+    private(set) var triggered: Bool = false
+
+    static let threshold: CGFloat = 50.0
+
+    mutating func began() {
+        accumulatedX = 0
+        accumulatedY = 0
+        triggered = false
+    }
+
+    mutating func accumulate(dx: CGFloat, dy: CGFloat) -> Bool? {
+        accumulatedX += dx
+        accumulatedY += dy
+
+        guard !triggered,
+              abs(accumulatedX) > Self.threshold,
+              abs(accumulatedX) > abs(accumulatedY) else {
+            return nil
+        }
+        triggered = true
+        return accumulatedX < 0
+    }
+}
+
 func rotatedBoundingBox(_ size: CGSize, by angle: Angle) -> CGSize {
     let c = abs(cos(angle.radians))
     let s = abs(sin(angle.radians))
@@ -126,6 +155,8 @@ struct ClickCatcher: NSViewRepresentable {
     let onScroll: (CGFloat, CGFloat) -> Void
     var dragURL: URL? = nil
     var canDrag: Bool = false
+    var onSwipeNavigate: ((Bool) -> Void)? = nil
+    var swipeEnabled: Bool = false
 
     func makeNSView(context: Context) -> ClickCatcherView {
         let view = ClickCatcherView()
@@ -135,6 +166,8 @@ struct ClickCatcher: NSViewRepresentable {
         view.onScroll = onScroll
         view.dragURL = dragURL
         view.canDrag = canDrag
+        view.onSwipeNavigate = onSwipeNavigate
+        view.swipeEnabled = swipeEnabled
         return view
     }
 
@@ -145,6 +178,8 @@ struct ClickCatcher: NSViewRepresentable {
         nsView.onScroll = onScroll
         nsView.dragURL = dragURL
         nsView.canDrag = canDrag
+        nsView.onSwipeNavigate = onSwipeNavigate
+        nsView.swipeEnabled = swipeEnabled
     }
 }
 
@@ -155,10 +190,13 @@ class ClickCatcherView: NSView, NSDraggingSource {
     var onScroll: ((CGFloat, CGFloat) -> Void)?
     var dragURL: URL?
     var canDrag: Bool = false
+    var onSwipeNavigate: ((Bool) -> Void)?
+    var swipeEnabled: Bool = false
 
     private var mouseDownEvent: NSEvent?
     private var mouseDownLocation: NSPoint?
     private var didStartDrag = false
+    private var swipeTracker = SwipeTracker()
 
     func draggingSession(
         _ session: NSDraggingSession,
@@ -227,8 +265,21 @@ class ClickCatcherView: NSView, NSDraggingSource {
     override func scrollWheel(with event: NSEvent) {
         if event.modifierFlags.contains(.command) {
             onZoom?(1.0 + event.scrollingDeltaY * 0.005)
+        } else if swipeEnabled, event.phase != [] {
+            handleSwipeTracking(event)
+        } else if swipeEnabled, event.momentumPhase != [] {
+            // Momentum after a swipe — ignore to prevent multi-skip
         } else {
             onScroll?(event.scrollingDeltaX, event.scrollingDeltaY)
+        }
+    }
+
+    private func handleSwipeTracking(_ event: NSEvent) {
+        if event.phase.contains(.began) {
+            swipeTracker.began()
+        }
+        if let isNext = swipeTracker.accumulate(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY) {
+            onSwipeNavigate?(isNext)
         }
     }
 
@@ -247,6 +298,8 @@ struct ImageDisplayView: View {
     let onLeftClick: () -> Void
     let onRightClick: () -> Void
     var dragURL: URL? = nil
+    var onSwipeNavigate: ((Bool) -> Void)? = nil
+    var swipeEnabled: Bool = false
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
@@ -268,7 +321,9 @@ struct ImageDisplayView: View {
                     onZoom: { applyZoom($0) },
                     onScroll: { applyPan(dx: $0, dy: $1) },
                     dragURL: dragURL,
-                    canDrag: abs(zoomScale - 1.0) < 0.01
+                    canDrag: abs(zoomScale - 1.0) < 0.01,
+                    onSwipeNavigate: onSwipeNavigate,
+                    swipeEnabled: swipeEnabled
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

@@ -65,7 +65,7 @@ struct SlideshowView: View {
     @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
-    @State private var currentDisplayImage: NSImage?
+    @State var currentDisplayImage: NSImage?
     @State private var myWindow: NSWindow?
     @State private var windowHasFocus = false
     @State var isProcessing = false
@@ -75,7 +75,7 @@ struct SlideshowView: View {
     @State var upscaleCancelled = false
     @State var upscaleProgress: Double = 0
     @State private var isDragOver = false
-    @State private var slideshow = SlideshowController()
+    @State var slideshow = SlideshowController()
     @State var savedToast: String?
     @State var savedToastIsError: Bool = false
     @State private var showThumbnails = false
@@ -107,9 +107,9 @@ struct SlideshowView: View {
     @State var flippedVertically: Set<String> = []
     @State var vignetteURLLevels: [String: Double] = [:]
     @State var showVignetteHUD: Bool = false
-    @State private var vignetteIntensity: Double = 1.0
-    @State private var vignetteBaseImage: NSImage?
-    @State private var vignetteTask: Task<Void, Never>?
+    @State var vignetteIntensity: Double = 1.0
+    @State var vignetteBaseImage: NSImage?
+    @State var vignetteTask: Task<Void, Never>?
 
     struct ImageAdjustments: Codable, Equatable {
         var exposure: Double = 0
@@ -150,6 +150,19 @@ struct SlideshowView: View {
     @State var cropController = CropController()
     @State var imageRatings: [URL: Int] = [:]
     @AppStorage("minimumRatingFilter") var minimumRatingFilter: Int = 0
+
+    @State var curvesURLLevels: [String: CurvesData] = [:]
+    @State var showCurvesHUD: Bool = false
+    @State var curvesData: CurvesData = .init()
+    @State var curvesChannel: CurveChannel = .all
+    @State var curvesBaseImage: NSImage?
+    @State var curvesTask: Task<Void, Never>?
+
+    @State var straightenAngles: [String: Double] = [:]
+    @State var showStraightenHUD: Bool = false
+    @State var straightenAngle: Double = 0.0
+    @State var straightenBaseImage: NSImage?
+    @State var straightenTask: Task<Void, Never>?
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -285,41 +298,6 @@ struct SlideshowView: View {
         }
     }
 
-    @ViewBuilder private var vignetteHUD: some View {
-        if showVignetteHUD {
-            VStack {
-                Spacer()
-                VStack(spacing: 12) {
-                    HStack {
-                        Text("Vignette")
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Text(String(format: "%.1f", vignetteIntensity))
-                            .monospacedDigit()
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    Slider(value: $vignetteIntensity, in: 0...2, step: 0.1)
-                        .onChange(of: vignetteIntensity) { _, _ in scheduleVignettePreview() }
-                        .tint(.white)
-                    HStack(spacing: 16) {
-                        Button("Cancel") { cancelVignetteHUD() }
-                            .buttonStyle(.bordered)
-                            .tint(.white)
-                        Button("Apply") { applyVignetteToImage() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-                .padding(20)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .frame(maxWidth: 360)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
-            }
-        }
-    }
-
     @ViewBuilder private var adjustmentsHUD: some View {
         if showAdjustmentsHUD {
             VStack {
@@ -429,6 +407,8 @@ struct SlideshowView: View {
         denoiseHUD
         vignetteHUD
         adjustmentsHUD
+        curvesHUD
+        straightenHUD
         cropOverlay
         beforeAfterLabel
         slideshowProgressBar
@@ -565,7 +545,12 @@ struct SlideshowView: View {
                         guard !isProcessing else { return }
                         imageLoader.previousImage()
                     },
-                    dragURL: imageLoader.currentImageURL
+                    dragURL: imageLoader.currentImageURL,
+                    onSwipeNavigate: { isNext in
+                        guard !isProcessing else { return }
+                        if isNext { imageLoader.nextImage() } else { imageLoader.previousImage() }
+                    },
+                    swipeEnabled: abs(zoomPan.zoomScale - 1.0) < 0.01 && !cropController.isActive
                 )
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(imageAccessibilityLabel)
@@ -650,7 +635,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -787,6 +772,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.adjustmentsImage)) { _ in
             ifKeyWindow { openAdjustmentsHUD() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.curvesImage)) { _ in
+            ifKeyWindow { openCurvesHUD() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreFaces)) { _ in
             ifKeyWindow { restoreFacesOnCurrentImage() }
         }
@@ -822,6 +810,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .removeCrop)) { _ in
             ifKeyWindow { removeCropForCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .straightenImage)) { _ in
+            ifKeyWindow { openStraightenHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .removeStraighten)) { _ in
+            ifKeyWindow { removeStraightenForCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -989,6 +983,12 @@ struct SlideshowView: View {
         } message: {
             Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyAll)) { _ in
+            ifKeyWindow { batchApplyEdits(favouritesOnly: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyFavourites)) { _ in
+            ifKeyWindow { batchApplyEdits(favouritesOnly: true) }
+        }
         .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
 
@@ -1038,6 +1038,30 @@ struct SlideshowView: View {
             }
             if keyPress.characters == "\r" {
                 applyAdjustmentsToImage()
+                return .handled
+            }
+            return .ignored
+        }
+
+        if showCurvesHUD {
+            if key == .escape {
+                cancelCurvesHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyCurvesToImage()
+                return .handled
+            }
+            return .ignored
+        }
+
+        if showStraightenHUD {
+            if key == .escape {
+                cancelStraightenHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyStraightenToImage()
                 return .handled
             }
             return .ignored
@@ -1248,6 +1272,15 @@ struct SlideshowView: View {
             return .handled
         case "e":
             openAdjustmentsHUD()
+            return .handled
+        case "E":
+            openCurvesHUD()
+            return .handled
+        case "y":
+            openStraightenHUD()
+            return .handled
+        case "Y":
+            removeStraightenForCurrentImage()
             return .handled
         case "b":
             showingOriginal = true
@@ -1791,10 +1824,20 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
         }
+        // Apply curves (skip during HUD preview)
+        if !showCurvesHUD, let curves = curvesURLLevels[url.absoluteString], !curves.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCurves(curves, to: image) ?? image
+        }
         // Apply vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+        // Apply straighten (skip during HUD preview)
+        if !showStraightenHUD, let sAngle = straightenAngles[url.absoluteString], sAngle != 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
         // Apply crop as the final geometry layer
         if let cropRegion = cropRegions[url.absoluteString],
@@ -1941,10 +1984,20 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyAdjustments(adj, to: image) ?? image
         }
+        // Curves (skip during HUD preview)
+        if !showCurvesHUD, let curves = curvesURLLevels[url.absoluteString], !curves.isIdentity,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyCurves(curves, to: image) ?? image
+        }
         // Vignette (skip during HUD preview)
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+        // Straighten (skip during HUD preview)
+        if !showStraightenHUD, let sAngle = straightenAngles[url.absoluteString], sAngle != 0,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
         // Crop as final geometry layer
         if let cropRegion = cropRegions[url.absoluteString],
@@ -1997,67 +2050,6 @@ struct SlideshowView: View {
         saveFavourites()
         UserDefaults.standard.set(name ?? "", forKey: "activePhotoEffect")
         updateDisplayImage()
-    }
-
-    private func applyVignette(intensity: Double, to image: NSImage) -> NSImage? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        let ciImage = CIImage(cgImage: cgImage)
-        guard let filter = CIFilter(name: "CIVignetteEffect") else { return nil }
-        filter.setValue(ciImage, forKey: kCIInputImageKey)
-        filter.setValue(CIVector(x: ciImage.extent.midX, y: ciImage.extent.midY), forKey: "inputCenter")
-        filter.setValue(max(ciImage.extent.width, ciImage.extent.height) * 0.75, forKey: "inputRadius")
-        filter.setValue(intensity, forKey: kCIInputIntensityKey)
-        guard let outputImage = filter.outputImage else { return nil }
-        let context = CIContext()
-        guard let cgOut = context.createCGImage(outputImage, from: outputImage.extent) else { return nil }
-        return NSImage(cgImage: cgOut, size: image.size)
-    }
-
-    private func openVignetteHUD() {
-        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying else { return }
-        vignetteIntensity = vignetteURLLevels[url.absoluteString] ?? 1.0
-        showVignetteHUD = true         // pipeline now skips vignette
-        updateDisplayImage()            // recomputes without vignette → clean base
-        vignetteBaseImage = currentDisplayImage
-        scheduleVignettePreview()
-    }
-
-    private func scheduleVignettePreview() {
-        vignetteTask?.cancel()
-        vignetteTask = Task {
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-            await MainActor.run { applyVignettePreview() }
-        }
-    }
-
-    private func applyVignettePreview() {
-        guard let base = vignetteBaseImage else { return }
-        currentDisplayImage = (vignetteIntensity > 0 ? applyVignette(intensity: vignetteIntensity, to: base) : nil) ?? base
-    }
-
-    private func applyVignetteToImage() {
-        guard let url = imageLoader.currentImageURL else { cancelVignetteHUD(); return }
-        if vignetteIntensity > 0 {
-            vignetteURLLevels[url.absoluteString] = vignetteIntensity
-        } else {
-            vignetteURLLevels.removeValue(forKey: url.absoluteString)
-        }
-        saveFavourites()
-        showVignetteHUD = false
-        vignetteTask?.cancel()
-        vignetteTask = nil
-        vignetteBaseImage = nil
-        updateDisplayImage()
-    }
-
-    private func cancelVignetteHUD() {
-        guard showVignetteHUD else { return }
-        showVignetteHUD = false
-        vignetteTask?.cancel()
-        vignetteTask = nil
-        vignetteBaseImage = nil
-        updateDisplayImage()  // restores pipeline including any previously persisted vignette
     }
 
     private func applyAdjustments(_ adj: ImageAdjustments, to image: NSImage) -> NSImage? {

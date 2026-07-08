@@ -58,6 +58,8 @@ extension NSNotification.Name {
 
     static let adjustmentsImage = NSNotification.Name("AdjustmentsImage")
 
+    static let curvesImage = NSNotification.Name("CurvesImage")
+
     static let restoreFaces = NSNotification.Name("RestoreFaces")
     static let removeFaceRestoration = NSNotification.Name("RemoveFaceRestoration")
 
@@ -76,6 +78,12 @@ extension NSNotification.Name {
     static let cropImage = NSNotification.Name("CropImage")
     static let removeCrop = NSNotification.Name("RemoveCrop")
 
+    static let straightenImage = NSNotification.Name("StraightenImage")
+    static let removeStraighten = NSNotification.Name("RemoveStraighten")
+
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
+
+    static let batchApplyAll = NSNotification.Name("BatchApplyAll")
+    static let batchApplyFavourites = NSNotification.Name("BatchApplyFavourites")
 }
