@@ -325,6 +325,12 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("s", modifiers: .command)
             .disabled(!imageLoaded)
 
+            Button("Export with Edits\u{2026}") {
+                NotificationCenter.default.post(name: .exportWithEdits, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Reveal in Finder") {

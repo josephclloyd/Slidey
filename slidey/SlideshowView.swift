@@ -851,6 +851,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.saveEditedImage)) { _ in
             ifKeyWindow { saveEditedImage() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportWithEdits)) { _ in
+            ifKeyWindow { exportWithEdits() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSlideshow)) { _ in
             if myWindow == nil || myWindow?.isKeyWindow == true {
                 toggleSlideshow()
@@ -1983,7 +1986,7 @@ struct SlideshowView: View {
         removeEdit(.sharpen)
     }
 
-    private func applyPhotoEffect(_ filterName: String, to image: NSImage) -> NSImage? {
+    func applyPhotoEffect(_ filterName: String, to image: NSImage) -> NSImage? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let ciImage = CIImage(cgImage: cgImage)
         guard let filter = CIFilter(name: filterName) else { return nil }
@@ -2034,7 +2037,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {
+    func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {
         guard horizontal || vertical else { return image }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         var ciImage = CIImage(cgImage: cgImage)
@@ -2080,7 +2083,7 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
-    private func applyAdjustments(_ adj: ImageAdjustments, to image: NSImage) -> NSImage? {
+    func applyAdjustments(_ adj: ImageAdjustments, to image: NSImage) -> NSImage? {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         var ciImage = CIImage(cgImage: cgImage)
         if adj.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
@@ -3159,7 +3162,7 @@ struct SlideshowView: View {
     /// Bakes the current rotation angle into a fresh NSImage so the saved
     /// file matches what the user sees. Returns the input untouched if no
     /// rotation is applied.
-    private func applyRotationIfNeeded(_ image: NSImage) -> NSImage {
+    func applyRotationIfNeeded(_ image: NSImage) -> NSImage {
         let degrees = rotationAngle.degrees.truncatingRemainder(dividingBy: 360)
         if degrees == 0 { return image }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -3199,7 +3202,7 @@ struct SlideshowView: View {
         return NSImage(cgImage: rotated, size: newSize)
     }
 
-    private func showSavedToast(filename: String) {
+    func showSavedToast(filename: String) {
         let message = "Saved as \(filename)"
         savedToast = message
         savedToastIsError = false
@@ -3209,7 +3212,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func showErrorToast(_ message: String) {
+    func showErrorToast(_ message: String) {
         savedToast = message
         savedToastIsError = true
         // Errors stay up a bit longer so the user can read them.
