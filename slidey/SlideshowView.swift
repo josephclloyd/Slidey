@@ -158,6 +158,9 @@ struct SlideshowView: View {
     @State var curvesBaseImage: NSImage?
     @State var curvesTask: Task<Void, Never>?
 
+    @State var histogramData: HistogramData?
+    @State var histogramShowRGB: Bool = false
+
     @State var straightenAngles: [String: Double] = [:]
     @State var showStraightenHUD: Bool = false
     @State var straightenAngle: Double = 0.0
@@ -303,10 +306,27 @@ struct SlideshowView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 10) {
-                    Text("Adjustments")
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack {
+                        Text("Adjustments")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Button(action: { histogramShowRGB.toggle() }) {
+                            Text(histogramShowRGB ? "RGB" : "L")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    if let data = histogramData {
+                        HistogramView(data: data, showRGB: histogramShowRGB)
+                            .frame(height: 60)
+                    }
                     adjustmentRow("Exposure", value: $adjustments.exposure, range: -2...2)
                     adjustmentRow("Highlights", value: $adjustments.highlights, range: -1...1)
                     adjustmentRow("Shadows", value: $adjustments.shadows, range: -1...1)
@@ -2103,7 +2123,13 @@ struct SlideshowView: View {
 
     private func applyAdjustmentsPreview() {
         guard let base = adjustmentsBaseImage else { return }
-        currentDisplayImage = (adjustments.isIdentity ? nil : applyAdjustments(adjustments, to: base)) ?? base
+        let preview = (adjustments.isIdentity ? nil : applyAdjustments(adjustments, to: base)) ?? base
+        currentDisplayImage = preview
+        updateHistogram(from: preview)
+    }
+
+    func updateHistogram(from image: NSImage) {
+        histogramData = HistogramData.compute(from: image)
     }
 
     private func applyAdjustmentsToImage() {
@@ -2116,6 +2142,7 @@ struct SlideshowView: View {
         saveFavourites()
         showAdjustmentsHUD = false
         adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
+        histogramData = nil
         updateDisplayImage()
     }
 
@@ -2123,6 +2150,7 @@ struct SlideshowView: View {
         guard showAdjustmentsHUD else { return }
         showAdjustmentsHUD = false
         adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
+        histogramData = nil
         updateDisplayImage()
     }
 

@@ -884,3 +884,50 @@ final class CurvesDataTests: XCTestCase {
         XCTAssertEqual(NSNotification.Name.curvesImage.rawValue, "CurvesImage")
     }
 }
+
+// MARK: - Histogram data model tests
+
+final class HistogramDataTests: XCTestCase {
+    func testCIAreaHistogramFilterIsAvailable() {
+        XCTAssertNotNil(CIFilter(name: "CIAreaHistogram"))
+    }
+
+    func testComputeFromSolidRedImage() {
+        let image = NSImage(size: NSSize(width: 64, height: 64))
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: 64, height: 64).fill()
+        image.unlockFocus()
+
+        guard let data = HistogramData.compute(from: image) else {
+            XCTFail("HistogramData.compute returned nil for a valid image")
+            return
+        }
+        XCTAssertEqual(data.red.count, 64)
+        XCTAssertEqual(data.green.count, 64)
+        XCTAssertEqual(data.blue.count, 64)
+        XCTAssertEqual(data.luminance.count, 64)
+
+        let redMax = data.red.max() ?? 0
+        XCTAssertGreaterThan(redMax, 0, "Red channel should have non-zero values for a red image")
+    }
+
+    func testComputeFromSolidBlackImage() {
+        let image = NSImage(size: NSSize(width: 32, height: 32))
+        image.lockFocus()
+        NSColor.black.setFill()
+        NSRect(x: 0, y: 0, width: 32, height: 32).fill()
+        image.unlockFocus()
+
+        guard let data = HistogramData.compute(from: image) else {
+            XCTFail("HistogramData.compute returned nil")
+            return
+        }
+        XCTAssertGreaterThan(data.luminance[0], 0, "First bin should hold all black pixels")
+    }
+
+    func testComputeReturnsNilForEmptyImage() {
+        let image = NSImage(size: .zero)
+        XCTAssertNil(HistogramData.compute(from: image))
+    }
+}

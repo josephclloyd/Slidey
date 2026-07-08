@@ -13,6 +13,17 @@ extension SlideshowView {
                         Text("Curves")
                             .fontWeight(.medium)
                             .foregroundColor(.white)
+                        Button(action: { histogramShowRGB.toggle() }) {
+                            Text(histogramShowRGB ? "RGB" : "L")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white.opacity(0.8))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.15))
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
                         Spacer()
                         Picker("", selection: $curvesChannel) {
                             ForEach(CurveChannel.allCases, id: \.self) { ch in
@@ -21,6 +32,10 @@ extension SlideshowView {
                         }
                         .pickerStyle(.segmented)
                         .frame(width: 220)
+                    }
+                    if let data = histogramData {
+                        HistogramView(data: data, showRGB: histogramShowRGB)
+                            .frame(height: 60)
                     }
                     CurveGraphView(
                         points: curvePointsBinding,
@@ -84,6 +99,7 @@ extension SlideshowView {
         guard showCurvesHUD else { return }
         showCurvesHUD = false
         curvesTask?.cancel(); curvesTask = nil; curvesBaseImage = nil
+        histogramData = nil
         updateDisplayImage()
     }
 
@@ -97,6 +113,7 @@ extension SlideshowView {
         saveFavourites()
         showCurvesHUD = false
         curvesTask?.cancel(); curvesTask = nil; curvesBaseImage = nil
+        histogramData = nil
         updateDisplayImage()
     }
 
@@ -134,7 +151,9 @@ extension SlideshowView {
 
     private func applyCurvesPreview() {
         guard let base = curvesBaseImage else { return }
-        currentDisplayImage = (curvesData.isIdentity ? nil : applyCurves(curvesData, to: base)) ?? base
+        let preview = (curvesData.isIdentity ? nil : applyCurves(curvesData, to: base)) ?? base
+        currentDisplayImage = preview
+        updateHistogram(from: preview)
     }
 
     private func applyToneCurve(_ pts: CurvePoints, to ciImage: CIImage) -> CIImage {
