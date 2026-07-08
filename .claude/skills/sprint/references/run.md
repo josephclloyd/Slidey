@@ -52,6 +52,14 @@ phantom-commit check (#4) report false positives. Always assert `main` first.
 If any check fails, fix it before proceeding. The stale-worktree and phantom-commit
 checks are especially important — corrupted state from a prior run is hard to recover from.
 
+**Never `git pull` in the main checkout — use `git fetch && git merge --ff-only`.** A bare
+`git pull` can hit a divergent-branches prompt (the main checkout is being branched from
+by spawned sessions throughout the sprint) and leaves HEAD detached at `FETCH_HEAD` instead
+of fast-forwarding `main` cleanly. Hit in Sprint 24; recovered with a plain `git checkout
+main` since the fetch had already updated the local ref, but `merge --ff-only` fails loudly
+instead of prompting for a reconciliation strategy, which is safer given how often this
+checkout is switched between branches mid-sprint.
+
 ## Post-impl routine (run after EVERY impl session goes idle)
 
 Do these steps in order before running the review phase. All are required
@@ -193,6 +201,17 @@ sleep 10
 mcx track <N>
 mcx tracked --json   # prNumber should now be populated
 ```
+
+## Flag plan-time risks to the impl session directly
+
+If the sprint plan's per-issue notes call out a specific risk — a stale suggestion in the
+issue text (e.g. a key binding that predates the current registry), an interaction hazard
+with existing code (e.g. a gesture layer the new feature must not collide with), or anything
+else the plan author already anticipated — send it to the impl session as a `mcx claude send`
+follow-up immediately after spawning, in your own words with the specific file/symbol names.
+Don't rely on the session reading the plan file itself or re-deriving the risk from the issue
+text alone. Sprint 24 did this for two issues (a stale key-binding suggestion, a gesture-
+precedence hazard) and both landed with 0 repair rounds.
 
 ## The main loop
 
@@ -395,6 +414,23 @@ git -C <worktree-path> log origin/<branch> --oneline 2>/dev/null | head -1
 
 If the branch wasn't pushed, `send` the session to push before bye-ing it.
 Unpushed work is unrecoverable after a daemon restart.
+
+## Prefer --body-file over inline heredocs for gh issue/pr create
+
+Hit a bash heredoc quoting failure twice in Sprint 24 — once for the orchestrator itself
+(filing GitHub issues whose body text contained apostrophes) and once for a spawned impl
+session's own `gh pr create` (`bad substitution: no closing ')'`, a bash parse error, not a
+quota or logic issue). Both recovered fine (the session had already committed and pushed;
+only PR creation failed), but this is a repeatable, avoidable failure mode.
+
+Write the body to a file first, then pass `--body-file`:
+```bash
+# Orchestrator: use the Write tool to create the body file, then:
+gh pr create --title "..." --body-file /path/to/body.md --base main
+gh issue create --title "..." --label "..." --body-file /path/to/body.md
+```
+This sidesteps shell quoting entirely — no escaping needed for apostrophes, backticks, or
+embedded double quotes in the body text. Prefer this over `--body "$(cat <<'EOF' ... EOF)"`.
 
 ## Build verification
 

@@ -95,11 +95,17 @@ defineAlias({
       `- Is the manual test checklist in the PR body specific enough for Joe to follow?`,
       `- Does the PR include tests for new logic? ImageLoader and SlideshowController changes are unit-testable and must have tests. If no tests are present and the logic is testable, flag as has-issues. If the logic is genuinely untestable (pure SwiftUI wiring), the PR description must say so explicitly.`,
       ``,
-      `If the PR looks good: post a brief "LGTM" comment and output exactly: VERDICT: clean`,
-      `If there are issues: post a review comment on the PR describing each issue clearly.`,
-      `  Then output exactly: VERDICT: has-issues`,
+      `If the PR looks good: post a brief "LGTM" comment on the PR first, then as your`,
+      `very last message output exactly one line and nothing else: VERDICT: clean`,
+      `If there are issues: post a review comment on the PR describing each issue clearly`,
+      `first, then as your very last message output exactly one line and nothing else:`,
+      `VERDICT: has-issues`,
       `If there is a fundamental problem that can't be repaired without rethinking the approach:`,
-      `  Post a comment explaining why. Output exactly: VERDICT: unresolvable`,
+      `Post a comment explaining why first, then as your very last message output exactly`,
+      `one line and nothing else: VERDICT: unresolvable`,
+      ``,
+      `Your final message must be ONLY that one-line verdict token — no summary, no`,
+      `recap of findings, nothing else on that line or after it.`,
     ].join("\n");
 
     const command = [
