@@ -167,6 +167,8 @@ struct SlideshowView: View {
     @State var straightenBaseImage: NSImage?
     @State var straightenTask: Task<Void, Never>?
 
+    @State var copiedAdjustments: CopiedAdjustments?
+
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
     }
@@ -1008,6 +1010,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyFavourites)) { _ in
             ifKeyWindow { batchApplyEdits(favouritesOnly: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyAdjustments)) { _ in
+            ifKeyWindow { copyCurrentAdjustments() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.pasteAdjustments)) { _ in
+            ifKeyWindow { pasteAdjustments() }
         }
         .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
