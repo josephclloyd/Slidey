@@ -11,4 +11,5 @@ struct CopiedAdjustments {
     var flipV: Bool
     var effect: String?
     var straightenAngle: Double?
+    var perspectiveCorners: PerspectiveCorners?
 }

@@ -37,6 +37,10 @@ extension SlideshowView {
             image = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
 
+        if let corners = perspectiveCorners[url.absoluteString] {
+            image = applyPerspectiveTransform(corners: corners, to: image) ?? image
+        }
+
         if let cropRegion = cropRegions[url.absoluteString] {
             image = applyCropToImage(image, region: cropRegion) ?? image
         }
