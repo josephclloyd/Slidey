@@ -16,8 +16,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          lfs: true
+        # SwiftLint never reads the bundled Core ML weight files, so this job doesn't
+        # need real LFS content — skip it entirely to avoid drawing from the repo's
+        # LFS bandwidth budget on every push.
 
       - name: Install SwiftLint
         run: brew install swiftlint
@@ -32,7 +33,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          lfs: true
+          lfs: false
+
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Git LFS Pull
+        # Xcode's coremlc compiles the .mlpackage weight files at build time, so Build
+        # (unlike Lint) needs the real bytes. Restoring from cache above means this only
+        # draws LFS bandwidth on a cache miss (first run, or when the weights change),
+        # not on every push.
+        run: git lfs pull
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
@@ -47,7 +65,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          lfs: true
+          lfs: false
+
+      - name: Create LFS file list
+        run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        id: lfs-cache
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+
+      - name: Git LFS Pull
+        run: git lfs pull
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
