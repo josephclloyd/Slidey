@@ -2142,7 +2142,7 @@ struct SlideshowView: View {
 
     private func openAdjustmentsHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying else { return }
+        guard !slideshow.isPlaying, !showPerspectiveHUD else { return }
         adjustments = adjustmentURLLevels[url.absoluteString] ?? .init()
         showAdjustmentsHUD = true
         updateDisplayImage()

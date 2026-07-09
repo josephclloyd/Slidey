@@ -220,6 +220,7 @@ extension SlideshowView {
         guard let url = imageLoader.currentImageURL else { return }
         guard let image = imageLoader.currentImage else { return }
         guard !slideshow.isPlaying else { return }
+        guard !showPerspectiveHUD else { return }
         guard !cropController.isActive, !showStraightenHUD, !showDenoiseHUD,
               !showVignetteHUD, !showAdjustmentsHUD, !showCurvesHUD else { return }
 

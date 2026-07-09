@@ -48,7 +48,7 @@ extension SlideshowView {
 
     func openStraightenHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying else { return }
+        guard !slideshow.isPlaying, !showPerspectiveHUD else { return }
         straightenAngle = straightenAngles[url.absoluteString] ?? 0.0
         showStraightenHUD = true
         updateDisplayImage()
