@@ -82,6 +82,9 @@ extension NSNotification.Name {
     static let straightenImage = NSNotification.Name("StraightenImage")
     static let removeStraighten = NSNotification.Name("RemoveStraighten")
 
+    static let perspectiveCorrection = NSNotification.Name("PerspectiveCorrection")
+    static let removePerspectiveCorrection = NSNotification.Name("RemovePerspectiveCorrection")
+
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
 

@@ -39,6 +39,7 @@
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
 		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
 		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
+		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +87,7 @@
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
 		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
+		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -137,6 +139,7 @@
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
 				EX100001000000000000001 /* SlideshowView+Export.swift */,
+				PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */,
 				H1000001000000000000001 /* CropController.swift */,
 				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
@@ -306,6 +309,7 @@
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
 				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
+				PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
 				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,

@@ -595,6 +595,15 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("y", modifiers: .shift)
 
+            Button("Perspective Correction\u{2026}") {
+                NotificationCenter.default.post(name: .perspectiveCorrection, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: .option)
+
+            Button("Remove Perspective Correction") {
+                NotificationCenter.default.post(name: .removePerspectiveCorrection, object: nil)
+            }
+
             Divider()
 
             Button("Vignette\u{2026}") {

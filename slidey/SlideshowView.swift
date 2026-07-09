@@ -166,7 +166,10 @@ struct SlideshowView: View {
     @State var straightenAngle: Double = 0.0
     @State var straightenBaseImage: NSImage?
     @State var straightenTask: Task<Void, Never>?
-
+    @State var perspectiveCorners: [String: PerspectiveCorners] = [:]
+    @State var showPerspectiveHUD: Bool = false
+    @State var perspectiveHUDCorners: PerspectiveCorners?
+    @State var perspectiveDraggingCorner: Int?
     @State var copiedAdjustments: CopiedAdjustments?
 
     var effectiveDisplayImage: NSImage? {
@@ -431,6 +434,7 @@ struct SlideshowView: View {
         adjustmentsHUD
         curvesHUD
         straightenHUD
+        perspectiveCorrectionOverlay
         cropOverlay
         beforeAfterLabel
         slideshowProgressBar
@@ -839,6 +843,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .removeStraighten)) { _ in
             ifKeyWindow { removeStraightenForCurrentImage() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .perspectiveCorrection)) { _ in
+            ifKeyWindow { openPerspectiveHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .removePerspectiveCorrection)) { _ in
+            ifKeyWindow { removePerspectiveCorrectionForCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -1098,6 +1108,12 @@ struct SlideshowView: View {
             return .ignored
         }
 
+        if showPerspectiveHUD {
+            if key == .escape { cancelPerspectiveHUD(); return .handled }
+            if keyPress.characters == "\r" { applyPerspectiveToImage(); return .handled }
+            return .ignored
+        }
+
         if cropController.isActive {
             if key == .escape { cancelCrop(); return .handled }
             if keyPress.characters == "\r" { confirmCrop(); return .handled }
@@ -1308,6 +1324,7 @@ struct SlideshowView: View {
             openCurvesHUD()
             return .handled
         case "y":
+            guard !keyPress.modifiers.contains(.option) else { return .ignored }
             openStraightenHUD()
             return .handled
         case "Y":
@@ -1870,6 +1887,10 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
+        if !showPerspectiveHUD, let corners = perspectiveCorners[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applyPerspectiveTransform(corners: corners, to: image) ?? image
+        }
         // Apply crop as the final geometry layer
         if let cropRegion = cropRegions[url.absoluteString],
            let image = currentDisplayImage {
@@ -2029,6 +2050,11 @@ struct SlideshowView: View {
         if !showStraightenHUD, let sAngle = straightenAngles[url.absoluteString], sAngle != 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyStraightenTransform(angle: sAngle, to: image) ?? image
+        }
+        // Perspective correction (skip during HUD preview)
+        if !showPerspectiveHUD, let corners = perspectiveCorners[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applyPerspectiveTransform(corners: corners, to: image) ?? image
         }
         // Crop as final geometry layer
         if let cropRegion = cropRegions[url.absoluteString],

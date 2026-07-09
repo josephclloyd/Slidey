@@ -1013,3 +1013,108 @@ final class HistogramDataTests: XCTestCase {
         XCTAssertNil(HistogramData.compute(from: image))
     }
 }
+
+// MARK: - PerspectiveCorners tests
+
+final class PerspectiveCornersTests: XCTestCase {
+    func testIdentityHasUnitSquareCorners() {
+        let id = PerspectiveCorners.identity
+        XCTAssertEqual(id.topLeft, CGPoint(x: 0, y: 0))
+        XCTAssertEqual(id.topRight, CGPoint(x: 1, y: 0))
+        XCTAssertEqual(id.bottomLeft, CGPoint(x: 0, y: 1))
+        XCTAssertEqual(id.bottomRight, CGPoint(x: 1, y: 1))
+    }
+
+    func testSubscriptGettersMatchProperties() {
+        let corners = PerspectiveCorners(
+            topLeft: CGPoint(x: 0.1, y: 0.2),
+            topRight: CGPoint(x: 0.8, y: 0.15),
+            bottomLeft: CGPoint(x: 0.05, y: 0.9),
+            bottomRight: CGPoint(x: 0.85, y: 0.95)
+        )
+        XCTAssertEqual(corners[0], corners.topLeft)
+        XCTAssertEqual(corners[1], corners.topRight)
+        XCTAssertEqual(corners[2], corners.bottomLeft)
+        XCTAssertEqual(corners[3], corners.bottomRight)
+    }
+
+    func testSubscriptSettersMutateCorrectCorner() {
+        var corners = PerspectiveCorners.identity
+        let newPoint = CGPoint(x: 0.5, y: 0.5)
+        corners[0] = newPoint
+        XCTAssertEqual(corners.topLeft, newPoint)
+        corners[1] = newPoint
+        XCTAssertEqual(corners.topRight, newPoint)
+        corners[2] = newPoint
+        XCTAssertEqual(corners.bottomLeft, newPoint)
+        corners[3] = newPoint
+        XCTAssertEqual(corners.bottomRight, newPoint)
+    }
+
+    func testOutOfBoundsSubscriptReturnsZero() {
+        let corners = PerspectiveCorners.identity
+        XCTAssertEqual(corners[4], .zero)
+        XCTAssertEqual(corners[-1], .zero)
+    }
+
+    func testEquatable() {
+        let a = PerspectiveCorners.identity
+        let b = PerspectiveCorners.identity
+        XCTAssertEqual(a, b)
+
+        var c = a
+        c.topLeft = CGPoint(x: 0.1, y: 0.1)
+        XCTAssertNotEqual(a, c)
+    }
+}
+
+// MARK: - Perspective transform tests
+
+final class PerspectiveTransformTests: XCTestCase {
+    private func make100x100Image() -> NSImage {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 100, pixelsHigh: 100,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        let image = NSImage(size: NSSize(width: 100, height: 100))
+        image.addRepresentation(rep)
+        return image
+    }
+
+    func testApplyPerspectiveTransformWithIdentityPreservesSize() {
+        let view = SlideshowView()
+        let image = make100x100Image()
+        let result = view.applyPerspectiveTransform(corners: .identity, to: image)
+        XCTAssertNotNil(result)
+        if let r = result {
+            XCTAssertEqual(r.size.width, 100, accuracy: 2)
+            XCTAssertEqual(r.size.height, 100, accuracy: 2)
+        }
+    }
+
+    func testApplyPerspectiveTransformWithSubQuadProducesSmallerImage() {
+        let view = SlideshowView()
+        let image = make100x100Image()
+        let corners = PerspectiveCorners(
+            topLeft: CGPoint(x: 0.25, y: 0.25),
+            topRight: CGPoint(x: 0.75, y: 0.25),
+            bottomLeft: CGPoint(x: 0.25, y: 0.75),
+            bottomRight: CGPoint(x: 0.75, y: 0.75)
+        )
+        let result = view.applyPerspectiveTransform(corners: corners, to: image)
+        XCTAssertNotNil(result)
+        if let r = result {
+            XCTAssertLessThan(r.size.width, 100)
+            XCTAssertLessThan(r.size.height, 100)
+        }
+    }
+
+    func testApplyPerspectiveTransformReturnsNilForEmptyImage() {
+        let view = SlideshowView()
+        let image = NSImage(size: .zero)
+        let result = view.applyPerspectiveTransform(corners: .identity, to: image)
+        XCTAssertNil(result)
+    }
+}

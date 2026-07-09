@@ -16,6 +16,7 @@ extension SlideshowView {
         let sourceFlipV = flippedVertically.contains(sourceKey)
         let sourceEffect = imageEffects[sourceURL]
         let sourceStraighten = straightenAngles[sourceKey]
+        let sourcePerspective = perspectiveCorners[sourceKey]
 
         let batchableStack: EditStack? = sourceStack.flatMap { stack in
             var filtered = EditStack()
@@ -40,6 +41,7 @@ extension SlideshowView {
             || sourceFlipH || sourceFlipV
             || sourceEffect != nil
             || sourceStraighten != nil
+            || sourcePerspective != nil
 
         guard hasEdits else {
             savedToast = "No adjustments to copy"
@@ -60,7 +62,8 @@ extension SlideshowView {
             flipH: sourceFlipH,
             flipV: sourceFlipV,
             effect: sourceEffect,
-            straightenAngle: sourceStraighten
+            straightenAngle: sourceStraighten,
+            perspectiveCorners: sourcePerspective
         )
 
         let message = "Adjustments copied"
@@ -143,6 +146,12 @@ extension SlideshowView {
             straightenAngles[key] = straighten
         } else {
             straightenAngles.removeValue(forKey: key)
+        }
+
+        if let perspective = copied.perspectiveCorners {
+            perspectiveCorners[key] = perspective
+        } else {
+            perspectiveCorners.removeValue(forKey: key)
         }
 
         updateDisplayImage()
