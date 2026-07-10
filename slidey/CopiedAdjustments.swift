@@ -12,4 +12,5 @@ struct CopiedAdjustments {
     var effect: String?
     var straightenAngle: Double?
     var perspectiveCorners: PerspectiveCorners?
+    var localAdjustmentLayers: [LocalAdjustmentLayer]?
 }

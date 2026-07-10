@@ -1068,6 +1068,185 @@ final class PerspectiveCornersTests: XCTestCase {
     }
 }
 
+// MARK: - Local adjustments notification tests
+
+final class LocalAdjustmentsNotificationTests: XCTestCase {
+    func testLocalAdjustmentsImageNotificationFires() {
+        let exp = expectation(description: "localAdjustmentsImage fires")
+        let obs = NotificationCenter.default.addObserver(forName: .localAdjustmentsImage, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveLocalAdjustmentsNotificationFires() {
+        let exp = expectation(description: "removeLocalAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeLocalAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testLocalAdjustmentsNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.localAdjustmentsImage.rawValue, "LocalAdjustmentsImage")
+        XCTAssertEqual(NSNotification.Name.removeLocalAdjustments.rawValue, "RemoveLocalAdjustments")
+    }
+
+    func testLocalAdjustmentsNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.localAdjustmentsImage, .removeLocalAdjustments]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
+// MARK: - LocalAdjustmentLayer model tests
+
+final class LocalAdjustmentLayerTests: XCTestCase {
+    func testMaskCGImageFromValidData() {
+        let width = 4
+        let height = 4
+        let data = Data(repeating: 128, count: width * height)
+        let layer = LocalAdjustmentLayer(
+            maskData: data, maskWidth: width, maskHeight: height,
+            adjustments: .init()
+        )
+        let cgImage = layer.maskCGImage()
+        XCTAssertNotNil(cgImage)
+        XCTAssertEqual(cgImage?.width, width)
+        XCTAssertEqual(cgImage?.height, height)
+    }
+
+    func testMaskCIImageFromValidData() {
+        let width = 8
+        let height = 8
+        let data = Data(repeating: 255, count: width * height)
+        let layer = LocalAdjustmentLayer(
+            maskData: data, maskWidth: width, maskHeight: height,
+            adjustments: .init()
+        )
+        let ciImage = layer.maskCIImage()
+        XCTAssertNotNil(ciImage)
+        XCTAssertEqual(ciImage?.extent.width ?? 0, CGFloat(width), accuracy: 0.01)
+        XCTAssertEqual(ciImage?.extent.height ?? 0, CGFloat(height), accuracy: 0.01)
+    }
+
+    func testMaskCGImageReturnsNilForEmptyData() {
+        let layer = LocalAdjustmentLayer(
+            maskData: Data(), maskWidth: 0, maskHeight: 0,
+            adjustments: .init()
+        )
+        XCTAssertNil(layer.maskCGImage())
+    }
+}
+
+// MARK: - LocalAdjustmentController tests
+
+final class LocalAdjustmentControllerTests: XCTestCase {
+    func testDefaultState() {
+        let ctrl = LocalAdjustmentController()
+        XCTAssertFalse(ctrl.isActive)
+        XCTAssertEqual(ctrl.brushRadius, 40)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        XCTAssertNil(ctrl.mousePosition)
+        XCTAssertNil(ctrl.lastPaintPixel)
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 0)
+        XCTAssertEqual(ctrl.maskHeight, 0)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+    }
+
+    func testInitMaskCreatesContext() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 50)
+        XCTAssertNotNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 100)
+        XCTAssertEqual(ctrl.maskHeight, 50)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+        XCTAssertFalse(ctrl.hasPainted)
+    }
+
+    func testInitMaskFillsBlack() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 4, height: 4)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertEqual(data.count, 4 * 4)
+        XCTAssertTrue(data.allSatisfy { $0 == 0 })
+    }
+
+    func testPaintStrokeSetsFlagsAndIncrementsMaskVersion() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 100)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+        ctrl.paintStroke(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 50, y: 50), pixelRadius: 10)
+        XCTAssertTrue(ctrl.hasPainted)
+        XCTAssertGreaterThan(ctrl.maskVersion, 0)
+    }
+
+    func testPaintStrokeProducesNonZeroPixels() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 100)
+        ctrl.paintStroke(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 50, y: 50), pixelRadius: 20)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        let nonZero = data.filter { $0 > 0 }.count
+        XCTAssertGreaterThan(nonZero, 0, "Painting should produce non-zero mask pixels")
+    }
+
+    func testResetMaskClearsToBlack() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 20, height: 20)
+        ctrl.paintStroke(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 10, y: 10), pixelRadius: 5)
+        XCTAssertTrue(ctrl.hasPainted)
+
+        ctrl.resetMask()
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertTrue(data.allSatisfy { $0 == 0 })
+    }
+
+    func testResetClearsEverything() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.isActive = true
+        ctrl.initMask(width: 50, height: 50)
+        ctrl.adjustments.exposure = 1.0
+        ctrl.hasPainted = true
+
+        ctrl.reset()
+        XCTAssertFalse(ctrl.isActive)
+        XCTAssertNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 0)
+        XCTAssertEqual(ctrl.maskHeight, 0)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+    }
+
+    func testMaskCGImageAfterInit() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 10, height: 10)
+        let img = ctrl.maskCGImage()
+        XCTAssertNotNil(img)
+        XCTAssertEqual(img?.width, 10)
+        XCTAssertEqual(img?.height, 10)
+    }
+
+    func testExtractMaskDataReturnsCorrectSize() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 32, height: 16)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertEqual(data.count, 32 * 16)
+    }
+}
+
 // MARK: - Perspective transform tests
 
 final class PerspectiveTransformTests: XCTestCase {

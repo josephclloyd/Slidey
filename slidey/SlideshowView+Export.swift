@@ -21,6 +21,10 @@ extension SlideshowView {
             image = applyPhotoEffect(effectName, to: image) ?? image
         }
 
+        if let layers = localAdjustmentURLLayers[url.absoluteString], !layers.isEmpty {
+            image = applyLocalAdjustmentLayers(layers, to: image) ?? image
+        }
+
         if let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity {
             image = applyAdjustments(adj, to: image) ?? image
         }

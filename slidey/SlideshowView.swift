@@ -123,9 +123,9 @@ struct SlideshowView: View {
     }
     @State var adjustmentURLLevels: [String: ImageAdjustments] = [:]
     @State var showAdjustmentsHUD: Bool = false
-    @State private var adjustments: ImageAdjustments = .init()
-    @State private var adjustmentsBaseImage: NSImage?
-    @State private var adjustmentsTask: Task<Void, Never>?
+    @State var adjustments: ImageAdjustments = .init()
+    @State var adjustmentsBaseImage: NSImage?
+    @State var adjustmentsTask: Task<Void, Never>?
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
     @State private var showFavouritesOnly: Bool = false
@@ -171,6 +171,12 @@ struct SlideshowView: View {
     @State var perspectiveHUDCorners: PerspectiveCorners?
     @State var perspectiveDraggingCorner: Int?
     @State var copiedAdjustments: CopiedAdjustments?
+
+    @State var localAdjustmentURLLayers: [String: [LocalAdjustmentLayer]] = [:]
+    @State var showLocalAdjustmentsHUD: Bool = false
+    @State var localAdjController = LocalAdjustmentController()
+    @State var localAdjBaseImage: NSImage?
+    @State var localAdjPreviewTask: Task<Void, Never>?
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -306,77 +312,6 @@ struct SlideshowView: View {
         }
     }
 
-    @ViewBuilder private var adjustmentsHUD: some View {
-        if showAdjustmentsHUD {
-            VStack {
-                Spacer()
-                VStack(spacing: 10) {
-                    HStack {
-                        Text("Adjustments")
-                            .fontWeight(.medium)
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button(action: { histogramShowRGB.toggle() }) {
-                            Text(histogramShowRGB ? "RGB" : "L")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.15))
-                                .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    if let data = histogramData {
-                        HistogramView(data: data, showRGB: histogramShowRGB)
-                            .frame(height: 60)
-                    }
-                    adjustmentRow("Exposure", value: $adjustments.exposure, range: -2...2)
-                    adjustmentRow("Highlights", value: $adjustments.highlights, range: -1...1)
-                    adjustmentRow("Shadows", value: $adjustments.shadows, range: -1...1)
-                    adjustmentRow("Vibrance", value: $adjustments.vibrance, range: -1...1)
-                    adjustmentRow("Warmth", value: $adjustments.warmth, range: -1...1)
-                    HStack(spacing: 16) {
-                        Button("Reset") {
-                            adjustments = .init()
-                            scheduleAdjustmentsPreview()
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.white)
-                        Spacer()
-                        Button("Cancel") { cancelAdjustmentsHUD() }
-                            .buttonStyle(.bordered)
-                            .tint(.white)
-                        Button("Apply") { applyAdjustmentsToImage() }
-                            .buttonStyle(.borderedProminent)
-                    }
-                }
-                .padding(20)
-                .background(.black.opacity(0.85))
-                .cornerRadius(12)
-                .frame(maxWidth: 400)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 40)
-            }
-        }
-    }
-
-    private func adjustmentRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
-        HStack {
-            Text(label)
-                .foregroundColor(.white)
-                .frame(width: 90, alignment: .leading)
-            Slider(value: value, in: range)
-                .onChange(of: value.wrappedValue) { _, _ in scheduleAdjustmentsPreview() }
-                .tint(.white)
-            Text(String(format: "%+.2f", value.wrappedValue))
-                .monospacedDigit()
-                .foregroundColor(.white.opacity(0.7))
-                .frame(width: 50, alignment: .trailing)
-        }
-    }
-
     @ViewBuilder
     private var imageInfoOverlay: some View {
         if let url = imageLoader.currentImageURL,
@@ -434,6 +369,7 @@ struct SlideshowView: View {
         adjustmentsHUD
         curvesHUD
         straightenHUD
+        localAdjustmentsOverlay
         perspectiveCorrectionOverlay
         cropOverlay
         beforeAfterLabel
@@ -661,7 +597,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -848,6 +784,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .removePerspectiveCorrection)) { _ in
             ifKeyWindow { removePerspectiveCorrectionForCurrentImage() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .localAdjustmentsImage)) { _ in
+            ifKeyWindow { openLocalAdjustmentsHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .removeLocalAdjustments)) { _ in
+            ifKeyWindow { removeLocalAdjustmentsForCurrentImage() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
@@ -1111,6 +1053,20 @@ struct SlideshowView: View {
         if showPerspectiveHUD {
             if key == .escape { cancelPerspectiveHUD(); return .handled }
             if keyPress.characters == "\r" { applyPerspectiveToImage(); return .handled }
+            return .ignored
+        }
+
+        if showLocalAdjustmentsHUD {
+            if key == .escape { cancelLocalAdjustmentsHUD(); return .handled }
+            if keyPress.characters == "\r" { commitLocalAdjustmentLayer(); return .handled }
+            if keyPress.characters == "[" {
+                localAdjController.brushRadius = max(5, localAdjController.brushRadius - 5)
+                return .handled
+            }
+            if keyPress.characters == "]" {
+                localAdjController.brushRadius = min(200, localAdjController.brushRadius + 5)
+                return .handled
+            }
             return .ignored
         }
 
@@ -1867,6 +1823,11 @@ struct SlideshowView: View {
         } else {
             currentDisplayImage = baseImage
         }
+        // Apply committed local adjustment layers (before global tone edits)
+        if let layers = localAdjustmentURLLayers[url.absoluteString], !layers.isEmpty,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyLocalAdjustmentLayers(layers, to: image) ?? image
+        }
         // Apply adjustments (skip during HUD preview)
         if !showAdjustmentsHUD, let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity,
            let image = currentDisplayImage {
@@ -2031,6 +1992,11 @@ struct SlideshowView: View {
         } else {
             currentDisplayImage = flippedBase
         }
+        // Local adjustment layers (before global tone edits)
+        if let layers = localAdjustmentURLLayers[url.absoluteString], !layers.isEmpty,
+           let image = currentDisplayImage {
+            currentDisplayImage = applyLocalAdjustmentLayers(layers, to: image) ?? image
+        }
         // Adjustments (skip during HUD preview)
         if !showAdjustmentsHUD, let adj = adjustmentURLLevels[url.absoluteString], !adj.isIdentity,
            let image = currentDisplayImage {
@@ -2109,88 +2075,6 @@ struct SlideshowView: View {
         updateDisplayImage()
     }
 
-    func applyAdjustments(_ adj: ImageAdjustments, to image: NSImage) -> NSImage? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        var ciImage = CIImage(cgImage: cgImage)
-        if adj.exposure != 0, let f = CIFilter(name: "CIExposureAdjust") {
-            f.setValue(ciImage, forKey: kCIInputImageKey)
-            f.setValue(adj.exposure, forKey: kCIInputEVKey)
-            ciImage = f.outputImage ?? ciImage
-        }
-        if adj.highlights != 0 || adj.shadows != 0, let f = CIFilter(name: "CIHighlightShadowAdjust") {
-            f.setValue(ciImage, forKey: kCIInputImageKey)
-            f.setValue(Float(1 - adj.highlights), forKey: "inputHighlightAmount")
-            f.setValue(Float(adj.shadows + 0.5), forKey: "inputShadowAmount")
-            ciImage = f.outputImage ?? ciImage
-        }
-        if adj.vibrance != 0, let f = CIFilter(name: "CIVibrance") {
-            f.setValue(ciImage, forKey: kCIInputImageKey)
-            f.setValue(adj.vibrance, forKey: "inputAmount")
-            ciImage = f.outputImage ?? ciImage
-        }
-        if adj.warmth != 0, let f = CIFilter(name: "CITemperatureAndTint") {
-            f.setValue(ciImage, forKey: kCIInputImageKey)
-            let neutral = CIVector(x: 6500 + adj.warmth * 2000, y: 0)
-            f.setValue(neutral, forKey: "inputNeutral")
-            f.setValue(CIVector(x: 6500, y: 0), forKey: "inputTargetNeutral")
-            ciImage = f.outputImage ?? ciImage
-        }
-        let ctx = CIContext()
-        guard let cgOut = ctx.createCGImage(ciImage, from: ciImage.extent) else { return nil }
-        return NSImage(cgImage: cgOut, size: image.size)
-    }
-
-    private func openAdjustmentsHUD() {
-        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying, !showPerspectiveHUD else { return }
-        adjustments = adjustmentURLLevels[url.absoluteString] ?? .init()
-        showAdjustmentsHUD = true
-        updateDisplayImage()
-        adjustmentsBaseImage = currentDisplayImage
-        scheduleAdjustmentsPreview()
-    }
-
-    private func scheduleAdjustmentsPreview() {
-        adjustmentsTask?.cancel()
-        adjustmentsTask = Task {
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-            await MainActor.run { applyAdjustmentsPreview() }
-        }
-    }
-
-    private func applyAdjustmentsPreview() {
-        guard let base = adjustmentsBaseImage else { return }
-        let preview = (adjustments.isIdentity ? nil : applyAdjustments(adjustments, to: base)) ?? base
-        currentDisplayImage = preview
-        updateHistogram(from: preview)
-    }
-
-    func updateHistogram(from image: NSImage) {
-        histogramData = HistogramData.compute(from: image)
-    }
-
-    private func applyAdjustmentsToImage() {
-        guard let url = imageLoader.currentImageURL else { cancelAdjustmentsHUD(); return }
-        if !adjustments.isIdentity {
-            adjustmentURLLevels[url.absoluteString] = adjustments
-        } else {
-            adjustmentURLLevels.removeValue(forKey: url.absoluteString)
-        }
-        saveFavourites()
-        showAdjustmentsHUD = false
-        adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
-        histogramData = nil
-        updateDisplayImage()
-    }
-
-    private func cancelAdjustmentsHUD() {
-        guard showAdjustmentsHUD else { return }
-        showAdjustmentsHUD = false
-        adjustmentsTask?.cancel(); adjustmentsTask = nil; adjustmentsBaseImage = nil
-        histogramData = nil
-        updateDisplayImage()
-    }
-
     private func toggleSmartZoom() {
         smartZoomEnabled.toggle()
         if smartZoomEnabled {
@@ -2233,7 +2117,7 @@ struct SlideshowView: View {
 
     private func openDenoiseHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying else { return }
+        guard !slideshow.isPlaying, !showLocalAdjustmentsHUD else { return }
         denoiseBaseImage = compositeBeforeStep(.smooth, for: url)
         denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
         showDenoiseHUD = true

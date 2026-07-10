@@ -40,6 +40,7 @@ struct KeyboardShortcutsView: View {
             ("\u{2325}Y", "Perspective correction"),
             ("e", "Open Adjustments HUD"),
             ("\u{21e7}E", "Open Curves HUD"),
+            ("Edit > Local Adj\u{2026}", "Brush-based dodge/burn"),
             ("p", "Restore faces via AI (CodeFormer)"),
             ("\u{21e7}P", "Remove face restoration"),
             ("g", "Remove red eye"),
