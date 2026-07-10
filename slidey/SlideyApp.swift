@@ -325,6 +325,12 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("s", modifiers: .command)
             .disabled(!imageLoaded)
 
+            Button("Export with Edits\u{2026}") {
+                NotificationCenter.default.post(name: .exportWithEdits, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Reveal in Finder") {
@@ -450,6 +456,18 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .copyFilePath, object: nil)
             }
             .keyboardShortcut("c", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Copy Adjustments") {
+                NotificationCenter.default.post(name: .copyAdjustments, object: nil)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+
+            Button("Paste Adjustments") {
+                NotificationCenter.default.post(name: .pasteAdjustments, object: nil)
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option])
         }
 
         CommandGroup(after: .pasteboard) {
@@ -577,6 +595,15 @@ struct EditMenuCommands: Commands {
             }
             .keyboardShortcut("y", modifiers: .shift)
 
+            Button("Perspective Correction\u{2026}") {
+                NotificationCenter.default.post(name: .perspectiveCorrection, object: nil)
+            }
+            .keyboardShortcut("y", modifiers: .option)
+
+            Button("Remove Perspective Correction") {
+                NotificationCenter.default.post(name: .removePerspectiveCorrection, object: nil)
+            }
+
             Divider()
 
             Button("Vignette\u{2026}") {
@@ -589,6 +616,14 @@ struct EditMenuCommands: Commands {
 
             Button("Curves\u{2026}") {
                 NotificationCenter.default.post(name: .curvesImage, object: nil)
+            }
+
+            Button("Local Adjustments\u{2026}") {
+                NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+            }
+
+            Button("Remove Local Adjustments") {
+                NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
             }
 
             Divider()

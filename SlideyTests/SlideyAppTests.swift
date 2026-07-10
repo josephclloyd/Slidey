@@ -824,6 +824,88 @@ final class BatchApplyNotificationTests: XCTestCase {
     }
 }
 
+// MARK: - Copy/paste adjustments notification tests
+
+final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
+    func testCopyAdjustmentsNotificationFires() {
+        let exp = expectation(description: "copyAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .copyAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .copyAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testPasteAdjustmentsNotificationFires() {
+        let exp = expectation(description: "pasteAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .pasteAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .pasteAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testCopyPasteAdjustmentsNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.copyAdjustments.rawValue, "CopyAdjustments")
+        XCTAssertEqual(NSNotification.Name.pasteAdjustments.rawValue, "PasteAdjustments")
+    }
+
+    func testCopyPasteAdjustmentsNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.copyAdjustments, .pasteAdjustments]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+
+    func testCopiedAdjustmentsStoresAllFields() {
+        let adj = SlideshowView.ImageAdjustments(exposure: 0.5, highlights: -0.3, shadows: 0.2, vibrance: 0.4, warmth: -0.1)
+        let curves = CurvesData()
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: adj,
+            curves: curves,
+            vignetteIntensity: 0.8,
+            denoiseLevel: 50.0,
+            rotationAngle: .degrees(90),
+            flipH: true,
+            flipV: false,
+            effect: "CIPhotoEffectMono",
+            straightenAngle: 2.5
+        )
+        XCTAssertNil(copied.editStack)
+        XCTAssertEqual(copied.adjustments?.exposure ?? 0, 0.5, accuracy: 0.001)
+        XCTAssertEqual(copied.vignetteIntensity ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(copied.denoiseLevel ?? 0, 50.0, accuracy: 0.001)
+        XCTAssertEqual(copied.rotationAngle, .degrees(90))
+        XCTAssertTrue(copied.flipH)
+        XCTAssertFalse(copied.flipV)
+        XCTAssertEqual(copied.effect, "CIPhotoEffectMono")
+        XCTAssertEqual(copied.straightenAngle ?? 0, 2.5, accuracy: 0.001)
+    }
+
+    func testCopiedAdjustmentsWithNilFields() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: nil,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: nil
+        )
+        XCTAssertNil(copied.editStack)
+        XCTAssertNil(copied.adjustments)
+        XCTAssertNil(copied.curves)
+        XCTAssertNil(copied.vignetteIntensity)
+        XCTAssertNil(copied.denoiseLevel)
+        XCTAssertNil(copied.rotationAngle)
+        XCTAssertFalse(copied.flipH)
+        XCTAssertFalse(copied.flipV)
+        XCTAssertNil(copied.effect)
+        XCTAssertNil(copied.straightenAngle)
+    }
+}
+
 // MARK: - Curves data model tests
 
 final class CurvePointsTests: XCTestCase {
@@ -882,5 +964,336 @@ final class CurvesDataTests: XCTestCase {
 
     func testCurvesNotificationName() {
         XCTAssertEqual(NSNotification.Name.curvesImage.rawValue, "CurvesImage")
+    }
+}
+
+// MARK: - Histogram data model tests
+
+final class HistogramDataTests: XCTestCase {
+    func testCIAreaHistogramFilterIsAvailable() {
+        XCTAssertNotNil(CIFilter(name: "CIAreaHistogram"))
+    }
+
+    func testComputeFromSolidRedImage() {
+        let image = NSImage(size: NSSize(width: 64, height: 64))
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 0, width: 64, height: 64).fill()
+        image.unlockFocus()
+
+        guard let data = HistogramData.compute(from: image) else {
+            XCTFail("HistogramData.compute returned nil for a valid image")
+            return
+        }
+        XCTAssertEqual(data.red.count, 64)
+        XCTAssertEqual(data.green.count, 64)
+        XCTAssertEqual(data.blue.count, 64)
+        XCTAssertEqual(data.luminance.count, 64)
+
+        let redMax = data.red.max() ?? 0
+        XCTAssertGreaterThan(redMax, 0, "Red channel should have non-zero values for a red image")
+    }
+
+    func testComputeFromSolidBlackImage() {
+        let image = NSImage(size: NSSize(width: 32, height: 32))
+        image.lockFocus()
+        NSColor.black.setFill()
+        NSRect(x: 0, y: 0, width: 32, height: 32).fill()
+        image.unlockFocus()
+
+        guard let data = HistogramData.compute(from: image) else {
+            XCTFail("HistogramData.compute returned nil")
+            return
+        }
+        XCTAssertGreaterThan(data.luminance[0], 0, "First bin should hold all black pixels")
+    }
+
+    func testComputeReturnsNilForEmptyImage() {
+        let image = NSImage(size: .zero)
+        XCTAssertNil(HistogramData.compute(from: image))
+    }
+}
+
+// MARK: - PerspectiveCorners tests
+
+final class PerspectiveCornersTests: XCTestCase {
+    func testIdentityHasUnitSquareCorners() {
+        let id = PerspectiveCorners.identity
+        XCTAssertEqual(id.topLeft, CGPoint(x: 0, y: 0))
+        XCTAssertEqual(id.topRight, CGPoint(x: 1, y: 0))
+        XCTAssertEqual(id.bottomLeft, CGPoint(x: 0, y: 1))
+        XCTAssertEqual(id.bottomRight, CGPoint(x: 1, y: 1))
+    }
+
+    func testSubscriptGettersMatchProperties() {
+        let corners = PerspectiveCorners(
+            topLeft: CGPoint(x: 0.1, y: 0.2),
+            topRight: CGPoint(x: 0.8, y: 0.15),
+            bottomLeft: CGPoint(x: 0.05, y: 0.9),
+            bottomRight: CGPoint(x: 0.85, y: 0.95)
+        )
+        XCTAssertEqual(corners[0], corners.topLeft)
+        XCTAssertEqual(corners[1], corners.topRight)
+        XCTAssertEqual(corners[2], corners.bottomLeft)
+        XCTAssertEqual(corners[3], corners.bottomRight)
+    }
+
+    func testSubscriptSettersMutateCorrectCorner() {
+        var corners = PerspectiveCorners.identity
+        let newPoint = CGPoint(x: 0.5, y: 0.5)
+        corners[0] = newPoint
+        XCTAssertEqual(corners.topLeft, newPoint)
+        corners[1] = newPoint
+        XCTAssertEqual(corners.topRight, newPoint)
+        corners[2] = newPoint
+        XCTAssertEqual(corners.bottomLeft, newPoint)
+        corners[3] = newPoint
+        XCTAssertEqual(corners.bottomRight, newPoint)
+    }
+
+    func testOutOfBoundsSubscriptReturnsZero() {
+        let corners = PerspectiveCorners.identity
+        XCTAssertEqual(corners[4], .zero)
+        XCTAssertEqual(corners[-1], .zero)
+    }
+
+    func testEquatable() {
+        let a = PerspectiveCorners.identity
+        let b = PerspectiveCorners.identity
+        XCTAssertEqual(a, b)
+
+        var c = a
+        c.topLeft = CGPoint(x: 0.1, y: 0.1)
+        XCTAssertNotEqual(a, c)
+    }
+}
+
+// MARK: - Local adjustments notification tests
+
+final class LocalAdjustmentsNotificationTests: XCTestCase {
+    func testLocalAdjustmentsImageNotificationFires() {
+        let exp = expectation(description: "localAdjustmentsImage fires")
+        let obs = NotificationCenter.default.addObserver(forName: .localAdjustmentsImage, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testRemoveLocalAdjustmentsNotificationFires() {
+        let exp = expectation(description: "removeLocalAdjustments fires")
+        let obs = NotificationCenter.default.addObserver(forName: .removeLocalAdjustments, object: nil, queue: .main) { _ in exp.fulfill() }
+        NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(obs)
+    }
+
+    func testLocalAdjustmentsNotificationNamesMatchExpectedStrings() {
+        XCTAssertEqual(NSNotification.Name.localAdjustmentsImage.rawValue, "LocalAdjustmentsImage")
+        XCTAssertEqual(NSNotification.Name.removeLocalAdjustments.rawValue, "RemoveLocalAdjustments")
+    }
+
+    func testLocalAdjustmentsNotificationNamesAreUnique() {
+        let names: [NSNotification.Name] = [.localAdjustmentsImage, .removeLocalAdjustments]
+        let uniqueNames = Set(names)
+        XCTAssertEqual(uniqueNames.count, names.count)
+    }
+}
+
+// MARK: - LocalAdjustmentLayer model tests
+
+final class LocalAdjustmentLayerTests: XCTestCase {
+    func testMaskCGImageFromValidData() {
+        let width = 4
+        let height = 4
+        let data = Data(repeating: 128, count: width * height)
+        let layer = LocalAdjustmentLayer(
+            maskData: data, maskWidth: width, maskHeight: height,
+            adjustments: .init()
+        )
+        let cgImage = layer.maskCGImage()
+        XCTAssertNotNil(cgImage)
+        XCTAssertEqual(cgImage?.width, width)
+        XCTAssertEqual(cgImage?.height, height)
+    }
+
+    func testMaskCIImageFromValidData() {
+        let width = 8
+        let height = 8
+        let data = Data(repeating: 255, count: width * height)
+        let layer = LocalAdjustmentLayer(
+            maskData: data, maskWidth: width, maskHeight: height,
+            adjustments: .init()
+        )
+        let ciImage = layer.maskCIImage()
+        XCTAssertNotNil(ciImage)
+        XCTAssertEqual(ciImage?.extent.width ?? 0, CGFloat(width), accuracy: 0.01)
+        XCTAssertEqual(ciImage?.extent.height ?? 0, CGFloat(height), accuracy: 0.01)
+    }
+
+    func testMaskCGImageReturnsNilForEmptyData() {
+        let layer = LocalAdjustmentLayer(
+            maskData: Data(), maskWidth: 0, maskHeight: 0,
+            adjustments: .init()
+        )
+        XCTAssertNil(layer.maskCGImage())
+    }
+}
+
+// MARK: - LocalAdjustmentController tests
+
+final class LocalAdjustmentControllerTests: XCTestCase {
+    func testDefaultState() {
+        let ctrl = LocalAdjustmentController()
+        XCTAssertFalse(ctrl.isActive)
+        XCTAssertEqual(ctrl.brushRadius, 40)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        XCTAssertNil(ctrl.mousePosition)
+        XCTAssertNil(ctrl.lastPaintPixel)
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 0)
+        XCTAssertEqual(ctrl.maskHeight, 0)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+    }
+
+    func testInitMaskCreatesContext() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 50)
+        XCTAssertNotNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 100)
+        XCTAssertEqual(ctrl.maskHeight, 50)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+        XCTAssertFalse(ctrl.hasPainted)
+    }
+
+    func testInitMaskFillsBlack() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 4, height: 4)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertEqual(data.count, 4 * 4)
+        XCTAssertTrue(data.allSatisfy { $0 == 0 })
+    }
+
+    func testPaintStrokeSetsFlagsAndIncrementsMaskVersion() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 100)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+        ctrl.paintStroke(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 50, y: 50), pixelRadius: 10)
+        XCTAssertTrue(ctrl.hasPainted)
+        XCTAssertGreaterThan(ctrl.maskVersion, 0)
+    }
+
+    func testPaintStrokeProducesNonZeroPixels() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 100, height: 100)
+        ctrl.paintStroke(from: CGPoint(x: 50, y: 50), to: CGPoint(x: 50, y: 50), pixelRadius: 20)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        let nonZero = data.filter { $0 > 0 }.count
+        XCTAssertGreaterThan(nonZero, 0, "Painting should produce non-zero mask pixels")
+    }
+
+    func testResetMaskClearsToBlack() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 20, height: 20)
+        ctrl.paintStroke(from: CGPoint(x: 10, y: 10), to: CGPoint(x: 10, y: 10), pixelRadius: 5)
+        XCTAssertTrue(ctrl.hasPainted)
+
+        ctrl.resetMask()
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertTrue(data.allSatisfy { $0 == 0 })
+    }
+
+    func testResetClearsEverything() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.isActive = true
+        ctrl.initMask(width: 50, height: 50)
+        ctrl.adjustments.exposure = 1.0
+        ctrl.hasPainted = true
+
+        ctrl.reset()
+        XCTAssertFalse(ctrl.isActive)
+        XCTAssertNil(ctrl.maskContext)
+        XCTAssertEqual(ctrl.maskWidth, 0)
+        XCTAssertEqual(ctrl.maskHeight, 0)
+        XCTAssertTrue(ctrl.adjustments.isIdentity)
+        XCTAssertFalse(ctrl.hasPainted)
+        XCTAssertEqual(ctrl.maskVersion, 0)
+    }
+
+    func testMaskCGImageAfterInit() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 10, height: 10)
+        let img = ctrl.maskCGImage()
+        XCTAssertNotNil(img)
+        XCTAssertEqual(img?.width, 10)
+        XCTAssertEqual(img?.height, 10)
+    }
+
+    func testExtractMaskDataReturnsCorrectSize() {
+        let ctrl = LocalAdjustmentController()
+        ctrl.initMask(width: 32, height: 16)
+        guard let data = ctrl.extractMaskData() else {
+            XCTFail("extractMaskData returned nil"); return
+        }
+        XCTAssertEqual(data.count, 32 * 16)
+    }
+}
+
+// MARK: - Perspective transform tests
+
+final class PerspectiveTransformTests: XCTestCase {
+    private func make100x100Image() -> NSImage {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 100, pixelsHigh: 100,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        let image = NSImage(size: NSSize(width: 100, height: 100))
+        image.addRepresentation(rep)
+        return image
+    }
+
+    func testApplyPerspectiveTransformWithIdentityPreservesSize() {
+        let view = SlideshowView()
+        let image = make100x100Image()
+        let result = view.applyPerspectiveTransform(corners: .identity, to: image)
+        XCTAssertNotNil(result)
+        if let r = result {
+            XCTAssertEqual(r.size.width, 100, accuracy: 2)
+            XCTAssertEqual(r.size.height, 100, accuracy: 2)
+        }
+    }
+
+    func testApplyPerspectiveTransformWithSubQuadProducesSmallerImage() {
+        let view = SlideshowView()
+        let image = make100x100Image()
+        let corners = PerspectiveCorners(
+            topLeft: CGPoint(x: 0.25, y: 0.25),
+            topRight: CGPoint(x: 0.75, y: 0.25),
+            bottomLeft: CGPoint(x: 0.25, y: 0.75),
+            bottomRight: CGPoint(x: 0.75, y: 0.75)
+        )
+        let result = view.applyPerspectiveTransform(corners: corners, to: image)
+        XCTAssertNotNil(result)
+        if let r = result {
+            XCTAssertLessThan(r.size.width, 100)
+            XCTAssertLessThan(r.size.height, 100)
+        }
+    }
+
+    func testApplyPerspectiveTransformReturnsNilForEmptyImage() {
+        let view = SlideshowView()
+        let image = NSImage(size: .zero)
+        let result = view.applyPerspectiveTransform(corners: .identity, to: image)
+        XCTAssertNil(result)
     }
 }

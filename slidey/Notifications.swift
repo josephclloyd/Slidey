@@ -22,6 +22,7 @@ extension NSNotification.Name {
     static let rotateCounterClockwise = NSNotification.Name("RotateCounterClockwise")
 
     static let saveEditedImage = NSNotification.Name("SaveEditedImage")
+    static let exportWithEdits = NSNotification.Name("ExportWithEdits")
     static let revealInFinder = NSNotification.Name("RevealInFinder")
     static let openInPreview = NSNotification.Name("OpenInPreview")
     static let openWith = NSNotification.Name("OpenWith")
@@ -81,8 +82,17 @@ extension NSNotification.Name {
     static let straightenImage = NSNotification.Name("StraightenImage")
     static let removeStraighten = NSNotification.Name("RemoveStraighten")
 
+    static let perspectiveCorrection = NSNotification.Name("PerspectiveCorrection")
+    static let removePerspectiveCorrection = NSNotification.Name("RemovePerspectiveCorrection")
+
+    static let localAdjustmentsImage = NSNotification.Name("LocalAdjustmentsImage")
+    static let removeLocalAdjustments = NSNotification.Name("RemoveLocalAdjustments")
+
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
+
+    static let copyAdjustments = NSNotification.Name("CopyAdjustments")
+    static let pasteAdjustments = NSNotification.Name("PasteAdjustments")
 
     static let batchApplyAll = NSNotification.Name("BatchApplyAll")
     static let batchApplyFavourites = NSNotification.Name("BatchApplyFavourites")

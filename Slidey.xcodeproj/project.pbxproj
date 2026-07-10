@@ -33,8 +33,16 @@
 		8E44BF55190E4D15961F66CF /* CurveGraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD79BACFAC7B4A62AA9685F9 /* CurveGraphView.swift */; };
 		763E6F53A95946CE82BE008B /* SlideshowView+Curves.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */; };
 		BA100002000000000000001 /* SlideshowView+BatchApply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA100001000000000000001 /* SlideshowView+BatchApply.swift */; };
+		CP100002000000000000001 /* SlideshowView+CopyPasteAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */; };
+		CA100002000000000000001 /* CopiedAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA100001000000000000001 /* CopiedAdjustments.swift */; };
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
+		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
+		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
+		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
+		LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LA100001000000000000001 /* LocalAdjustmentLayer.swift */; };
+		LH100002000000000000001 /* SlideshowView+LocalAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */; };
+		AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AJ100001000000000000001 /* SlideshowView+Adjustments.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,11 +81,19 @@
 		J1000001000000000000001 /* SlideshowView+Persistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Persistence.swift"; sourceTree = "<group>"; };
 		K1000001000000000000001 /* SlideshowView+Rating.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Rating.swift"; sourceTree = "<group>"; };
 		BA100001000000000000001 /* SlideshowView+BatchApply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+BatchApply.swift"; sourceTree = "<group>"; };
+		CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+CopyPasteAdjustments.swift"; sourceTree = "<group>"; };
+		CA100001000000000000001 /* CopiedAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopiedAdjustments.swift; sourceTree = "<group>"; };
 		K1000003000000000000001 /* RatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingTests.swift; sourceTree = "<group>"; };
 		AD79BACFAC7B4A62AA9685F9 /* CurveGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurveGraphView.swift; sourceTree = "<group>"; };
 		79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Curves.swift"; sourceTree = "<group>"; };
 		ST100001000000000000001 /* SlideshowView+Straighten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Straighten.swift"; sourceTree = "<group>"; };
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
+		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
+		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
+		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
+		LA100001000000000000001 /* LocalAdjustmentLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAdjustmentLayer.swift; sourceTree = "<group>"; };
+		LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+LocalAdjustments.swift"; sourceTree = "<group>"; };
+		AJ100001000000000000001 /* SlideshowView+Adjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Adjustments.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -124,8 +140,15 @@
 				K1000001000000000000001 /* SlideshowView+Rating.swift */,
 				79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */,
 				BA100001000000000000001 /* SlideshowView+BatchApply.swift */,
+				CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */,
+				CA100001000000000000001 /* CopiedAdjustments.swift */,
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
+				EX100001000000000000001 /* SlideshowView+Export.swift */,
+				PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */,
+				LA100001000000000000001 /* LocalAdjustmentLayer.swift */,
+				LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */,
+				AJ100001000000000000001 /* SlideshowView+Adjustments.swift */,
 				H1000001000000000000001 /* CropController.swift */,
 				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
@@ -136,6 +159,7 @@
 				F1000003000000000000001 /* SlideshowController.swift */,
 				E1000001000000000000001 /* KeyboardShortcutsView.swift */,
 				AD79BACFAC7B4A62AA9685F9 /* CurveGraphView.swift */,
+				HV100001000000000000001 /* HistogramView.swift */,
 				A1000010000000000000002 /* Assets.xcassets */,
 			);
 			path = slidey;
@@ -289,8 +313,15 @@
 				K1000002000000000000001 /* SlideshowView+Rating.swift in Sources */,
 				763E6F53A95946CE82BE008B /* SlideshowView+Curves.swift in Sources */,
 				BA100002000000000000001 /* SlideshowView+BatchApply.swift in Sources */,
+				CP100002000000000000001 /* SlideshowView+CopyPasteAdjustments.swift in Sources */,
+				CA100002000000000000001 /* CopiedAdjustments.swift in Sources */,
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
+				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
+				PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */,
+				LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */,
+				LH100002000000000000001 /* SlideshowView+LocalAdjustments.swift in Sources */,
+				AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
 				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,
@@ -301,6 +332,7 @@
 				F1000004000000000000001 /* SlideshowController.swift in Sources */,
 				E1000002000000000000001 /* KeyboardShortcutsView.swift in Sources */,
 				8E44BF55190E4D15961F66CF /* CurveGraphView.swift in Sources */,
+				HV100002000000000000001 /* HistogramView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

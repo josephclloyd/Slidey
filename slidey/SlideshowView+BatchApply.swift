@@ -16,6 +16,7 @@ extension SlideshowView {
         let sourceFlipV = flippedVertically.contains(sourceKey)
         let sourceEffect = imageEffects[sourceURL]
         let sourceCrop = cropRegions[sourceKey]
+        let sourceLocalAdj = localAdjustmentURLLayers[sourceKey]
 
         let hasEdits = (sourceStack != nil && !sourceStack!.isEmpty)
             || (sourceAdj != nil && !sourceAdj!.isIdentity)
@@ -25,6 +26,7 @@ extension SlideshowView {
             || sourceFlipH || sourceFlipV
             || sourceEffect != nil
             || sourceCrop != nil
+            || (sourceLocalAdj != nil && !sourceLocalAdj!.isEmpty)
 
         guard hasEdits else {
             savedToast = "No edits to apply"
@@ -84,6 +86,7 @@ extension SlideshowView {
         if sourceFlipH || sourceFlipV { descriptions.append("flip") }
         if sourceEffect != nil { descriptions.append("photo effect") }
         if sourceCrop != nil { descriptions.append("crop") }
+        if sourceLocalAdj != nil && !sourceLocalAdj!.isEmpty { descriptions.append("local adjustments") }
         alert.informativeText = "Edits: \(descriptions.joined(separator: ", "))"
             + "\n\nOriginal files are not modified. Edits apply in-session only."
         alert.alertStyle = .informational
@@ -154,6 +157,12 @@ extension SlideshowView {
                 cropRegions[key] = crop
             } else {
                 cropRegions.removeValue(forKey: key)
+            }
+
+            if let layers = sourceLocalAdj, !layers.isEmpty {
+                localAdjustmentURLLayers[key] = layers
+            } else {
+                localAdjustmentURLLayers.removeValue(forKey: key)
             }
         }
 
