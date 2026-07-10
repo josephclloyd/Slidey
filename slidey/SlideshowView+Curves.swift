@@ -86,7 +86,7 @@ extension SlideshowView {
 
     func openCurvesHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying, !showPerspectiveHUD else { return }
+        guard !slideshow.isPlaying, !showPerspectiveHUD, !showLocalAdjustmentsHUD else { return }
         curvesData = curvesURLLevels[url.absoluteString] ?? .init()
         curvesChannel = .all
         showCurvesHUD = true

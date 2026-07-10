@@ -618,6 +618,14 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .curvesImage, object: nil)
             }
 
+            Button("Local Adjustments\u{2026}") {
+                NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+            }
+
+            Button("Remove Local Adjustments") {
+                NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
+            }
+
             Divider()
 
             Button("Restore Faces") {

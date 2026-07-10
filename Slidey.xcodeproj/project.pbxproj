@@ -40,6 +40,9 @@
 		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
 		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
 		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
+		LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = LA100001000000000000001 /* LocalAdjustmentLayer.swift */; };
+		LH100002000000000000001 /* SlideshowView+LocalAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */; };
+		AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AJ100001000000000000001 /* SlideshowView+Adjustments.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,6 +91,9 @@
 		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
 		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
+		LA100001000000000000001 /* LocalAdjustmentLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalAdjustmentLayer.swift; sourceTree = "<group>"; };
+		LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+LocalAdjustments.swift"; sourceTree = "<group>"; };
+		AJ100001000000000000001 /* SlideshowView+Adjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Adjustments.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -140,6 +146,9 @@
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
 				EX100001000000000000001 /* SlideshowView+Export.swift */,
 				PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */,
+				LA100001000000000000001 /* LocalAdjustmentLayer.swift */,
+				LH100001000000000000001 /* SlideshowView+LocalAdjustments.swift */,
+				AJ100001000000000000001 /* SlideshowView+Adjustments.swift */,
 				H1000001000000000000001 /* CropController.swift */,
 				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
@@ -310,6 +319,9 @@
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
 				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
 				PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */,
+				LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */,
+				LH100002000000000000001 /* SlideshowView+LocalAdjustments.swift in Sources */,
+				AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
 				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,
