@@ -813,9 +813,9 @@ extension SlideshowView {
         var out = [UInt8](repeating: 255, count: w * h * 4)
         for i in 0..<(w * h) {
             let idx = i * 4
-            out[idx + 0] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 0]) * inv + Float(oPtr[idx + 0]) * s))))
-            out[idx + 1] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 1]) * inv + Float(oPtr[idx + 1]) * s))))
-            out[idx + 2] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 2]) * inv + Float(oPtr[idx + 2]) * s))))
+            let v0 = Float(bPtr[idx + 0]) * inv + Float(oPtr[idx + 0]) * s; out[idx + 0] = UInt8(v0.isFinite ? min(255, max(0, Int(v0))) : 0)
+            let v1 = Float(bPtr[idx + 1]) * inv + Float(oPtr[idx + 1]) * s; out[idx + 1] = UInt8(v1.isFinite ? min(255, max(0, Int(v1))) : 0)
+            let v2 = Float(bPtr[idx + 2]) * inv + Float(oPtr[idx + 2]) * s; out[idx + 2] = UInt8(v2.isFinite ? min(255, max(0, Int(v2))) : 0)
             out[idx + 3] = 255
         }
 
@@ -851,7 +851,7 @@ extension SlideshowView {
 
             var loadedModel: MLModel?
             let loadSemaphore = DispatchSemaphore(value: 0)
-            DispatchQueue.global(qos: .utility).async {
+            DispatchQueue.global(qos: .userInitiated).async {
                 loadedModel = try? MLModel(contentsOf: modelURL, configuration: cfg)
                 loadSemaphore.signal()
             }
@@ -1032,9 +1032,9 @@ extension SlideshowView {
             var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
             for i in 0..<(imgW * imgH) {
                 let dw = accW[i] > 0 ? accW[i] : 1
-                outPixels[i * 4 + 0] = UInt8(min(255, max(0, Int(accB[i] / dw * 255))))
-                outPixels[i * 4 + 1] = UInt8(min(255, max(0, Int(accG[i] / dw * 255))))
-                outPixels[i * 4 + 2] = UInt8(min(255, max(0, Int(accR[i] / dw * 255))))
+                let vB = accB[i] / dw * 255; outPixels[i * 4 + 0] = UInt8(vB.isFinite ? min(255, max(0, Int(vB))) : 0)
+                let vG = accG[i] / dw * 255; outPixels[i * 4 + 1] = UInt8(vG.isFinite ? min(255, max(0, Int(vG))) : 0)
+                let vR = accR[i] / dw * 255; outPixels[i * 4 + 2] = UInt8(vR.isFinite ? min(255, max(0, Int(vR))) : 0)
                 outPixels[i * 4 + 3] = 255
             }
 
