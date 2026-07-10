@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "Image edit compositing pipeline (EditStack model), key binding registry, HUD pattern, SwiftLint limits, CoreML conversion patterns, pbxproj file registration, coreView/overlayViews type-checker limits — updated through Sprint 22"
+description: "HUD pattern, SwiftLint limits, CoreML conversion gotchas (SwinIR trace size, ANE pre-compilation hang), pbxproj file registration, coreView/overlayViews type-checker limits — updated through Sprint 26. Key binding registry and compositing pipeline order are NOT kept here — CLAUDE.md is authoritative for both, they change too often to duplicate."
 metadata: 
   node_type: memory
   type: project
@@ -17,34 +17,38 @@ The canonical path for committing an edited NSImage in SlideshowView. It clears 
 
 ---
 
-## Compositing pipeline order (rewritten Sprint 21 — EditStack model)
+## Compositing pipeline: two categories, not one flat list (concept stable since Sprint 21)
 
-`updateDisplayImage` applies layers in this order:
+Rather than maintaining an enumerated order here (it has gone stale twice now — Sprint 25
+added curves/straighten/perspective-correction/local-adjustments, Sprint 26 added AI
+denoise — read `updateDisplayImage()` in `SlideshowView.swift` directly for the current
+exact order), the durable pattern is the **two-category model** introduced in Sprint 21:
 
-1. **Base image = `EditStack` walk** (`slidey/EditStack.swift`): `editStacks[url]` holds an
-   ordered `[EditStep]` (enhance, smooth(noiseLevel:), sharpen, upscale(factor:), faceRestore,
-   redEyeRemoval, backgroundRemoval, artifactRemoval, colorize). `updateDisplayImage` walks
-   the steps in the order they were *applied* (not a fixed priority), threading each step's
-   cached result forward as the input to the next, lazily recomputing only the first missing
-   step. `EditStack.append()` moves a re-applied step to the end (toggle semantics);
-   `remove(caseTag:)` drops a step and the remaining chain recomposites from source in order.
-   This replaced a fixed-priority "pick one winner" model (#198) that silently dropped
-   lower-priority edits on any re-render — see git history pre-#202 if you need the old
-   version for reference, do not resurrect the pattern.
-2. Flip (CIAffineTransform, horizontal then vertical)
-3. Photo effect (CIFilter, cached in `effectImages[url]`)
-4. Adjustments (Exposure/Highlights/Shadows/Vibrance/Warmth — skip during Adjustments HUD)
-5. Vignette (CIVignetteEffect — skip during Vignette HUD)
-6. Crop (`CropRegion`, normalized `CGRect` — added Sprint 21, applied as the final geometry
-   layer, after vignette)
+1. **`EditStack` walk** (`slidey/EditStack.swift`): `editStacks[url]` holds an ordered
+   `[EditStep]` for "content" edits (enhance, smooth, sharpen, upscale, faceRestore,
+   redEyeRemoval, backgroundRemoval, artifactRemoval, colorize, aiDenoise as of Sprint 26).
+   `updateDisplayImage` walks steps in *applied* order (not fixed priority), threading each
+   cached result forward, lazily recomputing only the first missing step.
+   `EditStack.append()` moves a re-applied step to the end (toggle semantics);
+   `remove(caseTag:)` drops a step and recomposites the rest from source. This replaced a
+   fixed-priority "pick one winner" model (#198) that silently dropped lower-priority edits
+   on re-render — do not resurrect that pattern.
+2. **Everything else** (flip, photo effect, adjustments, curves, vignette, straighten,
+   perspective correction, local adjustments, crop, and whatever's added next) is a
+   fixed-position layer applied *after* the EditStack walk, each behind its own per-URL
+   dict/state and each with a `!showXxxHUD` skip-during-preview guard.
 
-**How to apply:** Any new filter/geometry step that should compose with everything else
-(not itself a "content" edit competing for stack order) slots in after step 1, in both
-`updateDisplayImage` and `setDisplay`. A new *content* edit (like the 9 above) becomes a new
-`EditStep` case and must be appended to `editStacks[url]` by its commit function and removed
-by its `removeXxx()` function — do not add a new dict + ad hoc fallback-chain pattern, that's
-exactly what #198 replaced. `EditStack.append`/`remove` have unit tests in
-`SlideyTests/EditStackTests.swift` — extend them for any new case.
+**How to apply:** A new **content** edit (competes for stack order, like the 10 above)
+becomes a new `EditStep` case, appended by its commit function and removed by its
+`removeXxx()` — do not add a new dict + ad hoc fallback chain. A new **geometry/tone**
+layer (doesn't compete for stack order, like curves or perspective correction) gets its own
+fixed slot after the EditStack walk in both `updateDisplayImage` and `setDisplay` — read
+the current function to find where to insert it, and update both the live-display path
+*and* the export path (`SlideshowView+Export.swift`) and batch-apply/copy-paste paths
+together, since Sprint 25/26 both found real bugs from these paths drifting out of sync
+(#138's rotation-before-crop bug, #235's batch-apply missing straighten/denoise coverage).
+`EditStack.append`/`remove` have unit tests in `SlideyTests/EditStackTests.swift` — extend
+them for any new case.
 
 ---
 
@@ -61,24 +65,34 @@ Consistent structure across all three HUDs:
 
 ---
 
-## Per-image persistence
+## Per-image persistence — REVERSED in Sprint 23 (#217/#218)
 
-- Single `Double` per image: `[String: Double]` in UserDefaults (vignette, denoise)
-- Multi-value per image: `Codable` struct → `JSONEncoder` → `UserDefaults.data(forKey:)` (adjustments)
-- All persisted in `saveFavourites()` / `loadFavourites()`
+Session-only now, not persisted. Sprints 17-22 built up `UserDefaults`-backed persistence
+for rotation, flip, vignette, adjustments, crop, and photo effect across launches; Sprint 23
+explicitly reverted all of it (#217 "Stop persisting per-image edit stacks across app
+restarts", #218 "Stop persisting rotation, flip, vignette, adjustments, crop, and photo
+effect"). Every per-image edit is now purely in-memory `@State`, gone on relaunch. Do not
+reintroduce cross-launch persistence for edit state without checking why it was removed
+first — this was a deliberate product decision, not an oversight. (`saveFavourites()`/
+`loadFavourites()` still persist favourites/ratings via `UserDefaults` — that's unrelated
+and unaffected.)
 
 ---
 
-## `handleCharacterKeyPress` key registry
+## `handleCharacterKeyPress` key registry — see CLAUDE.md, not here
 
-Keys bound as of Sprint 22:
-`a`=enhance, `A`=remove-enhance, `m`=smooth, `M`=remove-smooth, `q`=denoise, `h`=sharpen, `H`=remove-sharpen, `u`=upscale-2x, `⌥U`=upscale-4x, `U`=remove-upscale, `s`=scale-to-native, `f`=scale-to-fill, `r`=rotate-CW, `R`=rotate-CCW, `n`=show-filename, `x`=favourite, `v`=favourites-only, `t`=thumbnails, `i`=image-info, `z`=smart-zoom, `/`=keyboard-shortcuts, `d`=debug-window, `j`=random-jump, `b`=before/after-preview, `e`=adjustments-hud, `c`=flip-horizontal, `C`=flip-vertical, `p`=face-restore, `P`=remove-face-restore, `g`=red-eye-removal, `G`=remove-red-eye, `k`=background-removal, `K`=restore-background, `l`=artifact-removal, `L`=restore-artifacts, `o`=colorize, `O`=remove-colorization, `w`=crop, `W`=remove-crop, `0`=clear-rating, `1`-`5`=set-rating.
+Do not duplicate the key list in this file — it changes almost every sprint and CLAUDE.md's
+copy is the one that's actually kept current (every sprint's impl session updates it as
+part of the PR). This file drifted out of sync with reality on this exact point twice
+(Sprint 22 → 25 audit, Sprint 25 → 26 audit) — stop trying to maintain a second copy.
 
-Free slots: `y`/`Y` only. Digits `6`-`9` are also free (only `0`-`5` are used, per the 0-5 star rating scale).
+SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep cyclomatic`
+after adding keys.
 
-SwiftLint `cyclomatic_complexity` error threshold is ~50. Run `xcodebuild | grep cyclomatic` after adding keys.
-
-**Why:** `j` was missing from the registry in Sprint 17's memory — caused a key conflict when planning Sprint 18 (#167 initially proposed `j`). Always read the actual code, not just the registry.
+**Why this section exists at all:** `j` was missing from an early registry snapshot kept
+here in Sprint 17's memory, causing a key conflict when planning Sprint 18 (#167 initially
+proposed `j`, already taken). The lesson isn't "keep a better list" — it's **always read
+`CLAUDE.md`'s registry directly at plan time, never rely on a memory-cached copy of it.**
 
 ---
 
