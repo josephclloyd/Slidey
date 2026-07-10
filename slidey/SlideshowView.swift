@@ -101,6 +101,10 @@ struct SlideshowView: View {
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
+    @State private var noiseSuggestionDismissed: Set<URL> = []
+    @State private var noiseSuggestionTask: Task<Void, Never>?
+    @State private var showNoiseSuggestion: Bool = false
+    @State private var noiseSuggestionURL: URL?
     @State var imageEffects: [URL: String] = [:]
     @State var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
     @State var flippedHorizontally: Set<String> = []
@@ -143,6 +147,10 @@ struct SlideshowView: View {
     @State var artifactRemovedImages: [URL: NSImage] = [:]
     @State var isRemovingArtifacts = false
     @State var artifactRemovalProgress: Double = 0
+    @State var aiDenoisedImages: [URL: NSImage] = [:]; @State var aiDenoiseRawImages: [URL: NSImage] = [:]
+    @State var isAIDenoising = false; @State var aiDenoiseProgress: Double = 0
+    @State var showAIDenoiseHUD: Bool = false; @State var aiDenoiseStrength: Double = 100.0
+    @State var aiDenoiseBaseImage: NSImage?; @State var aiDenoiseMLImage: NSImage?
     @State var colorizedImages: [URL: NSImage] = [:]
     @State var isColorizing = false
     @State var showColorConfirmAlert = false
@@ -360,11 +368,13 @@ struct SlideshowView: View {
         filenameOverlay
         imageInfoOverlay
         toastOverlay
+        noiseSuggestionOverlay
         trackInfoOverlay
         directoryMissingOverlay
         progressOverlays
         debugOverlay
         denoiseHUD
+        aiDenoiseHUD
         vignetteHUD
         adjustmentsHUD
         curvesHUD
@@ -456,6 +466,29 @@ struct SlideshowView: View {
                 }
             }
             .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private var noiseSuggestionOverlay: some View {
+        if showNoiseSuggestion {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("This image looks noisy \u{2014} press q to denoise")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.85))
+                        .cornerRadius(6)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 50)
+                }
+            }
+            .transition(.opacity)
+            .allowsHitTesting(false)
         }
     }
 
@@ -597,7 +630,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD() }
+            if isPlaying { cancelDenoise(); cancelAIDenoiseHUD(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -760,6 +793,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.restoreArtifacts)) { _ in
             ifKeyWindow { restoreArtifacts() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.aiDenoiseImage)) { _ in
+            ifKeyWindow { openAIDenoiseHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeAIDenoise)) { _ in
+            ifKeyWindow { removeAIDenoise() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.colorizeImage)) { _ in
             ifKeyWindow { colorizeCurrentImage() }
@@ -1002,6 +1041,18 @@ struct SlideshowView: View {
             return .ignored
         }
 
+        if showAIDenoiseHUD {
+            if key == .escape {
+                cancelAIDenoiseHUD()
+                return .handled
+            }
+            if keyPress.characters == "\r" {
+                applyAIDenoise()
+                return .handled
+            }
+            return .ignored
+        }
+
         if showVignetteHUD {
             if key == .escape {
                 cancelVignetteHUD()
@@ -1197,6 +1248,9 @@ struct SlideshowView: View {
             return .handled
         case "q":
             openDenoiseHUD()
+            return .handled
+        case "Q":
+            openAIDenoiseHUD()
             return .handled
         case "u":
             guard !keyPress.modifiers.contains(.option) else { return .ignored }
@@ -1423,6 +1477,8 @@ struct SlideshowView: View {
         redEyedImages = [:]
         backgroundRemovedImages = [:]
         artifactRemovedImages = [:]
+        aiDenoisedImages = [:]
+        aiDenoiseRawImages = [:]
         colorizedImages = [:]
         effectImages = [:]
         savedZoomScales = [:]
@@ -1657,6 +1713,8 @@ struct SlideshowView: View {
         redEyedImages = redEyedImages.filter { valid.contains($0.key) }
         backgroundRemovedImages = backgroundRemovedImages.filter { valid.contains($0.key) }
         artifactRemovedImages = artifactRemovedImages.filter { valid.contains($0.key) }
+        aiDenoisedImages = aiDenoisedImages.filter { valid.contains($0.key) }
+        aiDenoiseRawImages = aiDenoiseRawImages.filter { valid.contains($0.key) }
         colorizedImages = colorizedImages.filter { valid.contains($0.key) }
         editStacks = editStacks.filter { valid.contains($0.key) }
         imageRatings = imageRatings.filter { valid.contains($0.key) }
@@ -1689,6 +1747,9 @@ struct SlideshowView: View {
         if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
             applySmartZoomIfNeeded(for: url, image: image)
         }
+        if let url = imageLoader.currentImageURL {
+            checkNoiseAndSuggest(for: url)
+        }
         // Reset the auto-advance clock on every navigation so the next tick is always `interval` from now.
         if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
     }
@@ -1703,6 +1764,7 @@ struct SlideshowView: View {
         case .redEyeRemoval: return redEyedImages[url]
         case .backgroundRemoval: return backgroundRemovedImages[url]
         case .artifactRemoval: return artifactRemovedImages[url]
+        case .aiDenoise: return aiDenoisedImages[url]
         case .colorize: return colorizedImages[url]
         }
     }
@@ -1744,6 +1806,7 @@ struct SlideshowView: View {
         case .redEyeRemoval: redEyedImages[url] = nil
         case .backgroundRemoval: backgroundRemovedImages[url] = nil
         case .artifactRemoval: artifactRemovedImages[url] = nil
+        case .aiDenoise: aiDenoisedImages[url] = nil; aiDenoiseRawImages[url] = nil
         case .colorize: colorizedImages[url] = nil
         }
     }
@@ -1777,6 +1840,7 @@ struct SlideshowView: View {
         case .redEyeRemoval: applyRedEyeOnCurrentImage()
         case .backgroundRemoval: removeBackgroundOnCurrentImage()
         case .artifactRemoval: removeArtifactsOnCurrentImage()
+        case .aiDenoise(let strength): applyAIDenoiseDirectly(strength: strength)
         case .colorize: colorizeCurrentImage(force: true)
         }
     }
@@ -2118,6 +2182,7 @@ struct SlideshowView: View {
     private func openDenoiseHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
         guard !slideshow.isPlaying, !showLocalAdjustmentsHUD else { return }
+        dismissNoiseSuggestion()
         denoiseBaseImage = compositeBeforeStep(.smooth, for: url)
         denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
         showDenoiseHUD = true
@@ -2172,6 +2237,50 @@ struct SlideshowView: View {
         denoiseTask = nil
         denoiseBaseImage = nil
         updateDisplayImage()  // restores pre-HUD display including any active photo effect
+    }
+
+    private func checkNoiseAndSuggest(for url: URL) {
+        guard !slideshow.isPlaying else { return }
+        guard smoothedImages[url] == nil else { return }
+        guard !noiseSuggestionDismissed.contains(url) else { return }
+
+        noiseSuggestionTask?.cancel()
+        showNoiseSuggestion = false
+        noiseSuggestionURL = nil
+
+        let task = Task.detached(priority: .utility) {
+            let sigma = NoiseEstimator.estimateNoise(url: url)
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                guard self.imageLoader.currentImageURL == url else { return }
+                guard !self.slideshow.isPlaying else { return }
+                guard self.smoothedImages[url] == nil else { return }
+                guard let sigma, sigma > 800 else { return }
+
+                self.noiseSuggestionURL = url
+                self.showNoiseSuggestion = true
+                self.noiseSuggestionDismissed.insert(url)
+
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if self.noiseSuggestionURL == url {
+                            self.showNoiseSuggestion = false
+                            self.noiseSuggestionURL = nil
+                        }
+                    }
+                }
+            }
+        }
+        noiseSuggestionTask = task
+    }
+
+    private func dismissNoiseSuggestion() {
+        noiseSuggestionTask?.cancel()
+        noiseSuggestionTask = nil
+        showNoiseSuggestion = false
+        noiseSuggestionURL = nil
     }
 
     private func upscaleCurrentImage(scale: Int) {
@@ -2550,6 +2659,7 @@ struct SlideshowView: View {
         return ImageInfo(width: width, height: height, fileSizeText: fileSizeText, dateTakenText: dateTakenText, cameraText: cameraText)
     }
 
+    // swiftlint:disable:next cyclomatic_complexity
     private func renameCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
         let ext = url.pathExtension
@@ -2627,6 +2737,8 @@ struct SlideshowView: View {
                 if let val = self.redEyedImages.removeValue(forKey: url) { self.redEyedImages[newURL] = val }
                 if let val = self.backgroundRemovedImages.removeValue(forKey: url) { self.backgroundRemovedImages[newURL] = val }
                 if let val = self.artifactRemovedImages.removeValue(forKey: url) { self.artifactRemovedImages[newURL] = val }
+                if let val = self.aiDenoisedImages.removeValue(forKey: url) { self.aiDenoisedImages[newURL] = val }
+                if let val = self.aiDenoiseRawImages.removeValue(forKey: url) { self.aiDenoiseRawImages[newURL] = val }
                 if let val = self.colorizedImages.removeValue(forKey: url) { self.colorizedImages[newURL] = val }
                 if let val = self.editStacks.removeValue(forKey: url) { self.editStacks[newURL] = val }
                 if let val = self.imageRatings.removeValue(forKey: url) { self.imageRatings[newURL] = val }
@@ -2672,6 +2784,8 @@ struct SlideshowView: View {
                         if let val = self.redEyedImages.removeValue(forKey: newURL) { self.redEyedImages[url] = val }
                         if let val = self.backgroundRemovedImages.removeValue(forKey: newURL) { self.backgroundRemovedImages[url] = val }
                         if let val = self.artifactRemovedImages.removeValue(forKey: newURL) { self.artifactRemovedImages[url] = val }
+                        if let val = self.aiDenoisedImages.removeValue(forKey: newURL) { self.aiDenoisedImages[url] = val }
+                        if let val = self.aiDenoiseRawImages.removeValue(forKey: newURL) { self.aiDenoiseRawImages[url] = val }
                         if let val = self.colorizedImages.removeValue(forKey: newURL) { self.colorizedImages[url] = val }
                         if let val = self.editStacks.removeValue(forKey: newURL) { self.editStacks[url] = val }
                         if let val = self.imageRatings.removeValue(forKey: newURL) { self.imageRatings[url] = val }

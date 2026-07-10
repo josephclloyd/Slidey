@@ -104,166 +104,18 @@ extension SlideshowView {
         isRemovingArtifacts = true
         artifactRemovalProgress = 0
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let modelURL = Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlmodelc") ??
-                                  Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlpackage") else {
-                DispatchQueue.main.async { self.isRemovingArtifacts = false }
+        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.artifactRemovalProgress = $0 }) { result in
+            guard let result else {
+                self.isRemovingArtifacts = false
                 return
             }
-            let cfg = MLModelConfiguration(); cfg.computeUnits = .all
-            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
-                DispatchQueue.main.async { self.isRemovingArtifacts = false }
-                return
-            }
-
-            let imgW = srcCG.width
-            let imgH = srcCG.height
-            let cs = CGColorSpaceCreateDeviceRGB()
-            let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
-
-            guard let readCtx = CGContext(data: nil, width: imgW, height: imgH,
-                                          bitsPerComponent: 8, bytesPerRow: imgW * 4,
-                                          space: cs, bitmapInfo: bi) else {
-                DispatchQueue.main.async { self.isRemovingArtifacts = false }
-                return
-            }
-            readCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
-            guard let pixelData = readCtx.data else {
-                DispatchQueue.main.async { self.isRemovingArtifacts = false }
-                return
-            }
-            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
-
-            let tileSize = 126
-            let tileOverlap = 16
-
-            func tileStarts(_ total: Int) -> [Int] {
-                guard total > tileSize else { return [0] }
-                var positions: [Int] = []
-                let stride = tileSize - tileOverlap
-                var pos = 0
-                while pos < total {
-                    if pos + tileSize >= total {
-                        positions.append(max(0, total - tileSize))
-                        break
-                    }
-                    positions.append(pos)
-                    pos += stride
-                }
-                return positions
-            }
-
-            let xStarts = tileStarts(imgW)
-            let yStarts = tileStarts(imgH)
-            let totalTiles = xStarts.count * yStarts.count
-
-            var accR = [Float](repeating: 0, count: imgW * imgH)
-            var accG = [Float](repeating: 0, count: imgW * imgH)
-            var accB = [Float](repeating: 0, count: imgW * imgH)
-            var accW = [Float](repeating: 0, count: imgW * imgH)
-
-            var tilesDone = 0
-
-            for y0 in yStarts {
-                for x0 in xStarts {
-                    let y1 = min(y0 + tileSize, imgH)
-                    let x1 = min(x0 + tileSize, imgW)
-                    let tileH = y1 - y0
-                    let tileW = x1 - x0
-
-                    guard let inArr = try? MLMultiArray(shape: [1, 3, 126, 126], dataType: .float32) else { continue }
-                    inArr.withUnsafeMutableBytes { buf, _ in
-                        let ptr = buf.bindMemory(to: Float.self)
-                        for row in 0..<tileSize {
-                            for col in 0..<tileSize {
-                                let srcRow = min(y0 + min(row, tileH - 1), imgH - 1)
-                                let srcCol = min(x0 + min(col, tileW - 1), imgW - 1)
-                                let pixIdx = (srcRow * imgW + srcCol) * 4
-                                let pos = row * tileSize + col
-                                ptr[0 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 2]) / 255.0
-                                ptr[1 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 1]) / 255.0
-                                ptr[2 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 0]) / 255.0
-                            }
-                        }
-                    }
-
-                    guard let inFeatures = try? MLDictionaryFeatureProvider(
-                              dictionary: ["image": MLFeatureValue(multiArray: inArr)]),
-                          let outFeatures = try? model.prediction(from: inFeatures),
-                          let outArr = outFeatures.featureValue(for: "restored_image")?.multiArrayValue else { continue }
-
-                    let rampPx = tileOverlap
-                    let isFP16 = outArr.dataType == .float16
-                    let rawPtr16 = isFP16 ? outArr.dataPointer.bindMemory(to: UInt16.self, capacity: outArr.count) : nil
-                    let rawPtr32 = isFP16 ? nil : outArr.dataPointer.bindMemory(to: Float.self, capacity: outArr.count)
-
-                    for ty in 0..<tileH {
-                        let gy = y0 + ty
-                        for tx in 0..<tileW {
-                            let gx = x0 + tx
-                            var w: Float = 1.0
-                            if rampPx > 0 {
-                                if y0 > 0 && ty < rampPx { w *= Float(ty) / Float(rampPx) }
-                                if y1 < imgH && ty >= tileH - rampPx { w *= Float(tileH - 1 - ty) / Float(rampPx) }
-                                if x0 > 0 && tx < rampPx { w *= Float(tx) / Float(rampPx) }
-                                if x1 < imgW && tx >= tileW - rampPx { w *= Float(tileW - 1 - tx) / Float(rampPx) }
-                            }
-                            let idx = gy * imgW + gx
-                            let pos = ty * tileSize + tx
-                            let r0: Float, g0: Float, b0: Float
-                            if isFP16, let ptr = rawPtr16 {
-                                r0 = Float(Float16(bitPattern: ptr[0 * tileSize * tileSize + pos]))
-                                g0 = Float(Float16(bitPattern: ptr[1 * tileSize * tileSize + pos]))
-                                b0 = Float(Float16(bitPattern: ptr[2 * tileSize * tileSize + pos]))
-                            } else if let ptr = rawPtr32 {
-                                r0 = ptr[0 * tileSize * tileSize + pos]
-                                g0 = ptr[1 * tileSize * tileSize + pos]
-                                b0 = ptr[2 * tileSize * tileSize + pos]
-                            } else {
-                                (r0, g0, b0) = (0, 0, 0)
-                            }
-                            accR[idx] += r0 * w
-                            accG[idx] += g0 * w
-                            accB[idx] += b0 * w
-                            accW[idx] += w
-                        }
-                    }
-
-                    tilesDone += 1
-                    let progress = Double(tilesDone) / Double(totalTiles)
-                    DispatchQueue.main.async { self.artifactRemovalProgress = progress }
-                }
-            }
-
-            var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
-            for i in 0..<(imgW * imgH) {
-                let dw = accW[i] > 0 ? accW[i] : 1
-                outPixels[i * 4 + 0] = UInt8(min(255, max(0, Int(accB[i] / dw * 255))))
-                outPixels[i * 4 + 1] = UInt8(min(255, max(0, Int(accG[i] / dw * 255))))
-                outPixels[i * 4 + 2] = UInt8(min(255, max(0, Int(accR[i] / dw * 255))))
-                outPixels[i * 4 + 3] = 255
-            }
-
-            let capturedURL = url
-            outPixels.withUnsafeMutableBytes { ptr in
-                guard let outCtx = CGContext(data: ptr.baseAddress, width: imgW, height: imgH,
-                                             bitsPerComponent: 8, bytesPerRow: imgW * 4,
-                                             space: cs, bitmapInfo: bi),
-                      let outCG = outCtx.makeImage() else {
-                    DispatchQueue.main.async { self.isRemovingArtifacts = false }
-                    return
-                }
-                let result = NSImage(cgImage: outCG, size: source.size)
-                DispatchQueue.main.async {
-                    self.artifactRemovedImages[capturedURL] = result
-                    self.clearCachesDownstream(of: .artifactRemoval, for: capturedURL)
-                    self.editStacks[capturedURL, default: EditStack()].append(.artifactRemoval)
-                    self.effectImages[capturedURL] = nil
-                    self.isRemovingArtifacts = false
-                    self.saveFavourites()
-                    self.updateDisplayImage()
-                }
-            }
+            self.artifactRemovedImages[url] = result
+            self.clearCachesDownstream(of: .artifactRemoval, for: url)
+            self.editStacks[url, default: EditStack()].append(.artifactRemoval)
+            self.effectImages[url] = nil
+            self.isRemovingArtifacts = false
+            self.saveFavourites()
+            self.updateDisplayImage()
         }
     }
 
@@ -601,6 +453,56 @@ extension SlideshowView {
         }
     }
 
+    @ViewBuilder var aiDenoiseHUD: some View {
+        if showAIDenoiseHUD {
+            VStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("AI Denoise")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                        if isAIDenoising {
+                            Text("\(Int(aiDenoiseProgress * 100))%")
+                                .monospacedDigit()
+                                .foregroundColor(.white.opacity(0.7))
+                        } else {
+                            Text("\(Int(aiDenoiseStrength))%")
+                                .monospacedDigit()
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    if isAIDenoising {
+                        ProgressView(value: aiDenoiseProgress)
+                            .progressViewStyle(.linear)
+                            .tint(.white)
+                    } else {
+                        Slider(value: $aiDenoiseStrength, in: 0...100, step: 1)
+                            .onChange(of: aiDenoiseStrength) { _, _ in
+                                DispatchQueue.main.async { updateAIDenoiseBlend() }
+                            }
+                            .tint(.white)
+                    }
+                    HStack(spacing: 16) {
+                        Button("Cancel") { cancelAIDenoiseHUD() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                        Button("Apply") { applyAIDenoise() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(isAIDenoising)
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 360)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
     @ViewBuilder
     var progressOverlays: some View {
         if isProcessing {
@@ -738,6 +640,307 @@ extension SlideshowView {
                 .cornerRadius(12)
                 .frame(width: 700)
                 .padding(.bottom, 40)
+            }
+        }
+    }
+
+    func removeAIDenoise() {
+        removeEdit(.aiDenoise)
+    }
+
+    func openAIDenoiseHUD() {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isAIDenoising else { return }
+        guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
+        guard !showAIDenoiseHUD else { return }
+
+        aiDenoiseBaseImage = compositeBeforeStep(.aiDenoise, for: url)
+        aiDenoiseStrength = 100.0
+        showAIDenoiseHUD = true
+
+        if let cached = aiDenoiseRawImages[url] {
+            aiDenoiseMLImage = cached
+            updateAIDenoiseBlend()
+        } else {
+            runAIDenoiseInference()
+        }
+    }
+
+    func applyAIDenoiseDirectly(strength: Double) {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isAIDenoising else { return }
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = compositeBeforeStep(.aiDenoise, for: url) else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        isAIDenoising = true
+        aiDenoiseProgress = 0
+        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+            guard let mlImage else {
+                self.isAIDenoising = false
+                return
+            }
+            let blended = self.blendImages(base: source, overlay: mlImage, strength: strength / 100.0)
+            self.aiDenoiseRawImages[url] = mlImage
+            self.aiDenoisedImages[url] = blended
+            self.clearCachesDownstream(of: .aiDenoise, for: url)
+            self.editStacks[url, default: EditStack()].append(.aiDenoise(strength: strength))
+            self.effectImages[url] = nil
+            self.isAIDenoising = false
+            self.saveFavourites()
+            self.updateDisplayImage()
+        }
+    }
+
+    private func runAIDenoiseInference() {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let source = aiDenoiseBaseImage else { return }
+        guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        isAIDenoising = true
+        aiDenoiseProgress = 0
+
+        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+            self.isAIDenoising = false
+            guard let mlImage else {
+                self.cancelAIDenoiseHUD()
+                return
+            }
+            guard self.imageLoader.currentImageURL == url, self.showAIDenoiseHUD else { return }
+            self.aiDenoiseMLImage = mlImage
+            self.aiDenoiseRawImages[url] = mlImage
+            self.updateAIDenoiseBlend()
+        }
+    }
+
+    func updateAIDenoiseBlend() {
+        guard let base = aiDenoiseBaseImage, let ml = aiDenoiseMLImage else { return }
+        let strength = aiDenoiseStrength / 100.0
+        if strength <= 0 {
+            currentDisplayImage = base
+            return
+        }
+        if strength >= 1.0 {
+            currentDisplayImage = ml
+            return
+        }
+        currentDisplayImage = blendImages(base: base, overlay: ml, strength: strength)
+    }
+
+    func applyAIDenoise() {
+        guard !isAIDenoising else { return }
+        guard let url = imageLoader.currentImageURL,
+              let result = currentDisplayImage else { cancelAIDenoiseHUD(); return }
+        aiDenoisedImages[url] = result
+        clearCachesDownstream(of: .aiDenoise, for: url)
+        editStacks[url, default: EditStack()].append(.aiDenoise(strength: aiDenoiseStrength))
+        effectImages[url] = nil
+        saveFavourites()
+        showAIDenoiseHUD = false
+        aiDenoiseBaseImage = nil
+        aiDenoiseMLImage = nil
+        updateDisplayImage()
+    }
+
+    func cancelAIDenoiseHUD() {
+        guard showAIDenoiseHUD else { return }
+        showAIDenoiseHUD = false
+        isAIDenoising = false
+        aiDenoiseBaseImage = nil
+        aiDenoiseMLImage = nil
+        updateDisplayImage()
+    }
+
+    private func blendImages(base: NSImage, overlay: NSImage, strength: Double) -> NSImage {
+        guard let baseCG = base.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let overlayCG = overlay.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return base }
+        let w = baseCG.width, h = baseCG.height
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+
+        guard let baseCtx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                       bytesPerRow: w * 4, space: cs, bitmapInfo: bi),
+              let ovCtx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                    bytesPerRow: w * 4, space: cs, bitmapInfo: bi) else { return base }
+        baseCtx.draw(baseCG, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ovCtx.draw(overlayCG, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        guard let bData = baseCtx.data, let oData = ovCtx.data else { return base }
+        let bPtr = bData.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        let oPtr = oData.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        let s = Float(strength)
+        let inv = 1.0 - s
+
+        var out = [UInt8](repeating: 255, count: w * h * 4)
+        for i in 0..<(w * h) {
+            let idx = i * 4
+            out[idx + 0] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 0]) * inv + Float(oPtr[idx + 0]) * s))))
+            out[idx + 1] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 1]) * inv + Float(oPtr[idx + 1]) * s))))
+            out[idx + 2] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 2]) * inv + Float(oPtr[idx + 2]) * s))))
+            out[idx + 3] = 255
+        }
+
+        return out.withUnsafeMutableBytes { ptr -> NSImage in
+            guard let outCtx = CGContext(data: ptr.baseAddress, width: w, height: h,
+                                          bitsPerComponent: 8, bytesPerRow: w * 4,
+                                          space: cs, bitmapInfo: bi),
+                  let outCG = outCtx.makeImage() else { return base }
+            return NSImage(cgImage: outCG, size: base.size)
+        }
+    }
+
+    // swiftlint:disable:next function_body_length
+    private func runSwinIRInference(srcCG: CGImage, source: NSImage, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let modelURL = Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlmodelc") ??
+                                  Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlpackage") else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let cfg = MLModelConfiguration(); cfg.computeUnits = .all
+            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+
+            let imgW = srcCG.width
+            let imgH = srcCG.height
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let bi = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+
+            guard let readCtx = CGContext(data: nil, width: imgW, height: imgH,
+                                           bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                           space: cs, bitmapInfo: bi) else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            readCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
+            guard let pixelData = readCtx.data else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
+
+            let tileSize = 126
+            let tileOverlap = 16
+
+            func tileStarts(_ total: Int) -> [Int] {
+                guard total > tileSize else { return [0] }
+                var positions: [Int] = []
+                let stride = tileSize - tileOverlap
+                var pos = 0
+                while pos < total {
+                    if pos + tileSize >= total {
+                        positions.append(max(0, total - tileSize))
+                        break
+                    }
+                    positions.append(pos)
+                    pos += stride
+                }
+                return positions
+            }
+
+            let xStarts = tileStarts(imgW)
+            let yStarts = tileStarts(imgH)
+            let totalTiles = xStarts.count * yStarts.count
+
+            var accR = [Float](repeating: 0, count: imgW * imgH)
+            var accG = [Float](repeating: 0, count: imgW * imgH)
+            var accB = [Float](repeating: 0, count: imgW * imgH)
+            var accW = [Float](repeating: 0, count: imgW * imgH)
+
+            var tilesDone = 0
+
+            for y0 in yStarts {
+                for x0 in xStarts {
+                    let y1 = min(y0 + tileSize, imgH)
+                    let x1 = min(x0 + tileSize, imgW)
+                    let tileH = y1 - y0
+                    let tileW = x1 - x0
+
+                    guard let inArr = try? MLMultiArray(shape: [1, 3, 126, 126], dataType: .float32) else { continue }
+                    inArr.withUnsafeMutableBytes { buf, _ in
+                        let ptr = buf.bindMemory(to: Float.self)
+                        for row in 0..<tileSize {
+                            for col in 0..<tileSize {
+                                let srcRow = min(y0 + min(row, tileH - 1), imgH - 1)
+                                let srcCol = min(x0 + min(col, tileW - 1), imgW - 1)
+                                let pixIdx = (srcRow * imgW + srcCol) * 4
+                                let pos = row * tileSize + col
+                                ptr[0 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 2]) / 255.0
+                                ptr[1 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 1]) / 255.0
+                                ptr[2 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 0]) / 255.0
+                            }
+                        }
+                    }
+
+                    guard let inFeatures = try? MLDictionaryFeatureProvider(
+                              dictionary: ["image": MLFeatureValue(multiArray: inArr)]),
+                          let outFeatures = try? model.prediction(from: inFeatures),
+                          let outArr = outFeatures.featureValue(for: "restored_image")?.multiArrayValue else { continue }
+
+                    let rampPx = tileOverlap
+                    let isFP16 = outArr.dataType == .float16
+                    let rawPtr16 = isFP16 ? outArr.dataPointer.bindMemory(to: UInt16.self, capacity: outArr.count) : nil
+                    let rawPtr32 = isFP16 ? nil : outArr.dataPointer.bindMemory(to: Float.self, capacity: outArr.count)
+
+                    for ty in 0..<tileH {
+                        let gy = y0 + ty
+                        for tx in 0..<tileW {
+                            let gx = x0 + tx
+                            var w: Float = 1.0
+                            if rampPx > 0 {
+                                if y0 > 0 && ty < rampPx { w *= Float(ty) / Float(rampPx) }
+                                if y1 < imgH && ty >= tileH - rampPx { w *= Float(tileH - 1 - ty) / Float(rampPx) }
+                                if x0 > 0 && tx < rampPx { w *= Float(tx) / Float(rampPx) }
+                                if x1 < imgW && tx >= tileW - rampPx { w *= Float(tileW - 1 - tx) / Float(rampPx) }
+                            }
+                            let idx = gy * imgW + gx
+                            let pos = ty * tileSize + tx
+                            let r0: Float, g0: Float, b0: Float
+                            if isFP16, let ptr = rawPtr16 {
+                                r0 = Float(Float16(bitPattern: ptr[0 * tileSize * tileSize + pos]))
+                                g0 = Float(Float16(bitPattern: ptr[1 * tileSize * tileSize + pos]))
+                                b0 = Float(Float16(bitPattern: ptr[2 * tileSize * tileSize + pos]))
+                            } else if let ptr = rawPtr32 {
+                                r0 = ptr[0 * tileSize * tileSize + pos]
+                                g0 = ptr[1 * tileSize * tileSize + pos]
+                                b0 = ptr[2 * tileSize * tileSize + pos]
+                            } else {
+                                (r0, g0, b0) = (0, 0, 0)
+                            }
+                            accR[idx] += r0 * w
+                            accG[idx] += g0 * w
+                            accB[idx] += b0 * w
+                            accW[idx] += w
+                        }
+                    }
+
+                    tilesDone += 1
+                    let progress = Double(tilesDone) / Double(totalTiles)
+                    if let progressHandler {
+                        DispatchQueue.main.async { progressHandler(progress) }
+                    }
+                }
+            }
+
+            var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
+            for i in 0..<(imgW * imgH) {
+                let dw = accW[i] > 0 ? accW[i] : 1
+                outPixels[i * 4 + 0] = UInt8(min(255, max(0, Int(accB[i] / dw * 255))))
+                outPixels[i * 4 + 1] = UInt8(min(255, max(0, Int(accG[i] / dw * 255))))
+                outPixels[i * 4 + 2] = UInt8(min(255, max(0, Int(accR[i] / dw * 255))))
+                outPixels[i * 4 + 3] = 255
+            }
+
+            outPixels.withUnsafeMutableBytes { ptr in
+                guard let outCtx = CGContext(data: ptr.baseAddress, width: imgW, height: imgH,
+                                              bitsPerComponent: 8, bytesPerRow: imgW * 4,
+                                              space: cs, bitmapInfo: bi),
+                      let outCG = outCtx.makeImage() else {
+                    DispatchQueue.main.async { completion(nil) }
+                    return
+                }
+                let result = NSImage(cgImage: outCG, size: source.size)
+                DispatchQueue.main.async { completion(result) }
             }
         }
     }

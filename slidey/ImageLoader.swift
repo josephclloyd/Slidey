@@ -475,3 +475,53 @@ class ImageLoader: ObservableObject {
         stopWatching()
     }
 }
+
+enum NoiseEstimator {
+    static func estimateNoise(url: URL, maxPixelSize: Int = 512) -> Double? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width >= 3, height >= 3 else { return nil }
+
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let data = context.data else { return nil }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: width * height)
+
+        var sum: Double = 0
+        var count: Int = 0
+        for y in 1..<(height - 1) {
+            for x in 1..<(width - 1) {
+                let center = Double(pixels[y * width + x])
+                let top    = Double(pixels[(y - 1) * width + x])
+                let bottom = Double(pixels[(y + 1) * width + x])
+                let left   = Double(pixels[y * width + (x - 1)])
+                let right  = Double(pixels[y * width + (x + 1)])
+                let laplacian = 4 * center - top - bottom - left - right
+                sum += laplacian * laplacian
+                count += 1
+            }
+        }
+        guard count > 0 else { return nil }
+        return sum / Double(count)
+    }
+}
