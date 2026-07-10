@@ -101,6 +101,10 @@ struct SlideshowView: View {
     @State private var denoiseLevel: Double = 50.0
     @State private var denoiseBaseImage: NSImage?
     @State private var denoiseTask: Task<Void, Never>?
+    @State private var noiseSuggestionDismissed: Set<URL> = []
+    @State private var noiseSuggestionTask: Task<Void, Never>?
+    @State private var showNoiseSuggestion: Bool = false
+    @State private var noiseSuggestionURL: URL?
     @State var imageEffects: [URL: String] = [:]
     @State var effectImages: [URL: NSImage] = [:]      // cached effect-applied images
     @State var flippedHorizontally: Set<String> = []
@@ -360,6 +364,7 @@ struct SlideshowView: View {
         filenameOverlay
         imageInfoOverlay
         toastOverlay
+        noiseSuggestionOverlay
         trackInfoOverlay
         directoryMissingOverlay
         progressOverlays
@@ -456,6 +461,29 @@ struct SlideshowView: View {
                 }
             }
             .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private var noiseSuggestionOverlay: some View {
+        if showNoiseSuggestion {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text("This image looks noisy \u{2014} press q to denoise")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue.opacity(0.85))
+                        .cornerRadius(6)
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 50)
+                }
+            }
+            .transition(.opacity)
+            .allowsHitTesting(false)
         }
     }
 
@@ -597,7 +625,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD() }
+            if isPlaying { cancelDenoise(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -1689,6 +1717,9 @@ struct SlideshowView: View {
         if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
             applySmartZoomIfNeeded(for: url, image: image)
         }
+        if let url = imageLoader.currentImageURL {
+            checkNoiseAndSuggest(for: url)
+        }
         // Reset the auto-advance clock on every navigation so the next tick is always `interval` from now.
         if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
     }
@@ -2118,6 +2149,7 @@ struct SlideshowView: View {
     private func openDenoiseHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
         guard !slideshow.isPlaying, !showLocalAdjustmentsHUD else { return }
+        dismissNoiseSuggestion()
         denoiseBaseImage = compositeBeforeStep(.smooth, for: url)
         denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
         showDenoiseHUD = true
@@ -2172,6 +2204,50 @@ struct SlideshowView: View {
         denoiseTask = nil
         denoiseBaseImage = nil
         updateDisplayImage()  // restores pre-HUD display including any active photo effect
+    }
+
+    private func checkNoiseAndSuggest(for url: URL) {
+        guard !slideshow.isPlaying else { return }
+        guard smoothedImages[url] == nil else { return }
+        guard !noiseSuggestionDismissed.contains(url) else { return }
+
+        noiseSuggestionTask?.cancel()
+        showNoiseSuggestion = false
+        noiseSuggestionURL = nil
+
+        let task = Task.detached(priority: .utility) {
+            let sigma = NoiseEstimator.estimateNoise(url: url)
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                guard self.imageLoader.currentImageURL == url else { return }
+                guard !self.slideshow.isPlaying else { return }
+                guard self.smoothedImages[url] == nil else { return }
+                guard let sigma, sigma > 800 else { return }
+
+                self.noiseSuggestionURL = url
+                self.showNoiseSuggestion = true
+                self.noiseSuggestionDismissed.insert(url)
+
+                Task {
+                    try? await Task.sleep(for: .seconds(4))
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run {
+                        if self.noiseSuggestionURL == url {
+                            self.showNoiseSuggestion = false
+                            self.noiseSuggestionURL = nil
+                        }
+                    }
+                }
+            }
+        }
+        noiseSuggestionTask = task
+    }
+
+    private func dismissNoiseSuggestion() {
+        noiseSuggestionTask?.cancel()
+        noiseSuggestionTask = nil
+        showNoiseSuggestion = false
+        noiseSuggestionURL = nil
     }
 
     private func upscaleCurrentImage(scale: Int) {

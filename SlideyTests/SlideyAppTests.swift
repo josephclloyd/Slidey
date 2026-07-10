@@ -1297,3 +1297,120 @@ final class PerspectiveTransformTests: XCTestCase {
         XCTAssertNil(result)
     }
 }
+
+final class NoiseEstimatorTests: XCTestCase {
+    func testEstimateNoiseReturnsNilForMissingFile() {
+        let bogus = URL(fileURLWithPath: "/tmp/does-not-exist-\(UUID().uuidString).png")
+        XCTAssertNil(NoiseEstimator.estimateNoise(url: bogus))
+    }
+
+    func testEstimateNoiseReturnsLowValueForSolidImage() throws {
+        let width = 64
+        let height = 64
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmapRep)
+        NSColor.gray.setFill()
+        NSBezierPath.fill(NSRect(x: 0, y: 0, width: width, height: height))
+        NSGraphicsContext.restoreGraphicsState()
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noise-test-solid-\(UUID().uuidString).png")
+        let pngData = bitmapRep.representation(using: .png, properties: [:])!
+        try pngData.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let sigma = NoiseEstimator.estimateNoise(url: url)
+        XCTAssertNotNil(sigma)
+        XCTAssertLessThan(sigma!, 100, "Solid image should have very low noise estimate")
+    }
+
+    func testEstimateNoiseReturnsHighValueForNoisyImage() throws {
+        let width = 128
+        let height = 128
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        let bitmapData = bitmapRep.bitmapData!
+        let bytesPerRow = bitmapRep.bytesPerRow
+        for y in 0..<height {
+            for x in 0..<width {
+                let offset = y * bytesPerRow + x * 4
+                let val = UInt8.random(in: 0...255)
+                bitmapData[offset] = val
+                bitmapData[offset + 1] = val
+                bitmapData[offset + 2] = val
+                bitmapData[offset + 3] = 255
+            }
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noise-test-noisy-\(UUID().uuidString).png")
+        let pngData = bitmapRep.representation(using: .png, properties: [:])!
+        try pngData.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let sigma = NoiseEstimator.estimateNoise(url: url)
+        XCTAssertNotNil(sigma)
+        XCTAssertGreaterThan(sigma!, 800, "Random noise image should have high noise estimate")
+    }
+
+    func testEstimateNoiseReturnsMidValueForGradientImage() throws {
+        let width = 128
+        let height = 128
+        let bitmapRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        let bitmapData = bitmapRep.bitmapData!
+        let bytesPerRow = bitmapRep.bytesPerRow
+        for y in 0..<height {
+            for x in 0..<width {
+                let offset = y * bytesPerRow + x * 4
+                let val = UInt8(x * 255 / (width - 1))
+                bitmapData[offset] = val
+                bitmapData[offset + 1] = val
+                bitmapData[offset + 2] = val
+                bitmapData[offset + 3] = 255
+            }
+        }
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noise-test-gradient-\(UUID().uuidString).png")
+        let pngData = bitmapRep.representation(using: .png, properties: [:])!
+        try pngData.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let sigma = NoiseEstimator.estimateNoise(url: url)
+        XCTAssertNotNil(sigma)
+        XCTAssertLessThan(sigma!, 800, "Gradient image should not trigger noise suggestion")
+    }
+}
