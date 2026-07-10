@@ -77,6 +77,13 @@ Every retro should propose at least one concrete change to the sprint skill file
 
 Write the proposals. Joe decides which to apply. Apply approved ones now.
 
+**If any approved change edits a `.claude/phases/*.ts` file, run `mcx phase install`
+immediately after and commit the regenerated `.mcx.lock` alongside it.** Sprint 24's retro
+edited `review.ts` but skipped this, and the very first `mcx phase run` of Sprint 25 failed
+with "lockfile out of date" as a result. `mcx phase run` will refuse to execute against a
+stale lock, so this isn't optional cleanup — it blocks the next sprint's run phase entirely
+if skipped.
+
 ## 6. Commit diary + memory to sprint branch
 
 ```bash
