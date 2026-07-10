@@ -1,7 +1,7 @@
 # Sprint 26 — 2026-07-10
 
 Started: 2026-07-10T00:00
-Status: planned
+Status: shipped
 
 ## Theme: Smarter denoising (Joe-scoped: #240, #241 only)
 
@@ -55,3 +55,54 @@ rest of the open backlog (#219 object removal, #135 share sheet) is unchanged fr
 ## Notes
 
 (anything surprising from planning goes here once we start)
+
+## Results
+
+Released: v1.25 — 2026-07-10
+
+### Shipped
+- #241 Auto-detect noise and suggest denoising — PR #243, 0 repair rounds, clean on first
+  review (one non-blocking nit noted: an unstored `Task` whose cancellation check is dead
+  code, harmless given the URL guard already protects it).
+- #240 Smarter ML-based denoiser (ships as a separate "AI Denoise" tool, `Shift+Q`,
+  alongside the existing classical Denoise HUD) — PR #244, 1 repair round (two findings:
+  the PR claimed a shared `runSwinIRInference()` helper was extracted from artifact
+  removal, but `removeArtifactsOnCurrentImage()` still had its own ~160-line inline copy
+  of the same pipeline — the extraction was only applied to the new AI Denoise path, not
+  backported; and the new `.aiDenoise` edit step's `Codable`/`caseTag`/`displayName`
+  round-trip had no tests, contrary to CLAUDE.md's testability requirement for pure
+  model/state changes). The impl session's own scoping note is worth keeping: the bundled
+  SwinIR model was trained for JPEG artifact removal, not general sensor noise — it's
+  documented honestly in the PR as "AI Denoise" rather than overclaiming superiority over
+  the classical filter in all cases, with a dedicated NAFNet/Restormer-class model flagged
+  as the real follow-up if true sensor-noise superiority is wanted later.
+
+### Deviations from plan
+- **A large mid-sprint discussion about Anthropic account quota/billing**, prompted by Joe
+  noticing `mcx status`'s `Extra` usage line jump from `$0/$4600` to `$336/$4600` between
+  checks. Investigated: `hasExtraUsageEnabled: true` in the local Claude Code account
+  config confirmed extra usage was already enabled account-wide (not a toggle I needed to
+  flip); the `$X/$4600` figure appears to be a locally-tracked spend/budget-alert metric,
+  not the authoritative Anthropic-side balance. Net effect: quota-hit retries were worth
+  attempting more readily than assumed — a resume attempt after the reported reset time
+  succeeded even while `mcx status` still showed the 5h window at 100%, confirming the
+  displayed reset timestamp (and even 100%-used readings) can lag the actual server-side
+  state by a meaningful margin, consistent with prior sprints' notes on this lag but with
+  a clearer resolution this time: **just try the resume — it costs nothing to attempt, and
+  it succeeded well before the locally-displayed reset time.**
+- **Quota hit once mid-session** (#240's impl, 56 turns before the hit) — resumed via a
+  simple "try continuing now" nudge rather than waiting out the full displayed window,
+  per the finding above. No lost work.
+
+### Needs attention
+None — both issues merged clean.
+
+### Stats
+- PRs merged: 2 (#243, #244)
+- Repair rounds: #241 — 0; #240 — 1 (real findings: incomplete refactor claim, missing
+  tests)
+- Quota-hit recoveries: 1 (#240's impl — resumed successfully before the displayed reset
+  time)
+- Follow-up issues filed: none this sprint
+- Total orchestration cost: ~$13 across 6 spawned sessions (3 opus impl/repair, 3 sonnet
+  review)
