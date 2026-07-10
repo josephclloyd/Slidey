@@ -676,6 +676,17 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("AI Denoise\u{2026}") {
+                NotificationCenter.default.post(name: .aiDenoiseImage, object: nil)
+            }
+            .keyboardShortcut("q", modifiers: .shift)
+
+            Button("Remove AI Denoise") {
+                NotificationCenter.default.post(name: .removeAIDenoise, object: nil)
+            }
+
+            Divider()
+
             Button("Colorize (B&W to Color)") {
                 NotificationCenter.default.post(name: .colorizeImage, object: nil)
             }

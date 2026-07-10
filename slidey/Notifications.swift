@@ -73,6 +73,9 @@ extension NSNotification.Name {
     static let removeArtifacts = NSNotification.Name("RemoveArtifacts")
     static let restoreArtifacts = NSNotification.Name("RestoreArtifacts")
 
+    static let aiDenoiseImage = NSNotification.Name("AIDenoiseImage")
+    static let removeAIDenoise = NSNotification.Name("RemoveAIDenoise")
+
     static let colorizeImage = NSNotification.Name("ColorizeImage")
     static let removeColorization = NSNotification.Name("RemoveColorization")
 
