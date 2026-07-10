@@ -161,6 +161,15 @@ Terminal phases (done, needs-attention) return domain outputs; special-case them
 - `done`: `{ merged, prNumber, error? }` — if `error`, surface to Joe, don't retry blindly
 - `needs-attention`: record the item's `reason`, surface to Joe
 
+**Execute the returned `spawn` command's `prompt` verbatim — don't hand-rewrite it.**
+`review.ts` builds a review prompt that already includes strict verdict-token instructions
+on every round (round number only affects internal state tracking, not the prompt text
+itself). When you want to add round-specific context for a repair-loop re-review (e.g. "this
+is round 2, confirm the fix for finding X"), **append** it to the returned prompt rather than
+composing a new prompt by hand from scratch. Sprint 25 saw inconsistent verdict-token
+compliance from hand-authored re-review prompts that shortened or dropped the original
+instruction wording — the phase-generated prompt is the reliable source of that instruction.
+
 ## Daemon restart recovery
 
 If the daemon restarts mid-sprint (check `mcx status` — uptime near 0s), work items are wiped
@@ -431,6 +440,27 @@ gh issue create --title "..." --label "..." --body-file /path/to/body.md
 ```
 This sidesteps shell quoting entirely — no escaping needed for apostrophes, backticks, or
 embedded double quotes in the body text. Prefer this over `--body "$(cat <<'EOF' ... EOF)"`.
+
+## Direct push to main: only when CI/tooling itself is what's broken
+
+The normal flow (branch → PR → passing CI → `mcx pr merge`) requires CI to pass before
+anything lands on `main`. That flow cannot fix CI or tooling infrastructure that is itself
+broken — a PR fixing a broken required check can never pass that same check. Sprint 25 hit
+this twice: a stale `.mcx.lock` blocking `mcx phase run` for every work item, and a GitHub
+Git LFS bandwidth exhaustion blocking Build/Test account-wide.
+
+Direct push to `main` (bypassing the PR flow) is allowed **only** when all of these hold:
+- The change is confined to `.mcx.lock`, `.claude/phases/*.ts`, `.claude/skills/**`, or
+  `.github/workflows/*.yml` — never application code (`slidey/`, `SlideyTests/`).
+- The normal PR flow is **verifiably** blocked by the exact thing being fixed — not just
+  inconvenient or slow. Confirm this before pushing (e.g. reproduce the `mcx phase run`
+  error, or see the actual CI failure log), don't assume.
+- The push is noted in the sprint plan's Results/Deviations section when the results are
+  written, every time — this is a deviation from the standard workflow, not routine
+  practice, and needs to stay visible even though it's sometimes necessary.
+
+Never extend this exception to application code, no matter how small or "obviously correct"
+the change seems — application code always goes through the normal review + CI flow.
 
 ## Build verification
 
