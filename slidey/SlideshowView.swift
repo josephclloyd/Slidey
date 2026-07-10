@@ -149,6 +149,7 @@ struct SlideshowView: View {
     @State var artifactRemovalProgress: Double = 0
     @State var aiDenoisedImages: [URL: NSImage] = [:]; @State var aiDenoiseRawImages: [URL: NSImage] = [:]
     @State var isAIDenoising = false; @State var aiDenoiseProgress: Double = 0
+    @State var swinirCancellationToken: SwinIRCancellationToken?
     @State var showAIDenoiseHUD: Bool = false; @State var aiDenoiseStrength: Double = 100.0
     @State var aiDenoiseBaseImage: NSImage?; @State var aiDenoiseMLImage: NSImage?
     @State var colorizedImages: [URL: NSImage] = [:]
@@ -630,7 +631,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelAIDenoiseHUD(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
+            if isPlaying { cancelDenoise(); cancelAIDenoiseHUD(); cancelSwinIRIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -1128,7 +1129,8 @@ struct SlideshowView: View {
         }
 
         if key == .escape {
-            if isProcessing {
+            if cancelSwinIRIfRunning() {
+            } else if isProcessing {
                 cancelUpscale()
             } else if isFullScreen {
                 exitFullScreen()
