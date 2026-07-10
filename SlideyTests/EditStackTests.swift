@@ -46,6 +46,14 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(stack.steps[0], .upscale(factor: 4))
     }
 
+    func testAppendAIDenoiseUpdatesStrength() {
+        var stack = EditStack()
+        stack.append(.aiDenoise(strength: 50))
+        stack.append(.aiDenoise(strength: 80))
+        XCTAssertEqual(stack.steps.count, 1)
+        XCTAssertEqual(stack.steps[0], .aiDenoise(strength: 80))
+    }
+
     func testRemoveDropsOnlyMatchingCase() {
         var stack = EditStack()
         stack.append(.enhance)
@@ -105,12 +113,13 @@ final class EditStackTests: XCTestCase {
         stack.append(.redEyeRemoval)
         stack.append(.backgroundRemoval)
         stack.append(.artifactRemoval)
+        stack.append(.aiDenoise(strength: 75))
         stack.append(.colorize)
 
         let data = try JSONEncoder().encode(stack)
         let decoded = try JSONDecoder().decode(EditStack.self, from: data)
         XCTAssertEqual(stack, decoded)
-        XCTAssertEqual(decoded.steps.count, 9)
+        XCTAssertEqual(decoded.steps.count, 10)
     }
 
     func testEditStepTitleTag() {
@@ -122,6 +131,7 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(EditStep.redEyeRemoval.titleTag, "red-eye removed")
         XCTAssertEqual(EditStep.backgroundRemoval.titleTag, "background removed")
         XCTAssertEqual(EditStep.artifactRemoval.titleTag, "artifacts removed")
+        XCTAssertEqual(EditStep.aiDenoise(strength: 50).titleTag, "AI denoised (50%)")
         XCTAssertEqual(EditStep.colorize.titleTag, "colorized")
     }
 
@@ -129,6 +139,7 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(EditStep.enhance.caseTag, .enhance)
         XCTAssertEqual(EditStep.smooth(noiseLevel: 0.05).caseTag, .smooth)
         XCTAssertEqual(EditStep.upscale(factor: 2).caseTag, .upscale)
+        XCTAssertEqual(EditStep.aiDenoise(strength: 75).caseTag, .aiDenoise)
     }
 
     func testBatchableStepsExcludeSlowOperations() {
@@ -141,9 +152,10 @@ final class EditStackTests: XCTestCase {
         stack.append(.redEyeRemoval)
         stack.append(.backgroundRemoval)
         stack.append(.artifactRemoval)
+        stack.append(.aiDenoise(strength: 50))
         stack.append(.colorize)
 
-        let slowTags: Set<EditStepTag> = [.upscale, .faceRestore, .redEyeRemoval, .backgroundRemoval, .artifactRemoval, .colorize]
+        let slowTags: Set<EditStepTag> = [.upscale, .faceRestore, .redEyeRemoval, .backgroundRemoval, .artifactRemoval, .aiDenoise, .colorize]
         var filtered = EditStack()
         for step in stack.steps where !slowTags.contains(step.caseTag) {
             filtered.append(step)
