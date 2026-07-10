@@ -1,6 +1,6 @@
 ---
 name: project-sprint17-patterns
-description: "HUD pattern, SwiftLint limits, CoreML conversion gotchas (SwinIR trace size, ANE pre-compilation hang), pbxproj file registration, coreView/overlayViews type-checker limits — updated through Sprint 26. Key binding registry and compositing pipeline order are NOT kept here — CLAUDE.md is authoritative for both, they change too often to duplicate."
+description: "HUD pattern, SwiftLint limits, CoreML conversion AND runtime gotchas (SwinIR trace size, ANE pre-compilation hang at both conversion and Swift runtime load), pbxproj file registration, coreView/overlayViews type-checker limits — updated through Sprint 26. Key binding registry and compositing pipeline order are NOT kept here — CLAUDE.md is authoritative for both, they change too often to duplicate."
 metadata: 
   node_type: memory
   type: project
@@ -178,7 +178,9 @@ For large CoreML models (>50 MB) in CI:
 **Why:** The Xcode project uses a `PBXFileSystemSynchronizedRootGroup` for `Resources/`, which does not reliably trigger `coremlc generate` for new mlpackage additions. Using the raw API removes the compile-time dependency entirely.
 
 **Critical gotcha — ANE pre-compilation in `ct.convert()` (Sprint 20):**
-Always pass `compute_units=ct.ComputeUnit.CPU_ONLY` to `ct.convert()`. Without it, `ct.convert()` internally loads the model via `MLModel(contentsOf:)` to validate it, triggering Apple Neural Engine compilation via XPC — which blocks the conversion for 60+ minutes. `CPU_ONLY` skips this; the saved `.mlpackage` can still be loaded with GPU/ANE compute units at Swift runtime. The MIL program in the package is hardware-agnostic regardless of the `compute_units` flag used during conversion.
+Always pass `compute_units=ct.ComputeUnit.CPU_ONLY` to `ct.convert()`. Without it, `ct.convert()` internally loads the model via `MLModel(contentsOf:)` to validate it, triggering Apple Neural Engine compilation via XPC — which blocks the conversion for 60+ minutes. `CPU_ONLY` skips this at conversion time.
+
+**Correction (Sprint 26, #247) — this ALSO happens at Swift runtime, not just conversion.** The line above previously said the saved `.mlpackage` "can still be loaded with GPU/ANE compute units at Swift runtime" — that turned out to be wrong for SwinIR specifically. Requesting `.all` compute units in `MLModelConfiguration` when loading the model in the app (not just during Python-side conversion) triggered the identical `ANECompilerService.xpc` stall, observed directly at 100% CPU for 130+ minutes with no way to cancel from app code. Fixed by using `.cpuAndGPU` at Swift runtime too, not just `CPU_ONLY` at conversion time. See CLAUDE.md's Gotchas section for the full runtime-side writeup (timeout/cancellation limitations, the orphaned-process caveat). **Do not assume the conversion-time-only framing above is still accurate — verify against CLAUDE.md before trusting either compute-units claim.**
 
 **SwinIR-specific — trace at native training size only:**
 SwinIR must be traced at exactly `img_size=126` (126×126) — the model's training patch size. Other sizes (128, 256, 512) either OOM during trace (≥256) or trigger a coremltools `slice_by_index` error in the shift-mask computation (128). The 126×126 input requires tiling at Swift inference time.
