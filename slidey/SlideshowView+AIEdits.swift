@@ -104,7 +104,7 @@ extension SlideshowView {
         isRemovingArtifacts = true
         artifactRemovalProgress = 0
 
-        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.artifactRemovalProgress = $0 }) { result in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "Artifact Removal", progressHandler: { self.artifactRemovalProgress = $0 }) { result in
             guard let result else {
                 self.isRemovingArtifacts = false
                 return
@@ -673,7 +673,7 @@ extension SlideshowView {
 
         isAIDenoising = true
         aiDenoiseProgress = 0
-        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
             guard let mlImage else {
                 self.isAIDenoising = false
                 return
@@ -698,7 +698,7 @@ extension SlideshowView {
         isAIDenoising = true
         aiDenoiseProgress = 0
 
-        runSwinIRInference(srcCG: srcCG, source: source, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
             self.isAIDenoising = false
             guard let mlImage else {
                 self.cancelAIDenoiseHUD()
@@ -788,16 +788,30 @@ extension SlideshowView {
     }
 
     // swiftlint:disable:next function_body_length
-    private func runSwinIRInference(srcCG: CGImage, source: NSImage, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
+    private func runSwinIRInference(srcCG: CGImage, source: NSImage, label: String, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
+        DispatchQueue.main.async {
+            self.debugOutput = "Starting \(label)...\n"
+        }
         DispatchQueue.global(qos: .userInitiated).async {
+            let startTime = CFAbsoluteTimeGetCurrent()
+
             guard let modelURL = Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlmodelc") ??
                                   Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlpackage") else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: SwinIR_color_jpeg40 model not found in bundle\n"
+                    completion(nil)
+                }
                 return
+            }
+            DispatchQueue.main.async {
+                self.debugOutput += "Loading model...\n"
             }
             let cfg = MLModelConfiguration(); cfg.computeUnits = .all
             guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: Failed to load SwinIR model\n"
+                    completion(nil)
+                }
                 return
             }
 
@@ -809,12 +823,18 @@ extension SlideshowView {
             guard let readCtx = CGContext(data: nil, width: imgW, height: imgH,
                                            bitsPerComponent: 8, bytesPerRow: imgW * 4,
                                            space: cs, bitmapInfo: bi) else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: Failed to create drawing context\n"
+                    completion(nil)
+                }
                 return
             }
             readCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: imgW, height: imgH))
             guard let pixelData = readCtx.data else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: Failed to read pixel data\n"
+                    completion(nil)
+                }
                 return
             }
             let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
@@ -841,6 +861,11 @@ extension SlideshowView {
             let xStarts = tileStarts(imgW)
             let yStarts = tileStarts(imgH)
             let totalTiles = xStarts.count * yStarts.count
+
+            DispatchQueue.main.async {
+                self.debugOutput += "Image: \(imgW)×\(imgH), \(totalTiles) tile\(totalTiles == 1 ? "" : "s")\n"
+                self.debugOutput += "Running \(label) via Core ML...\n"
+            }
 
             var accR = [Float](repeating: 0, count: imgW * imgH)
             var accG = [Float](repeating: 0, count: imgW * imgH)
@@ -936,11 +961,18 @@ extension SlideshowView {
                                               bitsPerComponent: 8, bytesPerRow: imgW * 4,
                                               space: cs, bitmapInfo: bi),
                       let outCG = outCtx.makeImage() else {
-                    DispatchQueue.main.async { completion(nil) }
+                    DispatchQueue.main.async {
+                        self.debugOutput += "ERROR: Failed to create output image\n"
+                        completion(nil)
+                    }
                     return
                 }
                 let result = NSImage(cgImage: outCG, size: source.size)
-                DispatchQueue.main.async { completion(result) }
+                let elapsed = CFAbsoluteTimeGetCurrent() - startTime
+                DispatchQueue.main.async {
+                    self.debugOutput += String(format: "SUCCESS: %dx%d in %.1fs\n", imgW, imgH, elapsed)
+                    completion(result)
+                }
             }
         }
     }
