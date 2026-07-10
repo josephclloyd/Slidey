@@ -4,6 +4,13 @@ import CoreImage
 import CoreML
 import Vision
 
+final class SwinIRCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _cancelled = false
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return _cancelled }
+    func cancel() { lock.lock(); defer { lock.unlock() }; _cancelled = true }
+}
+
 extension SlideshowView {
 
     func removeFaceRestoration() {
@@ -94,6 +101,28 @@ extension SlideshowView {
         removeEdit(.artifactRemoval)
     }
 
+    func cancelArtifactRemoval() {
+        swinirCancellationToken?.cancel()
+        swinirCancellationToken = nil
+        isRemovingArtifacts = false
+        artifactRemovalProgress = 0
+    }
+
+    @discardableResult
+    func cancelSwinIRIfRunning() -> Bool {
+        if isRemovingArtifacts {
+            cancelArtifactRemoval()
+            return true
+        }
+        if isAIDenoising && !showAIDenoiseHUD {
+            swinirCancellationToken?.cancel()
+            swinirCancellationToken = nil
+            isAIDenoising = false
+            return true
+        }
+        return false
+    }
+
     // swiftlint:disable:next function_body_length
     func removeArtifactsOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
@@ -103,8 +132,10 @@ extension SlideshowView {
 
         isRemovingArtifacts = true
         artifactRemovalProgress = 0
+        let token = SwinIRCancellationToken()
+        swinirCancellationToken = token
 
-        runSwinIRInference(srcCG: srcCG, source: source, label: "Artifact Removal", progressHandler: { self.artifactRemovalProgress = $0 }) { result in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "Artifact Removal", token: token, progressHandler: { self.artifactRemovalProgress = $0 }) { result in
             guard let result else {
                 self.isRemovingArtifacts = false
                 return
@@ -574,6 +605,10 @@ extension SlideshowView {
                     Text("\(Int(artifactRemovalProgress * 100))%")
                         .font(.system(.subheadline, design: .monospaced))
                         .foregroundColor(.white.opacity(0.8))
+                    Button("Cancel") { cancelArtifactRemoval() }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.top, 4)
                 }
                 .padding(30)
                 .background(.black.opacity(0.85))
@@ -673,7 +708,9 @@ extension SlideshowView {
 
         isAIDenoising = true
         aiDenoiseProgress = 0
-        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+        let token = SwinIRCancellationToken()
+        swinirCancellationToken = token
+        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", token: token, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
             guard let mlImage else {
                 self.isAIDenoising = false
                 return
@@ -697,8 +734,10 @@ extension SlideshowView {
 
         isAIDenoising = true
         aiDenoiseProgress = 0
+        let token = SwinIRCancellationToken()
+        swinirCancellationToken = token
 
-        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", token: token, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
             self.isAIDenoising = false
             guard let mlImage else {
                 self.cancelAIDenoiseHUD()
@@ -742,6 +781,8 @@ extension SlideshowView {
 
     func cancelAIDenoiseHUD() {
         guard showAIDenoiseHUD else { return }
+        swinirCancellationToken?.cancel()
+        swinirCancellationToken = nil
         showAIDenoiseHUD = false
         isAIDenoising = false
         aiDenoiseBaseImage = nil
@@ -772,9 +813,9 @@ extension SlideshowView {
         var out = [UInt8](repeating: 255, count: w * h * 4)
         for i in 0..<(w * h) {
             let idx = i * 4
-            out[idx + 0] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 0]) * inv + Float(oPtr[idx + 0]) * s))))
-            out[idx + 1] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 1]) * inv + Float(oPtr[idx + 1]) * s))))
-            out[idx + 2] = UInt8(min(255, max(0, Int(Float(bPtr[idx + 2]) * inv + Float(oPtr[idx + 2]) * s))))
+            let v0 = Float(bPtr[idx + 0]) * inv + Float(oPtr[idx + 0]) * s; out[idx + 0] = UInt8(v0.isFinite ? min(255, max(0, Int(v0))) : 0)
+            let v1 = Float(bPtr[idx + 1]) * inv + Float(oPtr[idx + 1]) * s; out[idx + 1] = UInt8(v1.isFinite ? min(255, max(0, Int(v1))) : 0)
+            let v2 = Float(bPtr[idx + 2]) * inv + Float(oPtr[idx + 2]) * s; out[idx + 2] = UInt8(v2.isFinite ? min(255, max(0, Int(v2))) : 0)
             out[idx + 3] = 255
         }
 
@@ -788,7 +829,7 @@ extension SlideshowView {
     }
 
     // swiftlint:disable:next function_body_length
-    private func runSwinIRInference(srcCG: CGImage, source: NSImage, label: String, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
+    private func runSwinIRInference(srcCG: CGImage, source: NSImage, label: String, token: SwinIRCancellationToken, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
         DispatchQueue.main.async {
             self.debugOutput = "Starting \(label)...\n"
         }
@@ -806,8 +847,33 @@ extension SlideshowView {
             DispatchQueue.main.async {
                 self.debugOutput += "Loading model...\n"
             }
-            let cfg = MLModelConfiguration(); cfg.computeUnits = .all
-            guard let model = try? MLModel(contentsOf: modelURL, configuration: cfg) else {
+            let cfg = MLModelConfiguration(); cfg.computeUnits = .cpuAndGPU
+
+            var loadedModel: MLModel?
+            let loadSemaphore = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .userInitiated).async {
+                loadedModel = try? MLModel(contentsOf: modelURL, configuration: cfg)
+                loadSemaphore.signal()
+            }
+            let loadResult = loadSemaphore.wait(timeout: .now() + 30)
+
+            if token.isCancelled {
+                DispatchQueue.main.async {
+                    self.debugOutput += "CANCELLED: \(label) stopped during model load\n"
+                    completion(nil)
+                }
+                return
+            }
+
+            if loadResult == .timedOut {
+                DispatchQueue.main.async {
+                    self.debugOutput += "ERROR: Model load timed out after 30s (possible ANE compile stall)\n"
+                    completion(nil)
+                }
+                return
+            }
+
+            guard let model = loadedModel else {
                 DispatchQueue.main.async {
                     self.debugOutput += "ERROR: Failed to load SwinIR model\n"
                     completion(nil)
@@ -876,6 +942,14 @@ extension SlideshowView {
 
             for y0 in yStarts {
                 for x0 in xStarts {
+                    if token.isCancelled {
+                        let done = tilesDone
+                        DispatchQueue.main.async {
+                            self.debugOutput += "CANCELLED: \(label) stopped after \(done)/\(totalTiles) tiles\n"
+                            completion(nil)
+                        }
+                        return
+                    }
                     let y1 = min(y0 + tileSize, imgH)
                     let x1 = min(x0 + tileSize, imgW)
                     let tileH = y1 - y0
@@ -947,12 +1021,20 @@ extension SlideshowView {
                 }
             }
 
+            if token.isCancelled {
+                DispatchQueue.main.async {
+                    self.debugOutput += "CANCELLED: \(label) result discarded after tile loop\n"
+                    completion(nil)
+                }
+                return
+            }
+
             var outPixels = [UInt8](repeating: 255, count: imgW * imgH * 4)
             for i in 0..<(imgW * imgH) {
                 let dw = accW[i] > 0 ? accW[i] : 1
-                outPixels[i * 4 + 0] = UInt8(min(255, max(0, Int(accB[i] / dw * 255))))
-                outPixels[i * 4 + 1] = UInt8(min(255, max(0, Int(accG[i] / dw * 255))))
-                outPixels[i * 4 + 2] = UInt8(min(255, max(0, Int(accR[i] / dw * 255))))
+                let vB = accB[i] / dw * 255; outPixels[i * 4 + 0] = UInt8(vB.isFinite ? min(255, max(0, Int(vB))) : 0)
+                let vG = accG[i] / dw * 255; outPixels[i * 4 + 1] = UInt8(vG.isFinite ? min(255, max(0, Int(vG))) : 0)
+                let vR = accR[i] / dw * 255; outPixels[i * 4 + 2] = UInt8(vR.isFinite ? min(255, max(0, Int(vR))) : 0)
                 outPixels[i * 4 + 3] = 255
             }
 
@@ -963,6 +1045,13 @@ extension SlideshowView {
                       let outCG = outCtx.makeImage() else {
                     DispatchQueue.main.async {
                         self.debugOutput += "ERROR: Failed to create output image\n"
+                        completion(nil)
+                    }
+                    return
+                }
+                if token.isCancelled {
+                    DispatchQueue.main.async {
+                        self.debugOutput += "CANCELLED: \(label) result discarded\n"
                         completion(nil)
                     }
                     return
