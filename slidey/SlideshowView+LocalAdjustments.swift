@@ -355,9 +355,6 @@ extension SlideshowView {
         if localAdjController.adjustments.isIdentity {
             let tint = CIImage(color: CIColor(red: 0.3, green: 0.5, blue: 1.0, alpha: 1.0))
                 .cropped(to: ciBase.extent)
-            let tintedBase = ciBase.applyingFilter("CISourceOverCompositing", parameters: [
-                kCIInputBackgroundImageKey: ciBase
-            ])
             guard let blend = CIFilter(name: "CIBlendWithMask") else {
                 currentDisplayImage = base
                 return
@@ -366,7 +363,7 @@ extension SlideshowView {
                 "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.25)
             ])
             let composed = overlay.applyingFilter("CISourceOverCompositing", parameters: [
-                kCIInputBackgroundImageKey: tintedBase
+                kCIInputBackgroundImageKey: ciBase
             ])
             blend.setValue(composed, forKey: kCIInputImageKey)
             blend.setValue(ciBase, forKey: kCIInputBackgroundImageKey)
@@ -477,7 +474,7 @@ extension SlideshowView {
         localAdjController.lastPaintPixel = nil
     }
 
-    func handleBrushScrollWheel(_ deltaY: CGFloat) {
+    private func handleBrushScrollWheel(_ deltaY: CGFloat) {
         localAdjController.brushRadius = max(5, min(200, localAdjController.brushRadius + deltaY * 2))
     }
 
