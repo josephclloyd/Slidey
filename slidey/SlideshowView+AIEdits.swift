@@ -956,6 +956,8 @@ extension SlideshowView {
                     let tileW = x1 - x0
 
                     guard let inArr = try? MLMultiArray(shape: [1, 3, 126, 126], dataType: .float32) else { continue }
+                    let inChStride = inArr.strides[1].intValue
+                    let inRowStride = inArr.strides[2].intValue
                     inArr.withUnsafeMutableBytes { buf, _ in
                         let ptr = buf.bindMemory(to: Float.self)
                         for row in 0..<tileSize {
@@ -963,10 +965,10 @@ extension SlideshowView {
                                 let srcRow = min(y0 + min(row, tileH - 1), imgH - 1)
                                 let srcCol = min(x0 + min(col, tileW - 1), imgW - 1)
                                 let pixIdx = (srcRow * imgW + srcCol) * 4
-                                let pos = row * tileSize + col
-                                ptr[0 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 2]) / 255.0
-                                ptr[1 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 1]) / 255.0
-                                ptr[2 * tileSize * tileSize + pos] = Float(pixels[pixIdx + 0]) / 255.0
+                                let pos = row * inRowStride + col
+                                ptr[0 * inChStride + pos] = Float(pixels[pixIdx + 2]) / 255.0
+                                ptr[1 * inChStride + pos] = Float(pixels[pixIdx + 1]) / 255.0
+                                ptr[2 * inChStride + pos] = Float(pixels[pixIdx + 0]) / 255.0
                             }
                         }
                     }
@@ -980,6 +982,15 @@ extension SlideshowView {
                     let isFP16 = outArr.dataType == .float16
                     let rawPtr16 = isFP16 ? outArr.dataPointer.bindMemory(to: UInt16.self, capacity: outArr.count) : nil
                     let rawPtr32 = isFP16 ? nil : outArr.dataPointer.bindMemory(to: Float.self, capacity: outArr.count)
+                    let outChStride = outArr.strides[1].intValue
+                    let outRowStride = outArr.strides[2].intValue
+
+                    if tilesDone == 0 {
+                        let strides = outArr.strides.map { $0.intValue }
+                        DispatchQueue.main.async {
+                            self.debugOutput += "Output MLMultiArray strides: \(strides)\n"
+                        }
+                    }
 
                     for ty in 0..<tileH {
                         let gy = y0 + ty
@@ -993,16 +1004,16 @@ extension SlideshowView {
                                 if x1 < imgW && tx >= tileW - rampPx { w *= Float(tileW - 1 - tx) / Float(rampPx) }
                             }
                             let idx = gy * imgW + gx
-                            let pos = ty * tileSize + tx
+                            let pos = ty * outRowStride + tx
                             let r0: Float, g0: Float, b0: Float
                             if isFP16, let ptr = rawPtr16 {
-                                r0 = Float(Float16(bitPattern: ptr[0 * tileSize * tileSize + pos]))
-                                g0 = Float(Float16(bitPattern: ptr[1 * tileSize * tileSize + pos]))
-                                b0 = Float(Float16(bitPattern: ptr[2 * tileSize * tileSize + pos]))
+                                r0 = Float(Float16(bitPattern: ptr[0 * outChStride + pos]))
+                                g0 = Float(Float16(bitPattern: ptr[1 * outChStride + pos]))
+                                b0 = Float(Float16(bitPattern: ptr[2 * outChStride + pos]))
                             } else if let ptr = rawPtr32 {
-                                r0 = ptr[0 * tileSize * tileSize + pos]
-                                g0 = ptr[1 * tileSize * tileSize + pos]
-                                b0 = ptr[2 * tileSize * tileSize + pos]
+                                r0 = ptr[0 * outChStride + pos]
+                                g0 = ptr[1 * outChStride + pos]
+                                b0 = ptr[2 * outChStride + pos]
                             } else {
                                 (r0, g0, b0) = (0, 0, 0)
                             }
