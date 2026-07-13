@@ -42,7 +42,7 @@ extension SlideshowView {
             for step in stack.steps {
                 switch step {
                 case .upscale, .faceRestore, .backgroundRemoval,
-                     .artifactRemoval, .aiDenoise, .colorize, .redEyeRemoval:
+                     .artifactRemoval, .jpegCleanup, .colorize, .redEyeRemoval:
                     continue
                 default:
                     filtered.append(step)

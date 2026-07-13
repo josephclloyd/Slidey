@@ -114,10 +114,10 @@ extension SlideshowView {
             cancelArtifactRemoval()
             return true
         }
-        if isAIDenoising && !showAIDenoiseHUD {
+        if isCleaningJPEG && !showJPEGCleanupHUD {
             swinirCancellationToken?.cancel()
             swinirCancellationToken = nil
-            isAIDenoising = false
+            isCleaningJPEG = false
             return true
         }
         return false
@@ -484,44 +484,44 @@ extension SlideshowView {
         }
     }
 
-    @ViewBuilder var aiDenoiseHUD: some View {
-        if showAIDenoiseHUD {
+    @ViewBuilder var jpegCleanupHUD: some View {
+        if showJPEGCleanupHUD {
             VStack {
                 Spacer()
                 VStack(spacing: 12) {
                     HStack {
-                        Text("AI Denoise")
+                        Text("JPEG Cleanup")
                             .fontWeight(.medium)
                             .foregroundColor(.white)
                         Spacer()
-                        if isAIDenoising {
-                            Text("\(Int(aiDenoiseProgress * 100))%")
+                        if isCleaningJPEG {
+                            Text("\(Int(jpegCleanupProgress * 100))%")
                                 .monospacedDigit()
                                 .foregroundColor(.white.opacity(0.7))
                         } else {
-                            Text("\(Int(aiDenoiseStrength))%")
+                            Text("\(Int(jpegCleanupStrength))%")
                                 .monospacedDigit()
                                 .foregroundColor(.white.opacity(0.7))
                         }
                     }
-                    if isAIDenoising {
-                        ProgressView(value: aiDenoiseProgress)
+                    if isCleaningJPEG {
+                        ProgressView(value: jpegCleanupProgress)
                             .progressViewStyle(.linear)
                             .tint(.white)
                     } else {
-                        Slider(value: $aiDenoiseStrength, in: 0...100, step: 1)
-                            .onChange(of: aiDenoiseStrength) { _, _ in
-                                DispatchQueue.main.async { updateAIDenoiseBlend() }
+                        Slider(value: $jpegCleanupStrength, in: 0...100, step: 1)
+                            .onChange(of: jpegCleanupStrength) { _, _ in
+                                DispatchQueue.main.async { updateJPEGCleanupBlend() }
                             }
                             .tint(.white)
                     }
                     HStack(spacing: 16) {
-                        Button("Cancel") { cancelAIDenoiseHUD() }
+                        Button("Cancel") { cancelJPEGCleanupHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
-                        Button("Apply") { applyAIDenoise() }
+                        Button("Apply") { applyJPEGCleanup() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(isAIDenoising)
+                            .disabled(isCleaningJPEG)
                     }
                 }
                 .padding(20)
@@ -679,80 +679,80 @@ extension SlideshowView {
         }
     }
 
-    func removeAIDenoise() {
-        removeEdit(.aiDenoise)
+    func removeJPEGCleanup() {
+        removeEdit(.jpegCleanup)
     }
 
-    func openAIDenoiseHUD() {
-        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isAIDenoising else { return }
+    func openJPEGCleanupHUD() {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isCleaningJPEG else { return }
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !showAIDenoiseHUD else { return }
+        guard !showJPEGCleanupHUD else { return }
 
-        aiDenoiseBaseImage = compositeBeforeStep(.aiDenoise, for: url)
-        aiDenoiseStrength = 100.0
-        showAIDenoiseHUD = true
+        jpegCleanupBaseImage = compositeBeforeStep(.jpegCleanup, for: url)
+        jpegCleanupStrength = 100.0
+        showJPEGCleanupHUD = true
 
-        if let cached = aiDenoiseRawImages[url] {
-            aiDenoiseMLImage = cached
-            updateAIDenoiseBlend()
+        if let cached = jpegCleanupRawImages[url] {
+            jpegCleanupMLImage = cached
+            updateJPEGCleanupBlend()
         } else {
-            runAIDenoiseInference()
+            runJPEGCleanupInference()
         }
     }
 
-    func applyAIDenoiseDirectly(strength: Double) {
-        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isAIDenoising else { return }
+    func applyJPEGCleanupDirectly(strength: Double) {
+        guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isCleaningJPEG else { return }
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = compositeBeforeStep(.aiDenoise, for: url) else { return }
+        guard let source = compositeBeforeStep(.jpegCleanup, for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
-        isAIDenoising = true
-        aiDenoiseProgress = 0
+        isCleaningJPEG = true
+        jpegCleanupProgress = 0
         let token = SwinIRCancellationToken()
         swinirCancellationToken = token
-        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", token: token, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
+        runSwinIRInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token, progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
             guard let mlImage else {
-                self.isAIDenoising = false
+                self.isCleaningJPEG = false
                 return
             }
             let blended = self.blendImages(base: source, overlay: mlImage, strength: strength / 100.0)
-            self.aiDenoiseRawImages[url] = mlImage
-            self.aiDenoisedImages[url] = blended
-            self.clearCachesDownstream(of: .aiDenoise, for: url)
-            self.editStacks[url, default: EditStack()].append(.aiDenoise(strength: strength))
+            self.jpegCleanupRawImages[url] = mlImage
+            self.jpegCleanedImages[url] = blended
+            self.clearCachesDownstream(of: .jpegCleanup, for: url)
+            self.editStacks[url, default: EditStack()].append(.jpegCleanup(strength: strength))
             self.effectImages[url] = nil
-            self.isAIDenoising = false
+            self.isCleaningJPEG = false
             self.saveFavourites()
             self.updateDisplayImage()
         }
     }
 
-    private func runAIDenoiseInference() {
+    private func runJPEGCleanupInference() {
         guard let url = imageLoader.currentImageURL else { return }
-        guard let source = aiDenoiseBaseImage else { return }
+        guard let source = jpegCleanupBaseImage else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
-        isAIDenoising = true
-        aiDenoiseProgress = 0
+        isCleaningJPEG = true
+        jpegCleanupProgress = 0
         let token = SwinIRCancellationToken()
         swinirCancellationToken = token
 
-        runSwinIRInference(srcCG: srcCG, source: source, label: "AI Denoise", token: token, progressHandler: { self.aiDenoiseProgress = $0 }) { mlImage in
-            self.isAIDenoising = false
+        runSwinIRInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token, progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
+            self.isCleaningJPEG = false
             guard let mlImage else {
-                self.cancelAIDenoiseHUD()
+                self.cancelJPEGCleanupHUD()
                 return
             }
-            guard self.imageLoader.currentImageURL == url, self.showAIDenoiseHUD else { return }
-            self.aiDenoiseMLImage = mlImage
-            self.aiDenoiseRawImages[url] = mlImage
-            self.updateAIDenoiseBlend()
+            guard self.imageLoader.currentImageURL == url, self.showJPEGCleanupHUD else { return }
+            self.jpegCleanupMLImage = mlImage
+            self.jpegCleanupRawImages[url] = mlImage
+            self.updateJPEGCleanupBlend()
         }
     }
 
-    func updateAIDenoiseBlend() {
-        guard let base = aiDenoiseBaseImage, let ml = aiDenoiseMLImage else { return }
-        let strength = aiDenoiseStrength / 100.0
+    func updateJPEGCleanupBlend() {
+        guard let base = jpegCleanupBaseImage, let ml = jpegCleanupMLImage else { return }
+        let strength = jpegCleanupStrength / 100.0
         if strength <= 0 {
             currentDisplayImage = base
             return
@@ -764,29 +764,29 @@ extension SlideshowView {
         currentDisplayImage = blendImages(base: base, overlay: ml, strength: strength)
     }
 
-    func applyAIDenoise() {
-        guard !isAIDenoising else { return }
+    func applyJPEGCleanup() {
+        guard !isCleaningJPEG else { return }
         guard let url = imageLoader.currentImageURL,
-              let result = currentDisplayImage else { cancelAIDenoiseHUD(); return }
-        aiDenoisedImages[url] = result
-        clearCachesDownstream(of: .aiDenoise, for: url)
-        editStacks[url, default: EditStack()].append(.aiDenoise(strength: aiDenoiseStrength))
+              let result = currentDisplayImage else { cancelJPEGCleanupHUD(); return }
+        jpegCleanedImages[url] = result
+        clearCachesDownstream(of: .jpegCleanup, for: url)
+        editStacks[url, default: EditStack()].append(.jpegCleanup(strength: jpegCleanupStrength))
         effectImages[url] = nil
         saveFavourites()
-        showAIDenoiseHUD = false
-        aiDenoiseBaseImage = nil
-        aiDenoiseMLImage = nil
+        showJPEGCleanupHUD = false
+        jpegCleanupBaseImage = nil
+        jpegCleanupMLImage = nil
         updateDisplayImage()
     }
 
-    func cancelAIDenoiseHUD() {
-        guard showAIDenoiseHUD else { return }
+    func cancelJPEGCleanupHUD() {
+        guard showJPEGCleanupHUD else { return }
         swinirCancellationToken?.cancel()
         swinirCancellationToken = nil
-        showAIDenoiseHUD = false
-        isAIDenoising = false
-        aiDenoiseBaseImage = nil
-        aiDenoiseMLImage = nil
+        showJPEGCleanupHUD = false
+        isCleaningJPEG = false
+        jpegCleanupBaseImage = nil
+        jpegCleanupMLImage = nil
         updateDisplayImage()
     }
 

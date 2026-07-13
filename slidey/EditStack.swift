@@ -1,7 +1,7 @@
 import Foundation
 
 enum EditStepTag: String, Codable, CaseIterable {
-    case enhance, smooth, sharpen, upscale, faceRestore, redEyeRemoval, backgroundRemoval, artifactRemoval, aiDenoise, colorize
+    case enhance, smooth, sharpen, upscale, faceRestore, redEyeRemoval, backgroundRemoval, artifactRemoval, jpegCleanup, colorize
 }
 
 enum EditStep: Codable, Equatable {
@@ -13,7 +13,7 @@ enum EditStep: Codable, Equatable {
     case redEyeRemoval
     case backgroundRemoval
     case artifactRemoval
-    case aiDenoise(strength: Double)
+    case jpegCleanup(strength: Double)
     case colorize
 
     var caseTag: EditStepTag {
@@ -26,7 +26,7 @@ enum EditStep: Codable, Equatable {
         case .redEyeRemoval: return .redEyeRemoval
         case .backgroundRemoval: return .backgroundRemoval
         case .artifactRemoval: return .artifactRemoval
-        case .aiDenoise: return .aiDenoise
+        case .jpegCleanup: return .jpegCleanup
         case .colorize: return .colorize
         }
     }
@@ -41,7 +41,7 @@ enum EditStep: Codable, Equatable {
         case .redEyeRemoval: return "red-eye removed"
         case .backgroundRemoval: return "background removed"
         case .artifactRemoval: return "artifacts removed"
-        case .aiDenoise(let strength): return "AI denoised (\(Int(strength))%)"
+        case .jpegCleanup(let strength): return "JPEG cleaned up (\(Int(strength))%)"
         case .colorize: return "colorized"
         }
     }
