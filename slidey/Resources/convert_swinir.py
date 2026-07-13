@@ -14,6 +14,15 @@ Swift inference:
   model's native training patch — tracing at other sizes triggers a coremltools
   slice-by-index error in the shift-mask computation.
 
+Precision:
+  compute_precision=ct.precision.FLOAT32 is required below. coremltools defaults
+  mlprogram conversion to FLOAT16, which overflows here: SwinIR's img_range=255
+  scales activations up 255x before the 36-block transformer stack, and float16
+  tops out at ~65504 -- the float16 build produced 100% NaN output regardless of
+  which MLModelConfiguration.computeUnits was selected at runtime (.all,
+  .cpuAndGPU, .cpuOnly all NaN identically), since the cast to fp16 is baked into
+  the graph at conversion time, not chosen by the runtime backend. See #249.
+
 Dependencies:
   pip install torch==2.2.0 coremltools==7.2 timm "numpy<2"
   git clone https://github.com/JingyunLiang/SwinIR
@@ -48,7 +57,7 @@ def main():
         embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
         mlp_ratio=2, upsampler='', resi_connection='1conv',
     )
-    ckpt = torch.load(args.ckpt, map_location='cpu')
+    ckpt = torch.load(args.ckpt, map_location='cpu', weights_only=True)
     key  = 'params' if 'params' in ckpt else next(iter(ckpt))
     model.load_state_dict(ckpt[key], strict=True)
     model.eval()
@@ -67,6 +76,7 @@ def main():
         outputs=[ct.TensorType(name="restored_image")],
         convert_to="mlprogram",
         minimum_deployment_target=ct.target.macOS13,
+        compute_precision=ct.precision.FLOAT32,
     )
     del traced; gc.collect()
 
