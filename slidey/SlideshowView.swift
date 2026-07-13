@@ -154,7 +154,7 @@ struct SlideshowView: View {
     @State var jpegCleanupBaseImage: NSImage?; @State var jpegCleanupMLImage: NSImage?
     @State var grainReducedImages: [URL: NSImage] = [:]; @State var grainReductionRawImages: [URL: NSImage] = [:]
     @State var isReducingGrain = false; @State var grainReductionProgress: Double = 0
-    @State var nafnetCancellationToken: TiledMLCancellationToken?
+    @State var grainReductionCancellationToken: TiledMLCancellationToken?
     @State var showGrainReductionHUD: Bool = false; @State var grainReductionStrength: Double = 100.0
     @State var grainReductionBaseImage: NSImage?; @State var grainReductionMLImage: NSImage?
     @State var colorizedImages: [URL: NSImage] = [:]

@@ -84,9 +84,9 @@ extension SlideshowView {
         isReducingGrain = true
         grainReductionProgress = 0
         let token = TiledMLCancellationToken()
-        nafnetCancellationToken = token
+        grainReductionCancellationToken = token
         runTiledMLInference(srcCG: srcCG, source: source, label: "AI Grain Reduction", token: token,
-                             config: TiledMLModelConfig(resourceName: "NAFNet_SIDD_width32", tileSize: 256, tileOverlap: 32, outputFeatureName: "denoised_image"),
+                             config: TiledMLModelConfig(resourceName: "Restormer_real_denoising", tileSize: 256, tileOverlap: 32, outputFeatureName: "denoised_image"),
                              progressHandler: { self.grainReductionProgress = $0 }) { mlImage in
             guard let mlImage else {
                 self.isReducingGrain = false
@@ -112,10 +112,10 @@ extension SlideshowView {
         isReducingGrain = true
         grainReductionProgress = 0
         let token = TiledMLCancellationToken()
-        nafnetCancellationToken = token
+        grainReductionCancellationToken = token
 
         runTiledMLInference(srcCG: srcCG, source: source, label: "AI Grain Reduction", token: token,
-                             config: TiledMLModelConfig(resourceName: "NAFNet_SIDD_width32", tileSize: 256, tileOverlap: 32, outputFeatureName: "denoised_image"),
+                             config: TiledMLModelConfig(resourceName: "Restormer_real_denoising", tileSize: 256, tileOverlap: 32, outputFeatureName: "denoised_image"),
                              progressHandler: { self.grainReductionProgress = $0 }) { mlImage in
             self.isReducingGrain = false
             guard let mlImage else {
@@ -160,8 +160,8 @@ extension SlideshowView {
 
     func cancelGrainReductionHUD() {
         guard showGrainReductionHUD else { return }
-        nafnetCancellationToken?.cancel()
-        nafnetCancellationToken = nil
+        grainReductionCancellationToken?.cancel()
+        grainReductionCancellationToken = nil
         showGrainReductionHUD = false
         isReducingGrain = false
         grainReductionBaseImage = nil

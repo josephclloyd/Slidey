@@ -128,8 +128,8 @@ extension SlideshowView {
             return true
         }
         if isReducingGrain && !showGrainReductionHUD {
-            nafnetCancellationToken?.cancel()
-            nafnetCancellationToken = nil
+            grainReductionCancellationToken?.cancel()
+            grainReductionCancellationToken = nil
             isReducingGrain = false
             return true
         }
