@@ -676,13 +676,13 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
-            Button("AI Denoise\u{2026}") {
-                NotificationCenter.default.post(name: .aiDenoiseImage, object: nil)
+            Button("JPEG Cleanup\u{2026}") {
+                NotificationCenter.default.post(name: .jpegCleanupImage, object: nil)
             }
             .keyboardShortcut("q", modifiers: .shift)
 
-            Button("Remove AI Denoise") {
-                NotificationCenter.default.post(name: .removeAIDenoise, object: nil)
+            Button("Remove JPEG Cleanup") {
+                NotificationCenter.default.post(name: .removeJPEGCleanup, object: nil)
             }
 
             Divider()

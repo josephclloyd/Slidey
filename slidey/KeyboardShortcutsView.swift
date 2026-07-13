@@ -49,7 +49,7 @@ struct KeyboardShortcutsView: View {
             ("\u{21e7}K", "Restore background"),
             ("l", "Remove JPEG artifacts (SwinIR)"),
             ("\u{21e7}L", "Restore artifacts"),
-            ("\u{21e7}Q", "AI Denoise (SwinIR, adjustable)"),
+            ("\u{21e7}Q", "JPEG Cleanup (SwinIR, adjustable)"),
             ("o", "Colorize B&W photo (DDColor)"),
             ("\u{21e7}O", "Remove colorization"),
         ]),
