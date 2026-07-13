@@ -58,13 +58,28 @@ extension SlideshowView {
         removeEdit(.grainReduction)
     }
 
+    /// The real_denoising-style model this feature uses reduces real sensor noise by
+    /// roughly the same amount it unconditionally smooths already-clean content (see #253),
+    /// so defaulting to 100% blurs well-lit/low-noise photos with nothing to fix. Scale the
+    /// default against the same noise-sigma metric and threshold already used to decide
+    /// whether to *suggest* denoising (checkNoiseAndSuggest's `sigma > 800`), so a photo
+    /// right at that "worth suggesting" boundary lands at full strength. Floor at 20% rather
+    /// than 0 so there's always some visible effect rather than an apparently-inert default.
+    /// Rough heuristic, not calibrated against a broad real-photo corpus -- revisit the
+    /// floor/threshold if real-world defaults feel off in either direction.
+    private static func defaultGrainReductionStrength(for url: URL) -> Double {
+        guard let sigma = NoiseEstimator.estimateNoise(url: url) else { return 50.0 }
+        let normalized = min(1.0, sigma / 800.0)
+        return 20.0 + normalized * 80.0
+    }
+
     func openGrainReductionHUD() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isCleaningJPEG, !isReducingGrain else { return }
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
         guard !showGrainReductionHUD else { return }
 
         grainReductionBaseImage = compositeBeforeStep(.grainReduction, for: url)
-        grainReductionStrength = 100.0
+        grainReductionStrength = Self.defaultGrainReductionStrength(for: url)
         showGrainReductionHUD = true
 
         if let cached = grainReductionRawImages[url] {
