@@ -4,11 +4,18 @@ import CoreImage
 import CoreML
 import Vision
 
-final class SwinIRCancellationToken: @unchecked Sendable {
+final class TiledMLCancellationToken: @unchecked Sendable {
     private let lock = NSLock()
     private var _cancelled = false
     var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return _cancelled }
     func cancel() { lock.lock(); defer { lock.unlock() }; _cancelled = true }
+}
+
+struct TiledMLModelConfig {
+    let resourceName: String
+    let tileSize: Int
+    let tileOverlap: Int
+    let outputFeatureName: String
 }
 
 extension SlideshowView {
@@ -109,7 +116,7 @@ extension SlideshowView {
     }
 
     @discardableResult
-    func cancelSwinIRIfRunning() -> Bool {
+    func cancelTiledMLIfRunning() -> Bool {
         if isRemovingArtifacts {
             cancelArtifactRemoval()
             return true
@@ -118,6 +125,12 @@ extension SlideshowView {
             swinirCancellationToken?.cancel()
             swinirCancellationToken = nil
             isCleaningJPEG = false
+            return true
+        }
+        if isReducingGrain && !showGrainReductionHUD {
+            grainReductionCancellationToken?.cancel()
+            grainReductionCancellationToken = nil
+            isReducingGrain = false
             return true
         }
         return false
@@ -132,10 +145,12 @@ extension SlideshowView {
 
         isRemovingArtifacts = true
         artifactRemovalProgress = 0
-        let token = SwinIRCancellationToken()
+        let token = TiledMLCancellationToken()
         swinirCancellationToken = token
 
-        runSwinIRInference(srcCG: srcCG, source: source, label: "Artifact Removal", token: token, progressHandler: { self.artifactRemovalProgress = $0 }) { result in
+        runTiledMLInference(srcCG: srcCG, source: source, label: "Artifact Removal", token: token,
+                             config: TiledMLModelConfig(resourceName: "SwinIR_color_jpeg40", tileSize: 126, tileOverlap: 16, outputFeatureName: "restored_image"),
+                             progressHandler: { self.artifactRemovalProgress = $0 }) { result in
             guard let result else {
                 self.isRemovingArtifacts = false
                 return
@@ -708,9 +723,11 @@ extension SlideshowView {
 
         isCleaningJPEG = true
         jpegCleanupProgress = 0
-        let token = SwinIRCancellationToken()
+        let token = TiledMLCancellationToken()
         swinirCancellationToken = token
-        runSwinIRInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token, progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
+        runTiledMLInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token,
+                             config: TiledMLModelConfig(resourceName: "SwinIR_color_jpeg40", tileSize: 126, tileOverlap: 16, outputFeatureName: "restored_image"),
+                             progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
             guard let mlImage else {
                 self.isCleaningJPEG = false
                 return
@@ -734,10 +751,12 @@ extension SlideshowView {
 
         isCleaningJPEG = true
         jpegCleanupProgress = 0
-        let token = SwinIRCancellationToken()
+        let token = TiledMLCancellationToken()
         swinirCancellationToken = token
 
-        runSwinIRInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token, progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
+        runTiledMLInference(srcCG: srcCG, source: source, label: "JPEG Cleanup", token: token,
+                             config: TiledMLModelConfig(resourceName: "SwinIR_color_jpeg40", tileSize: 126, tileOverlap: 16, outputFeatureName: "restored_image"),
+                             progressHandler: { self.jpegCleanupProgress = $0 }) { mlImage in
             self.isCleaningJPEG = false
             guard let mlImage else {
                 self.cancelJPEGCleanupHUD()
@@ -790,7 +809,7 @@ extension SlideshowView {
         updateDisplayImage()
     }
 
-    private func blendImages(base: NSImage, overlay: NSImage, strength: Double) -> NSImage {
+    func blendImages(base: NSImage, overlay: NSImage, strength: Double) -> NSImage {
         guard let baseCG = base.cgImage(forProposedRect: nil, context: nil, hints: nil),
               let overlayCG = overlay.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return base }
         let w = baseCG.width, h = baseCG.height
@@ -829,17 +848,24 @@ extension SlideshowView {
     }
 
     // swiftlint:disable:next function_body_length
-    private func runSwinIRInference(srcCG: CGImage, source: NSImage, label: String, token: SwinIRCancellationToken, progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void) {
+    func runTiledMLInference(
+        srcCG: CGImage, source: NSImage, label: String, token: TiledMLCancellationToken, config: TiledMLModelConfig,
+        progressHandler: (@MainActor (Double) -> Void)? = nil, completion: @escaping @MainActor (NSImage?) -> Void
+    ) {
+        let modelResourceName = config.resourceName
+        let tileSize = config.tileSize
+        let tileOverlap = config.tileOverlap
+        let outputFeatureName = config.outputFeatureName
         DispatchQueue.main.async {
             self.debugOutput = "Starting \(label)...\n"
         }
         DispatchQueue.global(qos: .userInitiated).async {
             let startTime = CFAbsoluteTimeGetCurrent()
 
-            guard let modelURL = Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlmodelc") ??
-                                  Bundle.main.url(forResource: "SwinIR_color_jpeg40", withExtension: "mlpackage") else {
+            guard let modelURL = Bundle.main.url(forResource: modelResourceName, withExtension: "mlmodelc") ??
+                                  Bundle.main.url(forResource: modelResourceName, withExtension: "mlpackage") else {
                 DispatchQueue.main.async {
-                    self.debugOutput += "ERROR: SwinIR_color_jpeg40 model not found in bundle\n"
+                    self.debugOutput += "ERROR: \(modelResourceName) model not found in bundle\n"
                     completion(nil)
                 }
                 return
@@ -875,7 +901,7 @@ extension SlideshowView {
 
             guard let model = loadedModel else {
                 DispatchQueue.main.async {
-                    self.debugOutput += "ERROR: Failed to load SwinIR model\n"
+                    self.debugOutput += "ERROR: Failed to load \(modelResourceName) model\n"
                     completion(nil)
                 }
                 return
@@ -904,9 +930,6 @@ extension SlideshowView {
                 return
             }
             let pixels = pixelData.bindMemory(to: UInt8.self, capacity: imgW * imgH * 4)
-
-            let tileSize = 126
-            let tileOverlap = 16
 
             func tileStarts(_ total: Int) -> [Int] {
                 guard total > tileSize else { return [0] }
@@ -955,7 +978,7 @@ extension SlideshowView {
                     let tileH = y1 - y0
                     let tileW = x1 - x0
 
-                    guard let inArr = try? MLMultiArray(shape: [1, 3, 126, 126], dataType: .float32) else { continue }
+                    guard let inArr = try? MLMultiArray(shape: [1, 3, NSNumber(value: tileSize), NSNumber(value: tileSize)], dataType: .float32) else { continue }
                     let inChStride = inArr.strides[1].intValue
                     let inRowStride = inArr.strides[2].intValue
                     inArr.withUnsafeMutableBytes { buf, _ in
@@ -976,7 +999,7 @@ extension SlideshowView {
                     guard let inFeatures = try? MLDictionaryFeatureProvider(
                               dictionary: ["image": MLFeatureValue(multiArray: inArr)]),
                           let outFeatures = try? model.prediction(from: inFeatures),
-                          let outArr = outFeatures.featureValue(for: "restored_image")?.multiArrayValue else { continue }
+                          let outArr = outFeatures.featureValue(for: outputFeatureName)?.multiArrayValue else { continue }
 
                     let rampPx = tileOverlap
                     let isFP16 = outArr.dataType == .float16

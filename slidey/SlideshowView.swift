@@ -149,9 +149,14 @@ struct SlideshowView: View {
     @State var artifactRemovalProgress: Double = 0
     @State var jpegCleanedImages: [URL: NSImage] = [:]; @State var jpegCleanupRawImages: [URL: NSImage] = [:]
     @State var isCleaningJPEG = false; @State var jpegCleanupProgress: Double = 0
-    @State var swinirCancellationToken: SwinIRCancellationToken?
+    @State var swinirCancellationToken: TiledMLCancellationToken?
     @State var showJPEGCleanupHUD: Bool = false; @State var jpegCleanupStrength: Double = 100.0
     @State var jpegCleanupBaseImage: NSImage?; @State var jpegCleanupMLImage: NSImage?
+    @State var grainReducedImages: [URL: NSImage] = [:]; @State var grainReductionRawImages: [URL: NSImage] = [:]
+    @State var isReducingGrain = false; @State var grainReductionProgress: Double = 0
+    @State var grainReductionCancellationToken: TiledMLCancellationToken?
+    @State var showGrainReductionHUD: Bool = false; @State var grainReductionStrength: Double = 100.0
+    @State var grainReductionBaseImage: NSImage?; @State var grainReductionMLImage: NSImage?
     @State var colorizedImages: [URL: NSImage] = [:]
     @State var isColorizing = false
     @State var showColorConfirmAlert = false
@@ -376,6 +381,7 @@ struct SlideshowView: View {
         debugOverlay
         denoiseHUD
         jpegCleanupHUD
+        grainReductionHUD
         vignetteHUD
         adjustmentsHUD
         curvesHUD
@@ -477,7 +483,7 @@ struct SlideshowView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    Text("This image looks noisy \u{2014} press q to denoise")
+                    Text("This image looks noisy \u{2014} press \u{21e7}N for AI Grain Reduction")
                         .font(.system(.body, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
@@ -631,7 +637,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelSwinIRIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
+            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -800,6 +806,12 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeJPEGCleanup)) { _ in
             ifKeyWindow { removeJPEGCleanup() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.grainReductionImage)) { _ in
+            ifKeyWindow { openGrainReductionHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeGrainReduction)) { _ in
+            ifKeyWindow { removeGrainReduction() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.colorizeImage)) { _ in
             ifKeyWindow { colorizeCurrentImage() }
@@ -1027,85 +1039,51 @@ struct SlideshowView: View {
         }
     }
 
+    private func handleSimpleHUDKeyPress(_ keyPress: KeyPress, cancel: () -> Void, apply: () -> Void) -> KeyPress.Result {
+        if keyPress.key == .escape {
+            cancel()
+            return .handled
+        }
+        if keyPress.characters == "\r" {
+            apply()
+            return .handled
+        }
+        return .ignored
+    }
+
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
 
         if showDenoiseHUD {
-            if key == .escape {
-                cancelDenoise()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyDenoise()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelDenoise, apply: applyDenoise)
         }
 
         if showJPEGCleanupHUD {
-            if key == .escape {
-                cancelJPEGCleanupHUD()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyJPEGCleanup()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelJPEGCleanupHUD, apply: applyJPEGCleanup)
+        }
+
+        if showGrainReductionHUD {
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelGrainReductionHUD, apply: applyGrainReduction)
         }
 
         if showVignetteHUD {
-            if key == .escape {
-                cancelVignetteHUD()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyVignetteToImage()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelVignetteHUD, apply: applyVignetteToImage)
         }
 
         if showAdjustmentsHUD {
-            if key == .escape {
-                cancelAdjustmentsHUD()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyAdjustmentsToImage()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelAdjustmentsHUD, apply: applyAdjustmentsToImage)
         }
 
         if showCurvesHUD {
-            if key == .escape {
-                cancelCurvesHUD()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyCurvesToImage()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelCurvesHUD, apply: applyCurvesToImage)
         }
 
         if showStraightenHUD {
-            if key == .escape {
-                cancelStraightenHUD()
-                return .handled
-            }
-            if keyPress.characters == "\r" {
-                applyStraightenToImage()
-                return .handled
-            }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelStraightenHUD, apply: applyStraightenToImage)
         }
 
         if showPerspectiveHUD {
-            if key == .escape { cancelPerspectiveHUD(); return .handled }
-            if keyPress.characters == "\r" { applyPerspectiveToImage(); return .handled }
-            return .ignored
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelPerspectiveHUD, apply: applyPerspectiveToImage)
         }
 
         if showLocalAdjustmentsHUD {
@@ -1129,7 +1107,7 @@ struct SlideshowView: View {
         }
 
         if key == .escape {
-            if cancelSwinIRIfRunning() {
+            if cancelTiledMLIfRunning() {
             } else if isProcessing {
                 cancelUpscale()
             } else if isFullScreen {
@@ -1253,6 +1231,9 @@ struct SlideshowView: View {
             return .handled
         case "Q":
             openJPEGCleanupHUD()
+            return .handled
+        case "N":
+            openGrainReductionHUD()
             return .handled
         case "u":
             guard !keyPress.modifiers.contains(.option) else { return .ignored }
@@ -1768,6 +1749,7 @@ struct SlideshowView: View {
         case .artifactRemoval: return artifactRemovedImages[url]
         case .jpegCleanup: return jpegCleanedImages[url]
         case .colorize: return colorizedImages[url]
+        case .grainReduction: return grainReducedImages[url]
         }
     }
 
@@ -1810,6 +1792,7 @@ struct SlideshowView: View {
         case .artifactRemoval: artifactRemovedImages[url] = nil
         case .jpegCleanup: jpegCleanedImages[url] = nil; jpegCleanupRawImages[url] = nil
         case .colorize: colorizedImages[url] = nil
+        case .grainReduction: grainReducedImages[url] = nil; grainReductionRawImages[url] = nil
         }
     }
 
@@ -1844,6 +1827,7 @@ struct SlideshowView: View {
         case .artifactRemoval: removeArtifactsOnCurrentImage()
         case .jpegCleanup(let strength): applyJPEGCleanupDirectly(strength: strength)
         case .colorize: colorizeCurrentImage(force: true)
+        case .grainReduction(let strength): applyGrainReductionDirectly(strength: strength)
         }
     }
 
@@ -2244,6 +2228,7 @@ struct SlideshowView: View {
     private func checkNoiseAndSuggest(for url: URL) {
         guard !slideshow.isPlaying else { return }
         guard smoothedImages[url] == nil else { return }
+        guard grainReducedImages[url] == nil else { return }
         guard !noiseSuggestionDismissed.contains(url) else { return }
 
         noiseSuggestionTask?.cancel()
@@ -2257,6 +2242,7 @@ struct SlideshowView: View {
                 guard self.imageLoader.currentImageURL == url else { return }
                 guard !self.slideshow.isPlaying else { return }
                 guard self.smoothedImages[url] == nil else { return }
+                guard self.grainReducedImages[url] == nil else { return }
                 guard let sigma, sigma > 800 else { return }
 
                 self.noiseSuggestionURL = url
