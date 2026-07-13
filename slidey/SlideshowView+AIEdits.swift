@@ -985,13 +985,6 @@ extension SlideshowView {
                     let outChStride = outArr.strides[1].intValue
                     let outRowStride = outArr.strides[2].intValue
 
-                    if tilesDone == 0 {
-                        let strides = outArr.strides.map { $0.intValue }
-                        DispatchQueue.main.async {
-                            self.debugOutput += "Output MLMultiArray strides: \(strides)\n"
-                        }
-                    }
-
                     for ty in 0..<tileH {
                         let gy = y0 + ty
                         for tx in 0..<tileW {
