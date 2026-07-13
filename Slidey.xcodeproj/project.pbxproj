@@ -34,6 +34,7 @@
 		763E6F53A95946CE82BE008B /* SlideshowView+Curves.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */; };
 		BA100002000000000000001 /* SlideshowView+BatchApply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA100001000000000000001 /* SlideshowView+BatchApply.swift */; };
 		CP100002000000000000001 /* SlideshowView+CopyPasteAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */; };
+		GR100002000000000000001 /* SlideshowView+GrainReduction.swift in Sources */ = {isa = PBXBuildFile; fileRef = GR100001000000000000001 /* SlideshowView+GrainReduction.swift */; };
 		CA100002000000000000001 /* CopiedAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA100001000000000000001 /* CopiedAdjustments.swift */; };
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
@@ -82,6 +83,7 @@
 		K1000001000000000000001 /* SlideshowView+Rating.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Rating.swift"; sourceTree = "<group>"; };
 		BA100001000000000000001 /* SlideshowView+BatchApply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+BatchApply.swift"; sourceTree = "<group>"; };
 		CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+CopyPasteAdjustments.swift"; sourceTree = "<group>"; };
+		GR100001000000000000001 /* SlideshowView+GrainReduction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+GrainReduction.swift"; sourceTree = "<group>"; };
 		CA100001000000000000001 /* CopiedAdjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopiedAdjustments.swift; sourceTree = "<group>"; };
 		K1000003000000000000001 /* RatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingTests.swift; sourceTree = "<group>"; };
 		AD79BACFAC7B4A62AA9685F9 /* CurveGraphView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurveGraphView.swift; sourceTree = "<group>"; };
@@ -141,6 +143,7 @@
 				79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */,
 				BA100001000000000000001 /* SlideshowView+BatchApply.swift */,
 				CP100001000000000000001 /* SlideshowView+CopyPasteAdjustments.swift */,
+				GR100001000000000000001 /* SlideshowView+GrainReduction.swift */,
 				CA100001000000000000001 /* CopiedAdjustments.swift */,
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
@@ -314,6 +317,7 @@
 				763E6F53A95946CE82BE008B /* SlideshowView+Curves.swift in Sources */,
 				BA100002000000000000001 /* SlideshowView+BatchApply.swift in Sources */,
 				CP100002000000000000001 /* SlideshowView+CopyPasteAdjustments.swift in Sources */,
+				GR100002000000000000001 /* SlideshowView+GrainReduction.swift in Sources */,
 				CA100002000000000000001 /* CopiedAdjustments.swift in Sources */,
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,

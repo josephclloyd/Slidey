@@ -54,6 +54,14 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(stack.steps[0], .jpegCleanup(strength: 80))
     }
 
+    func testAppendGrainReductionUpdatesStrength() {
+        var stack = EditStack()
+        stack.append(.grainReduction(strength: 50))
+        stack.append(.grainReduction(strength: 80))
+        XCTAssertEqual(stack.steps.count, 1)
+        XCTAssertEqual(stack.steps[0], .grainReduction(strength: 80))
+    }
+
     func testRemoveDropsOnlyMatchingCase() {
         var stack = EditStack()
         stack.append(.enhance)
@@ -115,11 +123,12 @@ final class EditStackTests: XCTestCase {
         stack.append(.artifactRemoval)
         stack.append(.jpegCleanup(strength: 75))
         stack.append(.colorize)
+        stack.append(.grainReduction(strength: 60))
 
         let data = try JSONEncoder().encode(stack)
         let decoded = try JSONDecoder().decode(EditStack.self, from: data)
         XCTAssertEqual(stack, decoded)
-        XCTAssertEqual(decoded.steps.count, 10)
+        XCTAssertEqual(decoded.steps.count, 11)
     }
 
     func testEditStepTitleTag() {
@@ -133,6 +142,7 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(EditStep.artifactRemoval.titleTag, "artifacts removed")
         XCTAssertEqual(EditStep.jpegCleanup(strength: 50).titleTag, "JPEG cleaned up (50%)")
         XCTAssertEqual(EditStep.colorize.titleTag, "colorized")
+        XCTAssertEqual(EditStep.grainReduction(strength: 50).titleTag, "grain reduced (50%)")
     }
 
     func testEditStepCaseTag() {
@@ -140,6 +150,7 @@ final class EditStackTests: XCTestCase {
         XCTAssertEqual(EditStep.smooth(noiseLevel: 0.05).caseTag, .smooth)
         XCTAssertEqual(EditStep.upscale(factor: 2).caseTag, .upscale)
         XCTAssertEqual(EditStep.jpegCleanup(strength: 75).caseTag, .jpegCleanup)
+        XCTAssertEqual(EditStep.grainReduction(strength: 75).caseTag, .grainReduction)
     }
 
     func testBatchableStepsExcludeSlowOperations() {
@@ -154,8 +165,9 @@ final class EditStackTests: XCTestCase {
         stack.append(.artifactRemoval)
         stack.append(.jpegCleanup(strength: 50))
         stack.append(.colorize)
+        stack.append(.grainReduction(strength: 50))
 
-        let slowTags: Set<EditStepTag> = [.upscale, .faceRestore, .redEyeRemoval, .backgroundRemoval, .artifactRemoval, .jpegCleanup, .colorize]
+        let slowTags: Set<EditStepTag> = [.upscale, .faceRestore, .redEyeRemoval, .backgroundRemoval, .artifactRemoval, .jpegCleanup, .colorize, .grainReduction]
         var filtered = EditStack()
         for step in stack.steps where !slowTags.contains(step.caseTag) {
             filtered.append(step)

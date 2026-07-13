@@ -76,6 +76,9 @@ extension NSNotification.Name {
     static let jpegCleanupImage = NSNotification.Name("JPEGCleanupImage")
     static let removeJPEGCleanup = NSNotification.Name("RemoveJPEGCleanup")
 
+    static let grainReductionImage = NSNotification.Name("GrainReductionImage")
+    static let removeGrainReduction = NSNotification.Name("RemoveGrainReduction")
+
     static let colorizeImage = NSNotification.Name("ColorizeImage")
     static let removeColorization = NSNotification.Name("RemoveColorization")
 

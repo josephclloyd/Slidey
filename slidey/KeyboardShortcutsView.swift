@@ -50,6 +50,7 @@ struct KeyboardShortcutsView: View {
             ("l", "Remove JPEG artifacts (SwinIR)"),
             ("\u{21e7}L", "Restore artifacts"),
             ("\u{21e7}Q", "JPEG Cleanup (SwinIR, adjustable)"),
+            ("\u{21e7}N", "AI Grain Reduction (NAFNet, adjustable)"),
             ("o", "Colorize B&W photo (DDColor)"),
             ("\u{21e7}O", "Remove colorization"),
         ]),

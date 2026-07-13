@@ -687,6 +687,17 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("AI Grain Reduction\u{2026}") {
+                NotificationCenter.default.post(name: .grainReductionImage, object: nil)
+            }
+            .keyboardShortcut("n", modifiers: .shift)
+
+            Button("Remove AI Grain Reduction") {
+                NotificationCenter.default.post(name: .removeGrainReduction, object: nil)
+            }
+
+            Divider()
+
             Button("Colorize (B&W to Color)") {
                 NotificationCenter.default.post(name: .colorizeImage, object: nil)
             }
