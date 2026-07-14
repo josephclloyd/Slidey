@@ -163,7 +163,6 @@ struct SlideshowView: View {
     @State var objectRemovedImages: [URL: NSImage] = [:]
     @State var showObjectRemovalHUD: Bool = false
     @State var isInpainting: Bool = false
-    @State var inpaintProgress: Double = 0
     @State var objectRemovalController = ObjectRemovalController()
     @State var objectRemovalBaseImage: NSImage?
     @State var cropRegions: [String: CropRegion] = [:]
@@ -649,7 +648,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
+            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); cancelObjectRemovalHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue

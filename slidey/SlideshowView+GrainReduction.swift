@@ -76,7 +76,7 @@ extension SlideshowView {
     func openGrainReductionHUD() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isCleaningJPEG, !isReducingGrain else { return }
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !showGrainReductionHUD else { return }
+        guard !showGrainReductionHUD, !showObjectRemovalHUD, !isInpainting else { return }
 
         grainReductionBaseImage = compositeBeforeStep(.grainReduction, for: url)
         grainReductionStrength = Self.defaultGrainReductionStrength(for: url)
