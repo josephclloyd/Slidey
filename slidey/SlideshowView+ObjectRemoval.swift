@@ -463,7 +463,13 @@ extension SlideshowView {
             rotationAngle: rotationAngle
         )
         let px = norm.x * CGFloat(objectRemovalController.maskWidth)
-        let py = norm.y * CGFloat(objectRemovalController.maskHeight)
+        // norm.y is top-down (0 = top, matching SwiftUI/view coordinates), but the mask's
+        // CGContext is Quartz-native (0 = bottom, y increasing upward) with no flip transform
+        // applied in initMask(). Flip here so painting near the visual top of the image lands
+        // near the top of the mask bitmap, not the bottom. Confirmed as a real bug (not just
+        // theoretical): unflipped, dragging the brush down painted the stroke upward, and a
+        // brush near the bottom of the image painted near the top.
+        let py = (1 - norm.y) * CGFloat(objectRemovalController.maskHeight)
         return CGPoint(x: px, y: py)
     }
 
