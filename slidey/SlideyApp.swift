@@ -389,6 +389,11 @@ struct FileMenuCommands: Commands {
             }
             .disabled(!imageLoaded)
 
+            Button("Share\u{2026}") {
+                NotificationCenter.default.post(name: .shareImage, object: nil)
+            }
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Print\u{2026}") {

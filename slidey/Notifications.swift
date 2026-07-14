@@ -94,6 +94,7 @@ extension NSNotification.Name {
     static let localAdjustmentsImage = NSNotification.Name("LocalAdjustmentsImage")
     static let removeLocalAdjustments = NSNotification.Name("RemoveLocalAdjustments")
 
+    static let shareImage = NSNotification.Name("ShareImage")
     static let setDesktopPicture = NSNotification.Name("SetDesktopPicture")
     static let printImage = NSNotification.Name("PrintImage")
 

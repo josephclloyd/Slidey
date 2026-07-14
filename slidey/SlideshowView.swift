@@ -904,6 +904,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.setDesktopPicture)) { _ in
             ifKeyWindow { setAsDesktopPicture() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.shareImage)) { _ in
+            ifKeyWindow { showShareSheet() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.printImage)) { _ in
             ifKeyWindow { printCurrentImage() }
         }
@@ -3105,6 +3108,15 @@ struct SlideshowView: View {
         let windowPoint = window.convertPoint(fromScreen: mouseLocation)
         let viewPoint = contentView.convert(windowPoint, from: nil)
         menu.popUp(positioning: nil, at: viewPoint, in: contentView)
+    }
+
+    private func showShareSheet() {
+        guard let url = imageLoader.currentImageURL,
+              let window = myWindow ?? NSApplication.shared.keyWindow,
+              let contentView = window.contentView else { return }
+        let picker = NSSharingServicePicker(items: [url])
+        let rect = CGRect(x: contentView.bounds.midX, y: contentView.bounds.midY, width: 0, height: 0)
+        picker.show(relativeTo: rect, of: contentView, preferredEdge: .minY)
     }
 
     /// Writes the currently-displayed image (with rotation baked in) to a
