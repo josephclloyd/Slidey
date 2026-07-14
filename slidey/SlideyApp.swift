@@ -715,6 +715,17 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("Remove Object\u{2026}") {
+                NotificationCenter.default.post(name: .objectRemovalImage, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: .option)
+
+            Button("Undo Object Removal") {
+                NotificationCenter.default.post(name: .removeObjectRemoval, object: nil)
+            }
+
+            Divider()
+
             Button("Apply Edits to All Images\u{2026}") {
                 NotificationCenter.default.post(name: .batchApplyAll, object: nil)
             }
