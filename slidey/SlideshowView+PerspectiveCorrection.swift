@@ -219,7 +219,7 @@ extension SlideshowView {
     func openPerspectiveHUD() {
         guard let url = imageLoader.currentImageURL else { return }
         guard let image = imageLoader.currentImage else { return }
-        guard !slideshow.isPlaying, !showLocalAdjustmentsHUD else { return }
+        guard !slideshow.isPlaying, !showLocalAdjustmentsHUD, !showObjectRemovalHUD else { return }
         guard !showPerspectiveHUD else { return }
         guard !cropController.isActive, !showStraightenHUD, !showDenoiseHUD,
               !showVignetteHUD, !showAdjustmentsHUD, !showCurvesHUD else { return }

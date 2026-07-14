@@ -41,7 +41,7 @@ extension SlideshowView {
 
     func openVignetteHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying, !showPerspectiveHUD, !showLocalAdjustmentsHUD else { return }
+        guard !slideshow.isPlaying, !showPerspectiveHUD, !showLocalAdjustmentsHUD, !showObjectRemovalHUD else { return }
         vignetteIntensity = vignetteURLLevels[url.absoluteString] ?? 1.0
         showVignetteHUD = true
         updateDisplayImage()

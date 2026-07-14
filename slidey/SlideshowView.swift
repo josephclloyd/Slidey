@@ -42,16 +42,16 @@ private final class OpenWithMenuDelegate: NSObject {
 
 struct SlideshowView: View {
     @StateObject var imageLoader = ImageLoader()
-    @StateObject private var musicManager = MusicManager()
+    @StateObject var musicManager = MusicManager()
 
     @EnvironmentObject var recentDirectories: RecentDirectories
     @EnvironmentObject var pendingOpens: PendingOpens
-    @State private var showSongPicker = false
-    @State private var showPlaylistPicker = false
+    @State var showSongPicker = false
+    @State var showPlaylistPicker = false
 
     @State private var selectedDirectory: URL?
     @State private var scopedDirectory: URL?
-    @State private var isFullScreen = false
+    @State var isFullScreen = false
     @State var zoomPan = ZoomPanController()
     @State var rotationAngle: Angle = .zero
     @State var rotationAngles: [URL: Angle] = [:]
@@ -66,8 +66,8 @@ struct SlideshowView: View {
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
     @State var currentDisplayImage: NSImage?
-    @State private var myWindow: NSWindow?
-    @State private var windowHasFocus = false
+    @State var myWindow: NSWindow?
+    @State var windowHasFocus = false
     @State var isProcessing = false
     @State var debugOutput = ""
     @State var showDebugWindow = false
@@ -78,22 +78,22 @@ struct SlideshowView: View {
     @State var slideshow = SlideshowController()
     @State var savedToast: String?
     @State var savedToastIsError: Bool = false
-    @State private var showThumbnails = false
+    @State var showThumbnails = false
     @State private var infoOverlayURLs: Set<URL> = []
     @State private var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
     @State private var hasDisplaySleepAssertion = false
-    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 5
+    @AppStorage("slideshowInterval") var slideshowInterval: Double = 5
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
     @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
     @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
-    @AppStorage("shuffleOnAdvance") private var shuffleOnAdvance: Bool = false
+    @AppStorage("shuffleOnAdvance") var shuffleOnAdvance: Bool = false
     @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
-    @State private var showKeyboardShortcuts = false
+    @State var showKeyboardShortcuts = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
     @State var denoiseURLLevels: [String: Double] = [:]
@@ -160,6 +160,11 @@ struct SlideshowView: View {
     @State var colorizedImages: [URL: NSImage] = [:]
     @State var isColorizing = false
     @State var showColorConfirmAlert = false
+    @State var objectRemovedImages: [URL: NSImage] = [:]
+    @State var showObjectRemovalHUD: Bool = false
+    @State var isInpainting: Bool = false
+    @State var objectRemovalController = ObjectRemovalController()
+    @State var objectRemovalBaseImage: NSImage?
     @State var cropRegions: [String: CropRegion] = [:]
     @State var cropController = CropController()
     @State var imageRatings: [URL: Int] = [:]
@@ -379,6 +384,13 @@ struct SlideshowView: View {
         directoryMissingOverlay
         progressOverlays
         debugOverlay
+        editHUDOverlays
+        beforeAfterLabel
+        slideshowProgressBar
+    }
+
+    @ViewBuilder
+    private var editHUDOverlays: some View {
         denoiseHUD
         jpegCleanupHUD
         grainReductionHUD
@@ -387,10 +399,9 @@ struct SlideshowView: View {
         curvesHUD
         straightenHUD
         localAdjustmentsOverlay
+        objectRemovalOverlay
         perspectiveCorrectionOverlay
         cropOverlay
-        beforeAfterLabel
-        slideshowProgressBar
     }
 
     @ViewBuilder
@@ -637,7 +648,7 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); dismissNoiseSuggestion() }
+            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); cancelObjectRemovalHUD(); dismissNoiseSuggestion() }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -697,7 +708,16 @@ struct SlideshowView: View {
     }
 
     var body: some View {
-        coreView
+        let stage1 = attachViewingNotifications(coreView)
+        let stage2 = attachEditNotifications(stage1)
+        let stage3 = attachCropAndRemovalNotifications(stage2)
+        let stage4 = attachFileNotifications(stage3)
+        attachMusicAndMiscNotifications(stage4)
+    }
+
+    @ViewBuilder
+    private func attachViewingNotifications<Content: View>(_ content: Content) -> some View {
+        content
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.selectDirectory)) { _ in
             ifKeyWindow { selectDirectory() }
         }
@@ -751,6 +771,11 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
             ifKeyWindow { toggleFullScreen() }
         }
+    }
+
+    @ViewBuilder
+    private func attachEditNotifications<Content: View>(_ content: Content) -> some View {
+        content
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomIn)) { _ in
             ifKeyWindow {
                 zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
@@ -819,6 +844,11 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeColorization)) { _ in
             ifKeyWindow { removeColorization() }
         }
+    }
+
+    @ViewBuilder
+    private func attachCropAndRemovalNotifications<Content: View>(_ content: Content) -> some View {
+        content
         .onReceive(NotificationCenter.default.publisher(for: .cropImage)) { _ in
             ifKeyWindow { enterCropMode() }
         }
@@ -843,6 +873,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .removeLocalAdjustments)) { _ in
             ifKeyWindow { removeLocalAdjustmentsForCurrentImage() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .objectRemovalImage)) { _ in
+            ifKeyWindow { openObjectRemovalHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .removeObjectRemoval)) { _ in
+            ifKeyWindow { removeObjectRemovalForCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.upscaleImage2x)) { _ in
             ifKeyWindow { upscaleCurrentImage(scale: 2) }
         }
@@ -852,183 +888,11 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeUpscaling)) { _ in
             ifKeyWindow { removeUpscaling() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.saveEditedImage)) { _ in
-            ifKeyWindow { saveEditedImage() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportWithEdits)) { _ in
-            ifKeyWindow { exportWithEdits() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSlideshow)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                toggleSlideshow()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleThumbnails)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                showThumbnails.toggle()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
-            ifKeyWindow { toggleInfoOverlay() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.renameImage)) { _ in
-            ifKeyWindow { renameCurrentImage() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToTrash)) { _ in
-            ifKeyWindow { moveCurrentImageToTrash() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyToFolder)) { _ in
-            ifKeyWindow { copyCurrentImageToFolder() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToFolder)) { _ in
-            ifKeyWindow { moveCurrentImageToFolder() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportVisibleImages)) { _ in
-            ifKeyWindow { exportVisibleImages() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
-            ifKeyWindow { copyImageToClipboard() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyFilePath)) { _ in
-            ifKeyWindow { copyFilePathToClipboard() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.revealInFinder)) { _ in
-            ifKeyWindow { revealCurrentImageInFinder() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openInPreview)) { _ in
-            ifKeyWindow { openCurrentImageInDefaultApp() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.openWith)) { _ in
-            ifKeyWindow { showOpenWithMenu() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.setDesktopPicture)) { _ in
-            ifKeyWindow { setAsDesktopPicture() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.shareImage)) { _ in
-            ifKeyWindow { showShareSheet() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.printImage)) { _ in
-            ifKeyWindow { printCurrentImage() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavourite)) { _ in
-            ifKeyWindow { toggleFavourite() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFavouritesOnly)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                toggleShowFavouritesOnly()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showKeyboardShortcuts)) { _ in
-            showKeyboardShortcuts = true
-        }
-        .sheet(isPresented: $showKeyboardShortcuts) {
-            KeyboardShortcutsView()
-        }
-        .onChange(of: slideshowInterval) { _, _ in
-            if slideshow.isPlaying { slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure()) }
-        }
-        .onChange(of: shuffleOnAdvance) { _, newValue in
-            if newValue && slideshow.isPlaying {
-                slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
-            } else if !newValue {
-                slideshow.resetShuffleQueue()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                isFullScreen = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                isFullScreen = false
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = true
-                updateCursorVisibility()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
-            if let window = notification.object as? NSWindow, window == myWindow {
-                windowHasFocus = false
-                showingOriginal = false
-                updateCursorVisibility()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicOff)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                musicManager.setOff()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicChooseSong)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                Task {
-                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
-                    showSongPicker = true
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicChoosePlaylist)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                Task {
-                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
-                    showPlaylistPicker = true
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.musicShuffle)) { _ in
-            if myWindow == nil || myWindow?.isKeyWindow == true {
-                Task {
-                    guard await musicManager.requestAuthorizationIfNeeded() else { return }
-                    musicManager.setShuffle()
-                }
-            }
-        }
-        .sheet(isPresented: $showSongPicker) {
-            SongPickerView(musicManager: musicManager) { song in
-                musicManager.selectSong(song)
-            }
-        }
-        .sheet(isPresented: $showPlaylistPicker) {
-            PlaylistPickerView(musicManager: musicManager) { playlist in
-                musicManager.selectPlaylist(playlist)
-            }
-        }
-        .alert("Music Access Required", isPresented: $musicManager.authorizationDenied) {
-            Button("OK") {}
-        } message: {
-            Text("""
-            Slidey needs access to your Music library to play background music. \
-            You can grant access in System Settings > Privacy & Security > Media & Apple Music.
-            """)
-        }
-        .alert("No Faces Detected", isPresented: $showNoFaceAlert) {
-            Button("OK") {}
-        } message: {
-            Text("No faces were found in this image.")
-        }
-        .alert("Image Appears to Be in Color", isPresented: $showColorConfirmAlert) {
-            Button("Colorize Anyway") { colorizeCurrentImage(force: true) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This image appears to already be in color. Colorization is designed for grayscale/B&W photos and may produce unexpected results on color images.")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyAll)) { _ in
-            ifKeyWindow { batchApplyEdits(favouritesOnly: false) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.batchApplyFavourites)) { _ in
-            ifKeyWindow { batchApplyEdits(favouritesOnly: true) }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyAdjustments)) { _ in
-            ifKeyWindow { copyCurrentAdjustments() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.pasteAdjustments)) { _ in
-            ifKeyWindow { pasteAdjustments() }
-        }
-        .focusedSceneValue(\.hasCurrentImage, imageLoader.currentImageURL != nil)
     }
+
+    // attachFileNotifications and attachMusicAndMiscNotifications live in
+    // SlideshowView+NotificationHandlers.swift (extracted to stay under the
+    // file_length/type_body_length SwiftLint thresholds).
 
     /// Run `action` only if this view's window is the key window AND no
     /// upscale is in progress. Edit-menu commands fan out to every open
@@ -1036,7 +900,7 @@ struct SlideshowView: View {
     /// a single keystroke would enhance/rotate/upscale every visible
     /// slideshow at once. The isProcessing gate prevents edits and
     /// navigation from racing an in-flight upscale on the same image.
-    private func ifKeyWindow(_ action: () -> Void) {
+    func ifKeyWindow(_ action: () -> Void) {
         if (myWindow == nil || myWindow?.isKeyWindow == true) && !isProcessing {
             action()
         }
@@ -1087,6 +951,10 @@ struct SlideshowView: View {
 
         if showPerspectiveHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelPerspectiveHUD, apply: applyPerspectiveToImage)
+        }
+
+        if showObjectRemovalHUD {
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelObjectRemovalHUD, apply: applyObjectRemoval)
         }
 
         if showLocalAdjustmentsHUD {
@@ -1352,7 +1220,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func updateCursorVisibility() {
+    func updateCursorVisibility() {
         let shouldHideCursor = !imageLoader.imageURLs.isEmpty && isFullScreen && windowHasFocus && !showThumbnails && slideshow.isPlaying
         let shouldAutoHideMenuBar = isFullScreen && slideshow.isPlaying
 
@@ -1482,7 +1350,7 @@ struct SlideshowView: View {
         // updateDisplayImage will be called by onChange(of: imageLoader.imageURLs)
     }
 
-    private func toggleSlideshow() {
+    func toggleSlideshow() {
         if !slideshow.isPlaying && shuffleOnAdvance {
             slideshow.seedShuffleQueue(from: imageLoader.imageURLs, excluding: imageLoader.currentImageURL)
         }
@@ -1499,7 +1367,7 @@ struct SlideshowView: View {
         )
     }
 
-    private func makeAdvanceClosure() -> () -> Void {
+    func makeAdvanceClosure() -> () -> Void {
         { [imageLoader, slideshow] in
             let shuffleEnabled = UserDefaults.standard.bool(forKey: "shuffleOnAdvance")
             if shuffleEnabled {
@@ -1753,6 +1621,7 @@ struct SlideshowView: View {
         case .jpegCleanup: return jpegCleanedImages[url]
         case .colorize: return colorizedImages[url]
         case .grainReduction: return grainReducedImages[url]
+        case .objectRemoval: return objectRemovedImages[url]
         }
     }
 
@@ -1796,6 +1665,7 @@ struct SlideshowView: View {
         case .jpegCleanup: jpegCleanedImages[url] = nil; jpegCleanupRawImages[url] = nil
         case .colorize: colorizedImages[url] = nil
         case .grainReduction: grainReducedImages[url] = nil; grainReductionRawImages[url] = nil
+        case .objectRemoval: objectRemovedImages[url] = nil
         }
     }
 
@@ -1831,6 +1701,7 @@ struct SlideshowView: View {
         case .jpegCleanup(let strength): applyJPEGCleanupDirectly(strength: strength)
         case .colorize: colorizeCurrentImage(force: true)
         case .grainReduction(let strength): applyGrainReductionDirectly(strength: strength)
+        case .objectRemoval: break
         }
     }
 
@@ -2170,7 +2041,7 @@ struct SlideshowView: View {
 
     private func openDenoiseHUD() {
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !slideshow.isPlaying, !showLocalAdjustmentsHUD else { return }
+        guard !slideshow.isPlaying, !showLocalAdjustmentsHUD, !showObjectRemovalHUD else { return }
         dismissNoiseSuggestion()
         denoiseBaseImage = compositeBeforeStep(.smooth, for: url)
         denoiseLevel = denoiseURLLevels[url.absoluteString] ?? 50.0
@@ -2579,7 +2450,7 @@ struct SlideshowView: View {
         removeEdit(.upscale)
     }
 
-    private func toggleInfoOverlay() {
+    func toggleInfoOverlay() {
         guard let url = imageLoader.currentImageURL else { return }
         if infoOverlayURLs.contains(url) {
             infoOverlayURLs.remove(url)
@@ -2651,7 +2522,7 @@ struct SlideshowView: View {
     }
 
     // swiftlint:disable:next cyclomatic_complexity
-    private func renameCurrentImage() {
+    func renameCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
         let ext = url.pathExtension
         let basename = url.deletingPathExtension().lastPathComponent
@@ -2815,7 +2686,7 @@ struct SlideshowView: View {
         textField.selectText(nil)
     }
 
-    private func moveCurrentImageToTrash() {
+    func moveCurrentImageToTrash() {
         guard let url = imageLoader.currentImageURL else { return }
         let filename = url.lastPathComponent
 
@@ -2923,7 +2794,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func copyCurrentImageToFolder() {
+    func copyCurrentImageToFolder() {
         guard let sourceURL = imageLoader.currentImageURL else { return }
         pickDestinationFolder { destDir in
             let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
@@ -2945,7 +2816,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func exportVisibleImages() {
+    func exportVisibleImages() {
         let urls = imageLoader.imageURLs
         guard !urls.isEmpty else { return }
         pickDestinationFolder { destDir in
@@ -2987,7 +2858,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func moveCurrentImageToFolder() {
+    func moveCurrentImageToFolder() {
         guard let sourceURL = imageLoader.currentImageURL else { return }
         pickDestinationFolder { destDir in
             let destURL = destDir.appendingPathComponent(sourceURL.lastPathComponent)
@@ -3022,7 +2893,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func copyImageToClipboard() {
+    func copyImageToClipboard() {
         guard let displayedImage = currentDisplayImage ?? imageLoader.currentImage else { return }
         let outputImage = applyRotationIfNeeded(displayedImage)
         let pasteboard = NSPasteboard.general
@@ -3036,7 +2907,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func copyFilePathToClipboard() {
+    func copyFilePathToClipboard() {
         guard let url = imageLoader.currentImageURL else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -3049,17 +2920,17 @@ struct SlideshowView: View {
         }
     }
 
-    private func revealCurrentImageInFinder() {
+    func revealCurrentImageInFinder() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    private func openCurrentImageInDefaultApp() {
+    func openCurrentImageInDefaultApp() {
         guard let url = imageLoader.currentImageURL else { return }
         NSWorkspace.shared.open(url)
     }
 
-    private func setAsDesktopPicture() {
+    func setAsDesktopPicture() {
         guard let url = imageLoader.currentImageURL else { return }
         guard let screen = NSScreen.main else { return }
         do {
@@ -3075,7 +2946,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func printCurrentImage() {
+    func printCurrentImage() {
         guard let image = effectiveDisplayImage else { return }
         let printView = NSImageView(frame: NSRect(origin: .zero, size: image.size))
         printView.image = image
@@ -3087,7 +2958,7 @@ struct SlideshowView: View {
         op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
-    private func showOpenWithMenu() {
+    func showOpenWithMenu() {
         guard let url = imageLoader.currentImageURL,
               let window = myWindow ?? NSApplication.shared.keyWindow,
               let contentView = window.contentView else { return }
@@ -3110,7 +2981,7 @@ struct SlideshowView: View {
         menu.popUp(positioning: nil, at: viewPoint, in: contentView)
     }
 
-    private func showShareSheet() {
+    func showShareSheet() {
         guard let url = imageLoader.currentImageURL,
               let window = myWindow ?? NSApplication.shared.keyWindow,
               let contentView = window.contentView else { return }
@@ -3124,7 +2995,7 @@ struct SlideshowView: View {
     /// The original file is never touched. If the source volume is read-only
     /// (e.g. a mounted disk image), falls back to NSSavePanel so the user
     /// can pick a writable location.
-    private func saveEditedImage() {
+    func saveEditedImage() {
         guard let originalURL = imageLoader.currentImageURL else { return }
         guard let displayedImage = currentDisplayImage ?? imageLoader.currentImage else { return }
 
@@ -3245,7 +3116,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func toggleFavourite() {
+    func toggleFavourite() {
         guard let url = imageLoader.currentImageURL else { return }
         let key = url.absoluteString
         let wasFavourite = favouriteURLStrings.contains(key)
@@ -3266,7 +3137,7 @@ struct SlideshowView: View {
         }
     }
 
-    private func toggleShowFavouritesOnly() {
+    func toggleShowFavouritesOnly() {
         showFavouritesOnly.toggle()
         updateFilter()
         let message = showFavouritesOnly ? "★ Favourites only" : "Showing all images"

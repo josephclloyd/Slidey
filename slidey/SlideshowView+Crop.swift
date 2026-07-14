@@ -260,7 +260,7 @@ extension SlideshowView {
     // MARK: - Actions
 
     func enterCropMode() {
-        guard !showDenoiseHUD, !showVignetteHUD, !showAdjustmentsHUD, !showPerspectiveHUD, !showLocalAdjustmentsHUD else { return }
+        guard !showDenoiseHUD, !showVignetteHUD, !showAdjustmentsHUD, !showPerspectiveHUD, !showLocalAdjustmentsHUD, !showObjectRemovalHUD else { return }
         guard imageLoader.currentImageURL != nil else { return }
 
         if cropController.isActive {
