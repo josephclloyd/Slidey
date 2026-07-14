@@ -124,15 +124,18 @@ extension SlideshowView {
         if objectRemovalController.hasPainted,
            let maskCG = objectRemovalController.maskCGImage(),
            let fitted = objectRemovalFittedSize(containerSize: containerSize) {
-            let scaledW = fitted.width * zoomPan.zoomScale
-            let scaledH = fitted.height * zoomPan.zoomScale
-            let centerX = containerSize.width / 2 + zoomPan.imageOffset.width
-            let centerY = containerSize.height / 2 + zoomPan.imageOffset.height
+            // Mirrors ImageDisplayView's exact transform chain (frame -> rotate -> scale ->
+            // offset -> center-in-parent) so the mask stays pixel-aligned with the real image
+            // at any zoom/pan/rotation. Do not reintroduce a manual centerX/centerY + pre-scaled
+            // frame + .position() — that ordering rotates around the wrong anchor once the view
+            // expands to fill its parent, and was the cause of a real brush/mask misalignment bug.
             Image(decorative: maskCG, scale: 1.0)
                 .resizable()
-                .frame(width: scaledW, height: scaledH)
-                .position(x: centerX, y: centerY)
+                .frame(width: fitted.width, height: fitted.height)
                 .rotationEffect(rotationAngle)
+                .scaleEffect(zoomPan.zoomScale)
+                .offset(zoomPan.imageOffset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .colorMultiply(.red)
                 .opacity(0.4)
         }
