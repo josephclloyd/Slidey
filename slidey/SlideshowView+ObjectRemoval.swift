@@ -399,6 +399,7 @@ extension SlideshowView {
                 }
                 let result = NSImage(cgImage: outCG, size: base.size)
                 DispatchQueue.main.async {
+                    self.registerUndoForEdit(url: capturedURL, actionName: "Object Removal")
                     self.objectRemovedImages[capturedURL] = result
                     self.clearCachesDownstream(of: .objectRemoval, for: capturedURL)
                     self.editStacks[capturedURL, default: EditStack()].append(.objectRemoval)

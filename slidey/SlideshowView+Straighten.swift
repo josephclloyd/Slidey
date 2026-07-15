@@ -67,6 +67,7 @@ extension SlideshowView {
 
     func applyStraightenToImage() {
         guard let url = imageLoader.currentImageURL else { cancelStraightenHUD(); return }
+        registerUndoForEdit(url: url, actionName: "Straighten")
         if straightenAngle != 0 {
             straightenAngles[url.absoluteString] = straightenAngle
         } else {
@@ -82,6 +83,7 @@ extension SlideshowView {
 
     func removeStraightenForCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove Straighten")
         straightenAngles.removeValue(forKey: url.absoluteString)
         saveFavourites()
         updateDisplayImage()

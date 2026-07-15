@@ -270,6 +270,7 @@ extension SlideshowView {
             cancelPerspectiveHUD()
             return
         }
+        registerUndoForEdit(url: url, actionName: "Perspective Correction")
         if corners == .identity {
             perspectiveCorners.removeValue(forKey: url.absoluteString)
         } else {
@@ -284,6 +285,7 @@ extension SlideshowView {
 
     func removePerspectiveCorrectionForCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove Perspective Correction")
         if showPerspectiveHUD { cancelPerspectiveHUD() }
         perspectiveCorners.removeValue(forKey: url.absoluteString)
         saveFavourites()
