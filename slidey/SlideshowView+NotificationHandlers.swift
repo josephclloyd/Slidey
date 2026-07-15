@@ -78,6 +78,12 @@ extension SlideshowView {
         .sheet(isPresented: $showKeyboardShortcuts) {
             KeyboardShortcutsView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showToolsGuide)) { _ in
+            showToolsGuide = true
+        }
+        .sheet(isPresented: $showToolsGuide) {
+            ToolsGuideView()
+        }
     }
 
     @ViewBuilder

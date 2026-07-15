@@ -46,6 +46,7 @@
 		AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AJ100001000000000000001 /* SlideshowView+Adjustments.swift */; };
 		OR100002000000000000001 /* SlideshowView+ObjectRemoval.swift in Sources */ = {isa = PBXBuildFile; fileRef = OR100001000000000000001 /* SlideshowView+ObjectRemoval.swift */; };
 		NH100002000000000000001 /* SlideshowView+NotificationHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NH100001000000000000001 /* SlideshowView+NotificationHandlers.swift */; };
+		TG100002000000000000001 /* ToolsGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TG100001000000000000001 /* ToolsGuideView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		D1000001000000000000001 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		D8EF05A22F1189BE00ECB91A /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Resources; path = slidey/Resources; sourceTree = "<group>"; };
 		E1000001000000000000001 /* KeyboardShortcutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcutsView.swift; sourceTree = "<group>"; };
+		TG100001000000000000001 /* ToolsGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolsGuideView.swift; sourceTree = "<group>"; };
 		F1000001000000000000001 /* ZoomPanController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomPanController.swift; sourceTree = "<group>"; };
 		F1000003000000000000001 /* SlideshowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowController.swift; sourceTree = "<group>"; };
 		G1000001000000000000001 /* SlideshowView+AIEdits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+AIEdits.swift"; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 				F1000001000000000000001 /* ZoomPanController.swift */,
 				F1000003000000000000001 /* SlideshowController.swift */,
 				E1000001000000000000001 /* KeyboardShortcutsView.swift */,
+				TG100001000000000000001 /* ToolsGuideView.swift */,
 				AD79BACFAC7B4A62AA9685F9 /* CurveGraphView.swift */,
 				HV100001000000000000001 /* HistogramView.swift */,
 				A1000010000000000000002 /* Assets.xcassets */,
@@ -343,6 +346,7 @@
 				F1000002000000000000001 /* ZoomPanController.swift in Sources */,
 				F1000004000000000000001 /* SlideshowController.swift in Sources */,
 				E1000002000000000000001 /* KeyboardShortcutsView.swift in Sources */,
+				TG100002000000000000001 /* ToolsGuideView.swift in Sources */,
 				8E44BF55190E4D15961F66CF /* CurveGraphView.swift in Sources */,
 				HV100002000000000000001 /* HistogramView.swift in Sources */,
 			);

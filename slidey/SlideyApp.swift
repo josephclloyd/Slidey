@@ -427,6 +427,10 @@ struct HelpMenuCommands: Commands {
                 NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
             }
             .keyboardShortcut("/", modifiers: .command)
+
+            Button("Tools Guide") {
+                NotificationCenter.default.post(name: .showToolsGuide, object: nil)
+            }
         }
     }
 }
