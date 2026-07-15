@@ -261,14 +261,26 @@ final class FileMenuNotificationTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
 
+    func testShareImageNotificationFires() {
+        let expectation = expectation(description: "shareImage notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .shareImage, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .shareImage, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
     func testCopyMoveNotificationNamesMatchExpectedStrings() {
         XCTAssertEqual(NSNotification.Name.copyToFolder.rawValue, "CopyToFolder")
         XCTAssertEqual(NSNotification.Name.moveToFolder.rawValue, "MoveToFolder")
         XCTAssertEqual(NSNotification.Name.exportVisibleImages.rawValue, "ExportVisibleImages")
+        XCTAssertEqual(NSNotification.Name.shareImage.rawValue, "ShareImage")
     }
 
     func testCopyMoveNotificationNamesAreUnique() {
-        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash, .exportVisibleImages]
+        let names: [NSNotification.Name] = [.copyToFolder, .moveToFolder, .moveToTrash, .exportVisibleImages, .shareImage]
         let uniqueNames = Set(names)
         XCTAssertEqual(uniqueNames.count, names.count)
     }
@@ -857,6 +869,7 @@ final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
     func testCopiedAdjustmentsStoresAllFields() {
         let adj = SlideshowView.ImageAdjustments(exposure: 0.5, highlights: -0.3, shadows: 0.2, vibrance: 0.4, warmth: -0.1)
         let curves = CurvesData()
+        let crop = CropRegion(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
         let copied = CopiedAdjustments(
             editStack: nil,
             adjustments: adj,
@@ -867,7 +880,8 @@ final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
             flipH: true,
             flipV: false,
             effect: "CIPhotoEffectMono",
-            straightenAngle: 2.5
+            straightenAngle: 2.5,
+            cropRegion: crop
         )
         XCTAssertNil(copied.editStack)
         XCTAssertEqual(copied.adjustments?.exposure ?? 0, 0.5, accuracy: 0.001)
@@ -878,6 +892,7 @@ final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
         XCTAssertFalse(copied.flipV)
         XCTAssertEqual(copied.effect, "CIPhotoEffectMono")
         XCTAssertEqual(copied.straightenAngle ?? 0, 2.5, accuracy: 0.001)
+        XCTAssertEqual(copied.cropRegion, crop)
     }
 
     func testCopiedAdjustmentsWithNilFields() {
@@ -903,6 +918,89 @@ final class CopyPasteAdjustmentsNotificationTests: XCTestCase {
         XCTAssertFalse(copied.flipV)
         XCTAssertNil(copied.effect)
         XCTAssertNil(copied.straightenAngle)
+        XCTAssertNil(copied.cropRegion)
+    }
+
+    func testHasEditsReturnsFalseWhenEmpty() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: nil,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: nil
+        )
+        XCTAssertFalse(copied.hasEdits)
+    }
+
+    func testHasEditsReturnsTrueForDenoiseOnly() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: 50.0,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: nil
+        )
+        XCTAssertTrue(copied.hasEdits)
+    }
+
+    func testHasEditsReturnsTrueForStraightenOnly() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: nil,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: 1.5
+        )
+        XCTAssertTrue(copied.hasEdits)
+    }
+
+    func testHasEditsReturnsTrueForCropOnly() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: nil,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: nil,
+            cropRegion: CropRegion(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
+        )
+        XCTAssertTrue(copied.hasEdits)
+    }
+
+    func testDescriptionsIncludesStraightenAndDenoise() {
+        let copied = CopiedAdjustments(
+            editStack: nil,
+            adjustments: nil,
+            curves: nil,
+            vignetteIntensity: nil,
+            denoiseLevel: 50.0,
+            rotationAngle: nil,
+            flipH: false,
+            flipV: false,
+            effect: nil,
+            straightenAngle: 2.0
+        )
+        XCTAssertTrue(copied.descriptions.contains("denoise"))
+        XCTAssertTrue(copied.descriptions.contains("straighten"))
     }
 }
 

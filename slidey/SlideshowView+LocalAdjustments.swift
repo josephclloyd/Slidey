@@ -243,7 +243,7 @@ extension SlideshowView {
         guard !slideshow.isPlaying,
               !showDenoiseHUD, !showVignetteHUD, !showAdjustmentsHUD,
               !showCurvesHUD, !showStraightenHUD, !showPerspectiveHUD,
-              !cropController.isActive else { return }
+              !showObjectRemovalHUD, !cropController.isActive else { return }
 
         showLocalAdjustmentsHUD = true
         updateDisplayImage()

@@ -389,6 +389,11 @@ struct FileMenuCommands: Commands {
             }
             .disabled(!imageLoaded)
 
+            Button("Share\u{2026}") {
+                NotificationCenter.default.post(name: .shareImage, object: nil)
+            }
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Print\u{2026}") {
@@ -707,6 +712,17 @@ struct EditMenuCommands: Commands {
                 NotificationCenter.default.post(name: .removeColorization, object: nil)
             }
             .keyboardShortcut("o", modifiers: .shift)
+
+            Divider()
+
+            Button("Remove Object\u{2026}") {
+                NotificationCenter.default.post(name: .objectRemovalImage, object: nil)
+            }
+            .keyboardShortcut("o", modifiers: .option)
+
+            Button("Undo Object Removal") {
+                NotificationCenter.default.post(name: .removeObjectRemoval, object: nil)
+            }
 
             Divider()
 

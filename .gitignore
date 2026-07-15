@@ -66,3 +66,6 @@ fastlane/test_output
 .claude/sprints/.active
 .claude/worktrees/
 .mcx/
+
+# Python venvs used by one-off model conversion scripts (Resources/convert_*.py)
+.venv/

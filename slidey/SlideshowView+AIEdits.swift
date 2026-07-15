@@ -701,7 +701,7 @@ extension SlideshowView {
     func openJPEGCleanupHUD() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing, !isCleaningJPEG else { return }
         guard let url = imageLoader.currentImageURL, imageLoader.currentImage != nil else { return }
-        guard !showJPEGCleanupHUD else { return }
+        guard !showJPEGCleanupHUD, !showObjectRemovalHUD, !isInpainting else { return }
 
         jpegCleanupBaseImage = compositeBeforeStep(.jpegCleanup, for: url)
         jpegCleanupStrength = 100.0
