@@ -66,6 +66,10 @@ struct ViewMenuCommands: Commands {
                 NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
             }
 
+            Button("Shortcuts Overlay (/)") {
+                NotificationCenter.default.post(name: .toggleShortcutsOverlay, object: nil)
+            }
+
             Divider()
             Picker("Sort By", selection: $sortOrder) {
                 ForEach(AppSortOrder.allCases) { order in

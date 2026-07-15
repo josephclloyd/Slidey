@@ -23,6 +23,7 @@ struct KeyboardShortcutsView: View {
             ("⇧C", "Flip vertical (toggle)"),
             ("n", "Toggle filename overlay"),
             ("i", "Toggle image info overlay"),
+            ("/", "Toggle shortcuts overlay"),
             ("d", "Toggle debug window"),
         ]),
         ("Enhancement", [

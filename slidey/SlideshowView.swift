@@ -95,6 +95,7 @@ struct SlideshowView: View {
     @State private var isAutoOpening = false
     @State var showKeyboardShortcuts = false
     @State var showToolsGuide = false
+    @State var showShortcutsOverlay = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
     @State var denoiseURLLevels: [String: Double] = [:]
@@ -375,10 +376,79 @@ struct SlideshowView: View {
     }
 
     @ViewBuilder
+    private var shortcutsOverlay: some View {
+        if showShortcutsOverlay {
+            VStack {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        shortcutsSection("Navigate", items: [
+                            ("\u{2190} \u{2192}", "Prev / Next"),
+                            ("j", "Random"),
+                            ("Space", "Play / Pause"),
+                            ("t", "Thumbnails"),
+                        ])
+                        shortcutsSection("Display", items: [
+                            ("z", "Smart zoom"),
+                            ("s / f", "Native / Fill"),
+                            ("r / \u{21e7}R", "Rotate CW / CCW"),
+                            ("n / i", "Filename / Info"),
+                        ])
+                        shortcutsSection("Enhance", items: [
+                            ("a / m / h", "Enhance / Smooth / Sharpen"),
+                            ("u", "Upscale 2\u{00d7}"),
+                            ("e / \u{21e7}E", "Adjustments / Curves"),
+                            ("b (hold)", "Before / After"),
+                        ])
+                        shortcutsSection("Rate", items: [
+                            ("x", "Favourite"),
+                            ("1\u{2013}5 / 0", "Rate / Clear"),
+                        ])
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\u{2318}/")
+                                .fontWeight(.medium)
+                            Text("Full shortcut list")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.trailing, 20)
+                    .padding(.top, 20)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private func shortcutsSection(_ title: String, items: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .foregroundColor(.white.opacity(0.5))
+                .font(.system(.caption2, design: .monospaced))
+                .textCase(.uppercase)
+            ForEach(items, id: \.0) { key, label in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(key)
+                        .frame(width: 80, alignment: .trailing)
+                        .fontWeight(.medium)
+                    Text(label)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var overlayViews: some View {
         thumbnailOverlay
         filenameOverlay
         imageInfoOverlay
+        shortcutsOverlay
         toastOverlay
         noiseSuggestionOverlay
         trackInfoOverlay
@@ -1200,6 +1270,9 @@ struct SlideshowView: View {
             return .handled
         case " ":
             toggleSlideshow()
+            return .handled
+        case "/":
+            showShortcutsOverlay.toggle()
             return .handled
         case "0", "1", "2", "3", "4", "5":
             if let digit = Int(keyPress.characters) { setRating(digit) }
