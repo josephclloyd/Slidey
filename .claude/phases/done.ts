@@ -96,7 +96,7 @@ defineAlias({
     await pullProc.exited;
 
     // Clear scratchpad
-    for (const key of ["session_id", "review_session_id", "repair_session_id", "worktree_path", "review_round", "repair_round", "previous_phase", "model"]) {
+    for (const key of ["session_id", "review_session_id", "repair_session_id", "worktree_path", "review_round", "repair_round", "review_round_retry", "repair_round_retry", "previous_phase", "model"]) {
       await ctx.state.delete(key);
     }
 

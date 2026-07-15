@@ -14,6 +14,8 @@ state:
   worktree_path: string?
   review_round: number?
   repair_round: number?
+  review_round_retry: boolean?
+  repair_round_retry: boolean?
   previous_phase: string?
   model: string?
 

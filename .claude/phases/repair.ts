@@ -5,6 +5,10 @@
  * uncommitted context is preserved. Max 2 repair rounds; on round 3 → needs-attention.
  *
  * After repair, transitions back to review for a second pass.
+ *
+ * Quota-failed retry: same convention as review.ts — set "repair_round_retry" to true
+ * (plus delete "repair_session_id") before re-running this phase if the prior spawn died
+ * instantly with 0 tokens/cost, so the round counter isn't double-charged.
  */
 import { defineAlias, z } from "mcp-cli";
 
@@ -30,7 +34,10 @@ defineAlias({
       return { action: "in-flight" as const, command: [], allowTools: [], prompt: "", sessionId: existing };
     }
 
-    const repairRound = ((await ctx.state.get<number>("repair_round")) ?? 0) + 1;
+    const isRetry = (await ctx.state.get<boolean>("repair_round_retry")) ?? false;
+    const priorRound = (await ctx.state.get<number>("repair_round")) ?? 0;
+    const repairRound = isRetry ? priorRound : priorRound + 1;
+    if (isRetry) await ctx.state.delete("repair_round_retry");
     if (repairRound > 2) {
       return {
         action: "goto" as const,
