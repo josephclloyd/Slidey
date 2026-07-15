@@ -51,6 +51,7 @@ extension SlideshowView {
             let result = NSImage(cgImage: cgResult, size: source.size)
             let capturedURL = url
             DispatchQueue.main.async {
+                self.registerUndoForEdit(url: capturedURL, actionName: "Red Eye Removal")
                 self.redEyedImages[capturedURL] = result
                 self.clearCachesDownstream(of: .redEyeRemoval, for: capturedURL)
                 self.editStacks[capturedURL, default: EditStack()].append(.redEyeRemoval)
@@ -94,6 +95,7 @@ extension SlideshowView {
             let masked = NSImage(cgImage: maskedCG, size: source.size)
             let capturedURL = url
             DispatchQueue.main.async {
+                self.registerUndoForEdit(url: capturedURL, actionName: "Background Removal")
                 self.backgroundRemovedImages[capturedURL] = masked
                 self.clearCachesDownstream(of: .backgroundRemoval, for: capturedURL)
                 self.editStacks[capturedURL, default: EditStack()].append(.backgroundRemoval)
@@ -155,6 +157,7 @@ extension SlideshowView {
                 self.isRemovingArtifacts = false
                 return
             }
+            self.registerUndoForEdit(url: url, actionName: "Artifact Removal")
             self.artifactRemovedImages[url] = result
             self.clearCachesDownstream(of: .artifactRemoval, for: url)
             self.editStacks[url, default: EditStack()].append(.artifactRemoval)
@@ -365,6 +368,7 @@ extension SlideshowView {
                 }
                 let result = NSImage(cgImage: outCG, size: source.size)
                 DispatchQueue.main.async {
+                    self.registerUndoForEdit(url: capturedURL, actionName: "Colorize")
                     self.colorizedImages[capturedURL] = result
                     self.clearCachesDownstream(of: .colorize, for: capturedURL)
                     self.editStacks[capturedURL, default: EditStack()].append(.colorize)
@@ -488,6 +492,7 @@ extension SlideshowView {
             let result = NSImage(cgImage: finalCG, size: NSSize(width: imgWidth, height: imgHeight))
             let capturedURL = url
             DispatchQueue.main.async {
+                self.registerUndoForEdit(url: capturedURL, actionName: "Face Restore")
                 self.faceRestoredImages[capturedURL] = result
                 self.clearCachesDownstream(of: .faceRestore, for: capturedURL)
                 self.editStacks[capturedURL, default: EditStack()].append(.faceRestore)
@@ -733,6 +738,7 @@ extension SlideshowView {
                 return
             }
             let blended = self.blendImages(base: source, overlay: mlImage, strength: strength / 100.0)
+            self.registerUndoForEdit(url: url, actionName: "JPEG Cleanup")
             self.jpegCleanupRawImages[url] = mlImage
             self.jpegCleanedImages[url] = blended
             self.clearCachesDownstream(of: .jpegCleanup, for: url)
@@ -787,6 +793,7 @@ extension SlideshowView {
         guard !isCleaningJPEG else { return }
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelJPEGCleanupHUD(); return }
+        registerUndoForEdit(url: url, actionName: "JPEG Cleanup")
         jpegCleanedImages[url] = result
         clearCachesDownstream(of: .jpegCleanup, for: url)
         editStacks[url, default: EditStack()].append(.jpegCleanup(strength: jpegCleanupStrength))

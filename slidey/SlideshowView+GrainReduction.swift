@@ -108,6 +108,7 @@ extension SlideshowView {
                 return
             }
             let blended = self.blendImages(base: source, overlay: mlImage, strength: strength / 100.0)
+            self.registerUndoForEdit(url: url, actionName: "AI Grain Reduction")
             self.grainReductionRawImages[url] = mlImage
             self.grainReducedImages[url] = blended
             self.clearCachesDownstream(of: .grainReduction, for: url)
@@ -162,6 +163,7 @@ extension SlideshowView {
         guard !isReducingGrain else { return }
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelGrainReductionHUD(); return }
+        registerUndoForEdit(url: url, actionName: "AI Grain Reduction")
         grainReducedImages[url] = result
         clearCachesDownstream(of: .grainReduction, for: url)
         editStacks[url, default: EditStack()].append(.grainReduction(strength: grainReductionStrength))

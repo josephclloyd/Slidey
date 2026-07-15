@@ -286,6 +286,7 @@ extension SlideshowView {
             cancelCrop()
             return
         }
+        registerUndoForEdit(url: url, actionName: "Crop")
         cropRegions[url.absoluteString] = region
         saveFavourites()
         cropController.reset()
@@ -294,6 +295,7 @@ extension SlideshowView {
 
     func removeCropForCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove Crop")
         if cropController.isActive { cropController.reset() }
         cropRegions.removeValue(forKey: url.absoluteString)
         saveFavourites()

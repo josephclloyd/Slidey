@@ -60,6 +60,7 @@ extension SlideshowView {
 
     func applyVignetteToImage() {
         guard let url = imageLoader.currentImageURL else { cancelVignetteHUD(); return }
+        registerUndoForEdit(url: url, actionName: "Vignette")
         if vignetteIntensity > 0 {
             vignetteURLLevels[url.absoluteString] = vignetteIntensity
         } else {

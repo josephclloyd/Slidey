@@ -46,6 +46,7 @@
 		AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = AJ100001000000000000001 /* SlideshowView+Adjustments.swift */; };
 		OR100002000000000000001 /* SlideshowView+ObjectRemoval.swift in Sources */ = {isa = PBXBuildFile; fileRef = OR100001000000000000001 /* SlideshowView+ObjectRemoval.swift */; };
 		NH100002000000000000001 /* SlideshowView+NotificationHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NH100001000000000000001 /* SlideshowView+NotificationHandlers.swift */; };
+		UN100002000000000000001 /* SlideshowView+Undo.swift in Sources */ = {isa = PBXBuildFile; fileRef = UN100001000000000000001 /* SlideshowView+Undo.swift */; };
 		TG100002000000000000001 /* ToolsGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TG100001000000000000001 /* ToolsGuideView.swift */; };
 /* End PBXBuildFile section */
 
@@ -102,6 +103,7 @@
 		AJ100001000000000000001 /* SlideshowView+Adjustments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Adjustments.swift"; sourceTree = "<group>"; };
 		OR100001000000000000001 /* SlideshowView+ObjectRemoval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+ObjectRemoval.swift"; sourceTree = "<group>"; };
 		NH100001000000000000001 /* SlideshowView+NotificationHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+NotificationHandlers.swift"; sourceTree = "<group>"; };
+		UN100001000000000000001 /* SlideshowView+Undo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Undo.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -160,6 +162,7 @@
 				AJ100001000000000000001 /* SlideshowView+Adjustments.swift */,
 				OR100001000000000000001 /* SlideshowView+ObjectRemoval.swift */,
 				NH100001000000000000001 /* SlideshowView+NotificationHandlers.swift */,
+				UN100001000000000000001 /* SlideshowView+Undo.swift */,
 				H1000001000000000000001 /* CropController.swift */,
 				I1000001000000000000001 /* EditStack.swift */,
 				A1000006000000000000001 /* ImageLoader.swift */,
@@ -337,6 +340,7 @@
 				AJ100002000000000000001 /* SlideshowView+Adjustments.swift in Sources */,
 				OR100002000000000000001 /* SlideshowView+ObjectRemoval.swift in Sources */,
 				NH100002000000000000001 /* SlideshowView+NotificationHandlers.swift in Sources */,
+				UN100002000000000000001 /* SlideshowView+Undo.swift in Sources */,
 				H1000002000000000000001 /* CropController.swift in Sources */,
 				I1000002000000000000001 /* EditStack.swift in Sources */,
 				A1000005000000000000001 /* ImageLoader.swift in Sources */,

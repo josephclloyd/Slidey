@@ -284,6 +284,7 @@ extension SlideshowView {
         )
 
         let key = url.absoluteString
+        registerUndoForEdit(url: url, actionName: "Local Adjustment")
         var layers = localAdjustmentURLLayers[key] ?? []
         layers.append(layer)
         localAdjustmentURLLayers[key] = layers
@@ -314,6 +315,7 @@ extension SlideshowView {
 
     func removeLocalAdjustmentsForCurrentImage() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove Local Adjustments")
         if showLocalAdjustmentsHUD { cancelLocalAdjustmentsHUD() }
         localAdjustmentURLLayers.removeValue(forKey: url.absoluteString)
         saveFavourites()

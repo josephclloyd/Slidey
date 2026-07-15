@@ -61,7 +61,7 @@ struct SlideshowView: View {
     @State var smoothedImages: [URL: NSImage] = [:]
     @State var sharpenedImages: [URL: NSImage] = [:]
     @State var upscaledImages: [URL: NSImage] = [:]
-    @State private var upscaleFactors: [URL: Int] = [:]
+    @State var upscaleFactors: [URL: Int] = [:]
     @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
@@ -98,6 +98,7 @@ struct SlideshowView: View {
     @State var showShortcutsOverlay = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
+    @State var isRecomputingStep = false
     @State var denoiseURLLevels: [String: Double] = [:]
     @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
@@ -1536,6 +1537,9 @@ struct SlideshowView: View {
     }
 
     private func rotateClockwise() {
+        if let url = imageLoader.currentImageURL {
+            registerUndoForEdit(url: url, actionName: "Rotate")
+        }
         rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
@@ -1544,6 +1548,9 @@ struct SlideshowView: View {
     }
 
     private func rotateCounterClockwise() {
+        if let url = imageLoader.currentImageURL {
+            registerUndoForEdit(url: url, actionName: "Rotate")
+        }
         rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
@@ -1753,6 +1760,7 @@ struct SlideshowView: View {
 
     func removeEdit(_ tag: EditStepTag) {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove \(tag.undoActionName)")
         clearCachesDownstream(of: tag, for: url)
         clearCacheForStep(tag, url: url)
         editStacks[url]?.remove(caseTag: tag)
@@ -1763,6 +1771,8 @@ struct SlideshowView: View {
     }
 
     private func recomputeStep(_ step: EditStep, for url: URL) {
+        isRecomputingStep = true
+        defer { isRecomputingStep = false }
         switch step {
         case .enhance: enhanceCurrentImage()
         case .smooth(let noiseLevel): smoothCurrentImage(noiseLevel: noiseLevel)
@@ -1890,6 +1900,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let enhancedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Enhance")
             enhancedImages[url] = enhancedNSImage
             clearCachesDownstream(of: .enhance, for: url)
             editStacks[url, default: EditStack()].append(.enhance)
@@ -1922,6 +1933,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let smoothedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Smooth")
             smoothedImages[url] = smoothedNSImage
             clearCachesDownstream(of: .smooth, for: url)
             editStacks[url, default: EditStack()].append(.smooth(noiseLevel: noiseLevel))
@@ -1953,6 +1965,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let sharpenedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let sharpenedNSImage = NSImage(cgImage: sharpenedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Sharpen")
             sharpenedImages[url] = sharpenedNSImage
             clearCachesDownstream(of: .sharpen, for: url)
             editStacks[url, default: EditStack()].append(.sharpen)
@@ -2046,6 +2059,7 @@ struct SlideshowView: View {
 
     private func flipCurrentImageHorizontal() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Flip Horizontal")
         let key = url.absoluteString
         if flippedHorizontally.contains(key) { flippedHorizontally.remove(key) } else { flippedHorizontally.insert(key) }
         effectImages[url] = nil
@@ -2055,6 +2069,7 @@ struct SlideshowView: View {
 
     private func flipCurrentImageVertical() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Flip Vertical")
         let key = url.absoluteString
         if flippedVertically.contains(key) { flippedVertically.remove(key) } else { flippedVertically.insert(key) }
         effectImages[url] = nil
@@ -2066,6 +2081,7 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         let name = filterName.flatMap { $0.isEmpty ? nil : $0 }
         guard imageEffects[url] != name else { return }
+        registerUndoForEdit(url: url, actionName: "Photo Effect")
         imageEffects[url] = name
         effectImages[url] = nil
         saveFavourites()
@@ -2151,6 +2167,7 @@ struct SlideshowView: View {
     private func applyDenoise() {
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelDenoise(); return }
+        registerUndoForEdit(url: url, actionName: "Denoise")
         smoothedImages[url] = result
         clearCachesDownstream(of: .smooth, for: url)
         editStacks[url, default: EditStack()].append(.smooth(noiseLevel: denoiseLevel / 1000.0))
@@ -2331,6 +2348,7 @@ struct SlideshowView: View {
 
                 let result = NSImage(cgImage: outCGImage, size: NSSize(width: outW, height: outH))
                 DispatchQueue.main.async {
+                    self.registerUndoForEdit(url: targetURL, actionName: "Upscale")
                     self.upscaledImages[targetURL] = result
                     self.upscaleFactors[targetURL] = scale
                     self.clearCachesDownstream(of: .upscale, for: targetURL)
