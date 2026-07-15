@@ -8,6 +8,10 @@ final class SlideshowController {
     private var shouldStop: (() -> Bool)?
     private(set) var shuffleQueue: [URL] = []
 
+    deinit {
+        timer?.invalidate()
+    }
+
     func seedShuffleQueue(from urls: [URL], excluding current: URL? = nil) {
         shuffleQueue = urls.shuffled()
         if let current, let idx = shuffleQueue.firstIndex(of: current) {
