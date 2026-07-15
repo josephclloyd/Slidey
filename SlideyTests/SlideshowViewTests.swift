@@ -216,6 +216,7 @@ final class SlideshowControllerTests: XCTestCase {
         let controller = SlideshowController()
         controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
         XCTAssertTrue(controller.isPlaying)
+        controller.stop()
     }
 
     func testStartSetsLastAdvanceDate() {
@@ -224,6 +225,7 @@ final class SlideshowControllerTests: XCTestCase {
         controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
         XCTAssertNotNil(controller.lastAdvanceDate)
         XCTAssertGreaterThanOrEqual(controller.lastAdvanceDate!, before)
+        controller.stop()
     }
 
     func testStopClearsIsPlaying() {
@@ -249,6 +251,7 @@ final class SlideshowControllerTests: XCTestCase {
         controller.reschedule(interval: 3.0, advance: {})
         XCTAssertNotNil(controller.lastAdvanceDate)
         XCTAssertGreaterThan(controller.lastAdvanceDate!, firstDate)
+        controller.stop()
     }
 
     func testStopWhenNotPlayingIsNoop() {
@@ -261,6 +264,7 @@ final class SlideshowControllerTests: XCTestCase {
         let controller = SlideshowController()
         controller.toggle(isProcessing: false, imageCount: 5, interval: 3.0, advance: {})
         XCTAssertTrue(controller.isPlaying)
+        controller.stop()
     }
 
     func testToggleStopsWhenPlaying() {
@@ -293,6 +297,7 @@ final class SlideshowControllerTests: XCTestCase {
         var called = false
         controller.start(isProcessing: false, imageCount: 5, interval: 3.0, advance: {}, onStart: { called = true })
         XCTAssertTrue(called)
+        controller.stop()
     }
 
     func testStartDoesNotCallOnStartWhenGuarded() {
