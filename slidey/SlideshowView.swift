@@ -94,6 +94,7 @@ struct SlideshowView: View {
     @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
     @State private var isAutoOpening = false
     @State var showKeyboardShortcuts = false
+    @State var showToolsGuide = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
     @State var denoiseURLLevels: [String: Double] = [:]
