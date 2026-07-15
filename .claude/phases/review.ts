@@ -8,6 +8,14 @@
  *   clean → goto done
  *   has-issues → goto repair
  *   unresolvable → goto needs-attention
+ *
+ * Quota-failed retry: if the orchestrator detects a spawned session died instantly
+ * (0 tokens/cost, no verdict — a genuine quota failure, not a real review), it should set
+ * the "review_round_retry" state key to true (in addition to deleting "review_session_id")
+ * before re-running this phase. That signals the next spawn attempt is a retry of the
+ * SAME round, not a new one, so the round counter isn't double-charged for infrastructure
+ * failures. Hit twice in Sprint 27 before this existed; see run.md's Quota-hit recovery
+ * section for the exact orchestrator-side steps.
  */
 import { defineAlias, z } from "mcp-cli";
 
@@ -42,7 +50,10 @@ defineAlias({
       };
     }
 
-    const reviewRound = ((await ctx.state.get<number>("review_round")) ?? 0) + 1;
+    const isRetry = (await ctx.state.get<boolean>("review_round_retry")) ?? false;
+    const priorRound = (await ctx.state.get<number>("review_round")) ?? 0;
+    const reviewRound = isRetry ? priorRound : priorRound + 1;
+    if (isRetry) await ctx.state.delete("review_round_retry");
     if (reviewRound > 2) {
       return {
         action: "goto" as const,

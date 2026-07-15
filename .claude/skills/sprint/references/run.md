@@ -294,6 +294,27 @@ Never silently accept a bundle — always update the PR body so both issues are 
 When a session hits the usage quota mid-work, the branch may not exist yet and changes are
 uncommitted in the main worktree.
 
+**A quota-failed review/repair spawn no longer consumes a phase round (fixed in Sprint 27's
+retro, `review.ts`/`repair.ts`) — but you must set the retry flag.** These phases increment
+`review_round`/`repair_round` at spawn time, before the session's actual outcome is known.
+If the spawned session dies instantly with 0 tokens/0 cost and no verdict (a genuine quota
+failure, not a real review or repair attempt), tell the phase engine this retry doesn't
+count as a new round by setting `review_round_retry`/`repair_round_retry` to `true` before
+re-running `mcx phase run`:
+```bash
+mcx call _work_items phase_state_set '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"review_round_retry","value":true}'
+# or repair_round_retry, matching whichever phase failed
+```
+Also clear the stale `review_session_id`/`repair_session_id` (it still points at the dead
+session) before re-running `mcx phase run`, or the phase engine will report `in-flight`
+against a session that already exited:
+```bash
+mcx call _work_items phase_state_delete '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"review_session_id"}'
+```
+(This flag-based fix landed in Sprint 27's retro. Before that, the workaround was manually
+recomputing and setting `review_round`/`repair_round` back down by one — still works as a
+fallback if the flag mechanism itself ever needs bypassing, but prefer the flag.)
+
 **Quota status can lag the actual reset by ~10-15 minutes.** `mcx status`/`mcx call _metrics
 quota_status` occasionally report a `resetsAt` timestamp that has already passed while
 `utilization` still reads 100%. This happened twice in Sprint 21. Do not retry-spawn against
