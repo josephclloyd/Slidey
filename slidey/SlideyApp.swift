@@ -427,6 +427,10 @@ struct HelpMenuCommands: Commands {
                 NotificationCenter.default.post(name: .showKeyboardShortcuts, object: nil)
             }
             .keyboardShortcut("/", modifiers: .command)
+
+            Button("Tools Guide") {
+                NotificationCenter.default.post(name: .showToolsGuide, object: nil)
+            }
         }
     }
 }
@@ -478,79 +482,6 @@ struct EditMenuCommands: Commands {
         CommandGroup(after: .pasteboard) {
             Divider()
 
-            Button("Auto-Enhance Image") {
-                NotificationCenter.default.post(name: .enhanceImage, object: nil)
-            }
-            .keyboardShortcut("a", modifiers: [])
-
-            Button("Remove Enhancement") {
-                NotificationCenter.default.post(name: .removeEnhancement, object: nil)
-            }
-            .keyboardShortcut("a", modifiers: .shift)
-
-            Divider()
-
-            Button("Smooth Image") {
-                NotificationCenter.default.post(name: .smoothImage, object: nil)
-            }
-            .keyboardShortcut("m", modifiers: [])
-
-            Button("Remove Smoothing") {
-                NotificationCenter.default.post(name: .removeSmoothing, object: nil)
-            }
-            .keyboardShortcut("m", modifiers: .shift)
-
-            Button("Denoise\u{2026}") {
-                NotificationCenter.default.post(name: .denoiseImage, object: nil)
-            }
-            .keyboardShortcut("q", modifiers: [])
-
-            Divider()
-
-            Button("Sharpen Image") {
-                NotificationCenter.default.post(name: .sharpenImage, object: nil)
-            }
-            .keyboardShortcut("h", modifiers: [])
-
-            Button("Remove Sharpening") {
-                NotificationCenter.default.post(name: .removeSharpening, object: nil)
-            }
-            .keyboardShortcut("h", modifiers: .shift)
-
-            Divider()
-
-            Menu("Photo Effect") {
-                Text(activeEffectLabel)
-                Divider()
-                Button("None") { postEffect(nil) }
-                Divider()
-                Button("Mono (B&W)") { postEffect("CIPhotoEffectMono") }
-                Button("Noir (High-contrast B&W)") { postEffect("CIPhotoEffectNoir") }
-                Button("Fade (Vintage)") { postEffect("CIPhotoEffectFade") }
-                Button("Chrome (Vivid)") { postEffect("CIPhotoEffectChrome") }
-                Button("Process (Cool Fade)") { postEffect("CIPhotoEffectProcess") }
-                Button("Tonal (Soft B&W)") { postEffect("CIPhotoEffectTonal") }
-            }
-
-            Divider()
-
-            Button("AI Upscale Image (2x)") {
-                NotificationCenter.default.post(name: .upscaleImage2x, object: nil)
-            }
-            .keyboardShortcut("u", modifiers: [])
-
-            Button("AI Upscale Image (4x)") {
-                NotificationCenter.default.post(name: .upscaleImage4x, object: nil)
-            }
-            .keyboardShortcut("u", modifiers: .option)
-
-            Button("Remove Upscaling") {
-                NotificationCenter.default.post(name: .removeUpscaling, object: nil)
-            }
-            .keyboardShortcut("u", modifiers: .shift)
-
-            Divider()
-
             Button("Scale to Native Size") {
                 NotificationCenter.default.post(name: .scaleToNative, object: nil)
             }
@@ -563,165 +494,248 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
-            Button("Rotate Clockwise") {
-                NotificationCenter.default.post(name: .rotateClockwise, object: nil)
-            }
-            .keyboardShortcut("r", modifiers: [])
+            Menu("Enhance") {
+                Button("Auto-Enhance Image") {
+                    NotificationCenter.default.post(name: .enhanceImage, object: nil)
+                }
+                .keyboardShortcut("a", modifiers: [])
 
-            Button("Rotate Counter-Clockwise") {
-                NotificationCenter.default.post(name: .rotateCounterClockwise, object: nil)
-            }
-            .keyboardShortcut("r", modifiers: .shift)
+                Button("Remove Enhancement") {
+                    NotificationCenter.default.post(name: .removeEnhancement, object: nil)
+                }
+                .keyboardShortcut("a", modifiers: .shift)
 
-            Divider()
+                Divider()
 
-            Button("Flip Horizontal") {
-                NotificationCenter.default.post(name: .flipHorizontal, object: nil)
-            }
-            Button("Flip Vertical") {
-                NotificationCenter.default.post(name: .flipVertical, object: nil)
-            }
+                Button("Smooth Image") {
+                    NotificationCenter.default.post(name: .smoothImage, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: [])
 
-            Divider()
+                Button("Remove Smoothing") {
+                    NotificationCenter.default.post(name: .removeSmoothing, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: .shift)
 
-            Button("Crop\u{2026}") {
-                NotificationCenter.default.post(name: .cropImage, object: nil)
-            }
-            Button("Remove Crop") {
-                NotificationCenter.default.post(name: .removeCrop, object: nil)
-            }
+                Divider()
 
-            Button("Straighten\u{2026}") {
-                NotificationCenter.default.post(name: .straightenImage, object: nil)
-            }
-            .keyboardShortcut("y", modifiers: [])
-            Button("Remove Straighten") {
-                NotificationCenter.default.post(name: .removeStraighten, object: nil)
-            }
-            .keyboardShortcut("y", modifiers: .shift)
+                Button("Sharpen Image") {
+                    NotificationCenter.default.post(name: .sharpenImage, object: nil)
+                }
+                .keyboardShortcut("h", modifiers: [])
 
-            Button("Perspective Correction\u{2026}") {
-                NotificationCenter.default.post(name: .perspectiveCorrection, object: nil)
-            }
-            .keyboardShortcut("y", modifiers: .option)
+                Button("Remove Sharpening") {
+                    NotificationCenter.default.post(name: .removeSharpening, object: nil)
+                }
+                .keyboardShortcut("h", modifiers: .shift)
 
-            Button("Remove Perspective Correction") {
-                NotificationCenter.default.post(name: .removePerspectiveCorrection, object: nil)
-            }
+                Divider()
 
-            Divider()
+                Button("AI Upscale Image (2x)") {
+                    NotificationCenter.default.post(name: .upscaleImage2x, object: nil)
+                }
+                .keyboardShortcut("u", modifiers: [])
 
-            Button("Vignette\u{2026}") {
-                NotificationCenter.default.post(name: .vignetteImage, object: nil)
-            }
+                Button("AI Upscale Image (4x)") {
+                    NotificationCenter.default.post(name: .upscaleImage4x, object: nil)
+                }
+                .keyboardShortcut("u", modifiers: .option)
 
-            Button("Adjustments\u{2026}") {
-                NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+                Button("Remove Upscaling") {
+                    NotificationCenter.default.post(name: .removeUpscaling, object: nil)
+                }
+                .keyboardShortcut("u", modifiers: .shift)
             }
 
-            Button("Curves\u{2026}") {
-                NotificationCenter.default.post(name: .curvesImage, object: nil)
+            Menu("Denoise & Cleanup") {
+                Button("Denoise\u{2026}") {
+                    NotificationCenter.default.post(name: .denoiseImage, object: nil)
+                }
+                .keyboardShortcut("q", modifiers: [])
+
+                Divider()
+
+                Button("JPEG Cleanup\u{2026}") {
+                    NotificationCenter.default.post(name: .jpegCleanupImage, object: nil)
+                }
+                .keyboardShortcut("q", modifiers: .shift)
+
+                Button("Remove JPEG Cleanup") {
+                    NotificationCenter.default.post(name: .removeJPEGCleanup, object: nil)
+                }
+
+                Divider()
+
+                Button("AI Grain Reduction\u{2026}") {
+                    NotificationCenter.default.post(name: .grainReductionImage, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .shift)
+
+                Button("Remove AI Grain Reduction") {
+                    NotificationCenter.default.post(name: .removeGrainReduction, object: nil)
+                }
+
+                Divider()
+
+                Button("Remove Artifacts") {
+                    NotificationCenter.default.post(name: .removeArtifacts, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: [])
+
+                Button("Restore Artifacts") {
+                    NotificationCenter.default.post(name: .restoreArtifacts, object: nil)
+                }
+                .keyboardShortcut("l", modifiers: .shift)
             }
 
-            Button("Local Adjustments\u{2026}") {
-                NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+            Menu("Tone & Color") {
+                Button("Adjustments\u{2026}") {
+                    NotificationCenter.default.post(name: .adjustmentsImage, object: nil)
+                }
+
+                Button("Curves\u{2026}") {
+                    NotificationCenter.default.post(name: .curvesImage, object: nil)
+                }
+
+                Button("Vignette\u{2026}") {
+                    NotificationCenter.default.post(name: .vignetteImage, object: nil)
+                }
+
+                Divider()
+
+                Button("Local Adjustments\u{2026}") {
+                    NotificationCenter.default.post(name: .localAdjustmentsImage, object: nil)
+                }
+
+                Button("Remove Local Adjustments") {
+                    NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
+                }
+
+                Divider()
+
+                Menu("Photo Effect") {
+                    Text(activeEffectLabel)
+                    Divider()
+                    Button("None") { postEffect(nil) }
+                    Divider()
+                    Button("Mono (B&W)") { postEffect("CIPhotoEffectMono") }
+                    Button("Noir (High-contrast B&W)") { postEffect("CIPhotoEffectNoir") }
+                    Button("Fade (Vintage)") { postEffect("CIPhotoEffectFade") }
+                    Button("Chrome (Vivid)") { postEffect("CIPhotoEffectChrome") }
+                    Button("Process (Cool Fade)") { postEffect("CIPhotoEffectProcess") }
+                    Button("Tonal (Soft B&W)") { postEffect("CIPhotoEffectTonal") }
+                }
             }
 
-            Button("Remove Local Adjustments") {
-                NotificationCenter.default.post(name: .removeLocalAdjustments, object: nil)
+            Menu("Retouch") {
+                Button("Restore Faces") {
+                    NotificationCenter.default.post(name: .restoreFaces, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: [])
+
+                Button("Remove Face Restoration") {
+                    NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: .shift)
+
+                Divider()
+
+                Button("Remove Red Eye") {
+                    NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: [])
+
+                Button("Remove Red-Eye Correction") {
+                    NotificationCenter.default.post(name: .removeRedEye, object: nil)
+                }
+                .keyboardShortcut("g", modifiers: .shift)
+
+                Divider()
+
+                Button("Remove Background") {
+                    NotificationCenter.default.post(name: .removeBackground, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: [])
+
+                Button("Restore Background") {
+                    NotificationCenter.default.post(name: .restoreBackground, object: nil)
+                }
+                .keyboardShortcut("k", modifiers: .shift)
+
+                Divider()
+
+                Button("Colorize (B&W to Color)") {
+                    NotificationCenter.default.post(name: .colorizeImage, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: [])
+
+                Button("Remove Colorization") {
+                    NotificationCenter.default.post(name: .removeColorization, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .shift)
+
+                Divider()
+
+                Button("Remove Object\u{2026}") {
+                    NotificationCenter.default.post(name: .objectRemovalImage, object: nil)
+                }
+                .keyboardShortcut("o", modifiers: .option)
+
+                Button("Undo Object Removal") {
+                    NotificationCenter.default.post(name: .removeObjectRemoval, object: nil)
+                }
             }
 
-            Divider()
+            Menu("Geometry") {
+                Button("Rotate Clockwise") {
+                    NotificationCenter.default.post(name: .rotateClockwise, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: [])
 
-            Button("Restore Faces") {
-                NotificationCenter.default.post(name: .restoreFaces, object: nil)
-            }
-            .keyboardShortcut("p", modifiers: [])
+                Button("Rotate Counter-Clockwise") {
+                    NotificationCenter.default.post(name: .rotateCounterClockwise, object: nil)
+                }
+                .keyboardShortcut("r", modifiers: .shift)
 
-            Button("Remove Face Restoration") {
-                NotificationCenter.default.post(name: .removeFaceRestoration, object: nil)
-            }
-            .keyboardShortcut("p", modifiers: .shift)
+                Divider()
 
-            Divider()
+                Button("Flip Horizontal") {
+                    NotificationCenter.default.post(name: .flipHorizontal, object: nil)
+                }
+                Button("Flip Vertical") {
+                    NotificationCenter.default.post(name: .flipVertical, object: nil)
+                }
 
-            Button("Remove Red Eye") {
-                NotificationCenter.default.post(name: .redEyeRemoval, object: nil)
-            }
-            .keyboardShortcut("g", modifiers: [])
+                Divider()
 
-            Button("Remove Red-Eye Correction") {
-                NotificationCenter.default.post(name: .removeRedEye, object: nil)
-            }
-            .keyboardShortcut("g", modifiers: .shift)
+                Button("Crop\u{2026}") {
+                    NotificationCenter.default.post(name: .cropImage, object: nil)
+                }
+                Button("Remove Crop") {
+                    NotificationCenter.default.post(name: .removeCrop, object: nil)
+                }
 
-            Divider()
+                Divider()
 
-            Button("Remove Background") {
-                NotificationCenter.default.post(name: .removeBackground, object: nil)
-            }
-            .keyboardShortcut("k", modifiers: [])
+                Button("Straighten\u{2026}") {
+                    NotificationCenter.default.post(name: .straightenImage, object: nil)
+                }
+                .keyboardShortcut("y", modifiers: [])
+                Button("Remove Straighten") {
+                    NotificationCenter.default.post(name: .removeStraighten, object: nil)
+                }
+                .keyboardShortcut("y", modifiers: .shift)
 
-            Button("Restore Background") {
-                NotificationCenter.default.post(name: .restoreBackground, object: nil)
-            }
-            .keyboardShortcut("k", modifiers: .shift)
+                Divider()
 
-            Divider()
+                Button("Perspective Correction\u{2026}") {
+                    NotificationCenter.default.post(name: .perspectiveCorrection, object: nil)
+                }
+                .keyboardShortcut("y", modifiers: .option)
 
-            Button("Remove Artifacts") {
-                NotificationCenter.default.post(name: .removeArtifacts, object: nil)
-            }
-            .keyboardShortcut("l", modifiers: [])
-
-            Button("Restore Artifacts") {
-                NotificationCenter.default.post(name: .restoreArtifacts, object: nil)
-            }
-            .keyboardShortcut("l", modifiers: .shift)
-
-            Divider()
-
-            Button("JPEG Cleanup\u{2026}") {
-                NotificationCenter.default.post(name: .jpegCleanupImage, object: nil)
-            }
-            .keyboardShortcut("q", modifiers: .shift)
-
-            Button("Remove JPEG Cleanup") {
-                NotificationCenter.default.post(name: .removeJPEGCleanup, object: nil)
-            }
-
-            Divider()
-
-            Button("AI Grain Reduction\u{2026}") {
-                NotificationCenter.default.post(name: .grainReductionImage, object: nil)
-            }
-            .keyboardShortcut("n", modifiers: .shift)
-
-            Button("Remove AI Grain Reduction") {
-                NotificationCenter.default.post(name: .removeGrainReduction, object: nil)
-            }
-
-            Divider()
-
-            Button("Colorize (B&W to Color)") {
-                NotificationCenter.default.post(name: .colorizeImage, object: nil)
-            }
-            .keyboardShortcut("o", modifiers: [])
-
-            Button("Remove Colorization") {
-                NotificationCenter.default.post(name: .removeColorization, object: nil)
-            }
-            .keyboardShortcut("o", modifiers: .shift)
-
-            Divider()
-
-            Button("Remove Object\u{2026}") {
-                NotificationCenter.default.post(name: .objectRemovalImage, object: nil)
-            }
-            .keyboardShortcut("o", modifiers: .option)
-
-            Button("Undo Object Removal") {
-                NotificationCenter.default.post(name: .removeObjectRemoval, object: nil)
+                Button("Remove Perspective Correction") {
+                    NotificationCenter.default.post(name: .removePerspectiveCorrection, object: nil)
+                }
             }
 
             Divider()

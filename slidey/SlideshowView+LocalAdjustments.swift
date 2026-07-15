@@ -488,7 +488,7 @@ extension SlideshowView {
             rotationAngle: rotationAngle
         )
         let px = norm.x * CGFloat(localAdjController.maskWidth)
-        let py = norm.y * CGFloat(localAdjController.maskHeight)
+        let py = (1 - norm.y) * CGFloat(localAdjController.maskHeight)
         return CGPoint(x: px, y: py)
     }
 
