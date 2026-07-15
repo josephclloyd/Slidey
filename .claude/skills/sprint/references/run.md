@@ -52,6 +52,15 @@ phantom-commit check (#4) report false positives. Always assert `main` first.
 If any check fails, fix it before proceeding. The stale-worktree and phantom-commit
 checks are especially important — corrupted state from a prior run is hard to recover from.
 
+**Don't trust a single `mcx status` reading right after a daemon restart.** If uptime is
+near 0s and any server shows `connecting` instead of `connected` (especially `_claude`,
+`_mock`, `_site`), the daemon is still starting up — spawning or calling `mcx monitor`
+against it can fail (e.g. `mcx monitor` erroring "Was there a typo in the url or port?").
+Hit in Sprint 28: cost several minutes of diagnosis before the fix was found. Re-check
+`mcx status` after a few seconds; only proceed once uptime is climbing normally and all 8
+servers read `connected`. If a connection error persists despite a stable-looking status,
+try `mcx restart` once, then recheck.
+
 **Never `git pull` in the main checkout — use `git fetch && git merge --ff-only`.** A bare
 `git pull` can hit a divergent-branches prompt (the main checkout is being branched from
 by spawned sessions throughout the sprint) and leaves HEAD detached at `FETCH_HEAD` instead
@@ -314,6 +323,18 @@ mcx call _work_items phase_state_delete '{"workItemId":"#N","repoRoot":"/Users/j
 (This flag-based fix landed in Sprint 27's retro. Before that, the workaround was manually
 recomputing and setting `review_round`/`repair_round` back down by one — still works as a
 fallback if the flag mechanism itself ever needs bypassing, but prefer the flag.)
+
+**Verify the retry flag actually held** before re-spawning — don't just trust that the
+returned action came back as `spawn` and move on:
+```bash
+mcx call _work_items phase_state_get '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"review_round"}'
+# or repair_round — confirm the value is unchanged from before the quota-failed attempt
+```
+Cheap to check, and catches a silent regression in the fix itself immediately (e.g. a
+future edit to `review.ts`/`repair.ts` that breaks the flag logic) rather than only
+discovering it two rounds later when an item unexpectedly lands in `needs-attention`.
+Validated working correctly in Sprint 28 (`#259` hit two genuine quota failures; the round
+counter stayed at 1 through both, confirmed via this exact check).
 
 **Quota status can lag the actual reset by ~10-15 minutes.** `mcx status`/`mcx call _metrics
 quota_status` occasionally report a `resetsAt` timestamp that has already passed while
