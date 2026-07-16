@@ -70,7 +70,7 @@ slidey/
 
 ## Workflow
 
-Issues are tracked in GitHub Issues. The backlog comes from the README "Roadmap / TODO" section.
+Issues are tracked in GitHub Issues, which is the sole source of backlog truth. The README no longer carries a "Roadmap / TODO" section — that content moved to GitHub Issues intentionally, not through staleness.
 
 Memory files in `.claude/memory/` must be committed and pushed when changed — they are
 git-tracked and synced across machines via a symlink to `~/.claude/projects/<slug>/memory/`.
