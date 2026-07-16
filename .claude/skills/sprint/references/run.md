@@ -61,6 +61,24 @@ Hit in Sprint 28: cost several minutes of diagnosis before the fix was found. Re
 servers read `connected`. If a connection error persists despite a stable-looking status,
 try `mcx restart` once, then recheck.
 
+**"Protocol mismatch: daemon X, CLI expects Y" means the `mcx` CLI binary and the running
+daemon have drifted to different versions** (the CLI auto-updates independently of the
+already-running daemon process). This blocks *every* `mcx` command, including read-only
+queries like `mcx claude ls` — there's no working around it, the daemon needs
+`mcx daemon reload`. That command will refuse if it would orphan active sessions; before
+forcing it, confirm via context (not by querying — the mismatch blocks queries too) that
+nothing genuinely in-flight would be lost. All real sprint work lives in git/GitHub, not
+in the daemon's session list, so orphaning old idle-session bookkeeping is normally safe
+to force through (`mcx daemon reload --force`) — but confirm with Joe first regardless,
+since the tool's own warning is exactly the kind of "hard to reverse, ask first" situation
+this skill's parent instructions call out. Hit in Sprint 30 (daemon auto-upgraded from
+1.12.1 to 1.14.6 mid-session). **After reloading, expect `.mcx.lock` to be invalidated
+too** — a newer `mcx` computes phase-file content hashes differently, so `mcx phase run`
+will report the lock "out of date" even though no phase file content actually changed.
+Verify with `git diff .claude/phases/` (should be empty) before treating it as a real
+change, then `mcx phase install` and push the `.mcx.lock`-only diff directly to `main` per
+the tooling-blocked exception below — this is exactly that exception's use case.
+
 **Never `git pull` in the main checkout — use `git fetch && git merge --ff-only`.** A bare
 `git pull` can hit a divergent-branches prompt (the main checkout is being branched from
 by spawned sessions throughout the sprint) and leaves HEAD detached at `FETCH_HEAD` instead
