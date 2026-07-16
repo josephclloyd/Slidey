@@ -342,6 +342,17 @@ quota_status` occasionally report a `resetsAt` timestamp that has already passed
 a stale 100%-with-past-reset-time reading — wait ~10-15 minutes and recheck; it resolves
 itself without any other intervention.
 
+**A quota wait expected to exceed ~1 hour will outlast the persistent Monitor task's own
+timeout — restart it, don't just `ScheduleWakeup` and assume events will still arrive.**
+`ScheduleWakeup` correctly re-invokes the orchestrator at the right time, but the
+background `Monitor` task backing the event stream has its own independent timeout
+(typically 3600000ms) and silently stops delivering events if the wait runs longer. Hit in
+Sprint 29: a ~3h five-hour-window wait outlasted the monitor, and this wasn't caught until
+a manual `mcx status` check well after the wait began — a `session.result` event could
+have been missed entirely. Before or immediately after scheduling a wakeup for a wait that
+could plausibly exceed an hour, restart the Monitor task proactively; don't wait to notice
+a gap.
+
 **Zero-progress case (most common when quota hits early):** If multiple sessions all hit quota simultaneously, they typically made no commits and created no remote branches. Check with `git log <branch> ^main --oneline` — if empty, the session left nothing useful. If the build also fails, discard without further investigation:
 
 ```bash
