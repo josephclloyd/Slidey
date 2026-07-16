@@ -35,20 +35,93 @@ extension SlideshowView {
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let req = VNDetectFaceRectanglesRequest()
+            let req = VNDetectFaceLandmarksRequest()
             try? VNImageRequestHandler(cgImage: srcCG, options: [:]).perform([req])
-            guard let faces = req.results as? [VNFaceObservation], !faces.isEmpty else {
+            guard let faces = req.results, !faces.isEmpty else {
                 DispatchQueue.main.async { self.showNoFaceAlert = true }
                 return
             }
 
-            let ciImg = CIImage(cgImage: srcCG)
-            guard let filter = CIFilter(name: "CIRedEyeCorrection") else { return }
-            filter.setValue(ciImg, forKey: kCIInputImageKey)
-            guard let output = filter.outputImage else { return }
-            let ctx = CIContext(options: [.workingColorSpace: CGColorSpaceCreateDeviceRGB()])
-            guard let cgResult = ctx.createCGImage(output, from: output.extent) else { return }
-            let result = NSImage(cgImage: cgResult, size: source.size)
+            let width = srcCG.width
+            let height = srcCG.height
+            let imageSize = CGSize(width: width, height: height)
+
+            struct EyeRegion {
+                let centerX: Int; let centerY: Int; let radius: Int
+            }
+            var eyeRegions: [EyeRegion] = []
+            for face in faces {
+                guard let landmarks = face.landmarks else { continue }
+                for region in [landmarks.leftEye, landmarks.rightEye] {
+                    guard let region = region, region.pointCount > 0 else { continue }
+                    let pts = region.pointsInImage(imageSize: imageSize)
+                    let cx = pts.map(\.x).reduce(0, +) / CGFloat(pts.count)
+                    let cy = pts.map(\.y).reduce(0, +) / CGFloat(pts.count)
+                    let pixelX = Int(cx)
+                    let pixelY = height - Int(cy)
+                    let maxSpread: CGFloat = pts.map { (pt: CGPoint) -> CGFloat in
+                        let dx = pt.x - cx
+                        let dy = pt.y - cy
+                        return sqrt(dx * dx + dy * dy)
+                    }.max() ?? 0
+                    let searchRadius = max(Int(maxSpread * 0.45), 4)
+                    eyeRegions.append(EyeRegion(centerX: pixelX, centerY: pixelY, radius: searchRadius))
+                }
+            }
+
+            guard !eyeRegions.isEmpty else {
+                DispatchQueue.main.async { self.showNoFaceAlert = true }
+                return
+            }
+
+            let bytesPerRow = width * 4
+            guard let bitmapCtx = CGContext(
+                data: nil, width: width, height: height, bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return }
+            bitmapCtx.translateBy(x: 0, y: CGFloat(height))
+            bitmapCtx.scaleBy(x: 1, y: -1)
+            bitmapCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: width, height: height))
+            guard let data = bitmapCtx.data else { return }
+            let buffer = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+
+            var pixelsChanged = 0
+            for eye in eyeRegions {
+                let minX = max(0, eye.centerX - eye.radius)
+                let maxX = min(width - 1, eye.centerX + eye.radius)
+                let minY = max(0, eye.centerY - eye.radius)
+                let maxY = min(height - 1, eye.centerY + eye.radius)
+                for y in minY...maxY {
+                    for x in minX...maxX {
+                        let dx = CGFloat(x - eye.centerX)
+                        let dy = CGFloat(y - eye.centerY)
+                        let dist = sqrt(dx * dx + dy * dy)
+                        if dist > CGFloat(eye.radius) { continue }
+                        let offset = y * bytesPerRow + x * 4
+                        let r = CGFloat(buffer[offset])
+                        let g = CGFloat(buffer[offset + 1])
+                        let b = CGFloat(buffer[offset + 2])
+                        let redRatio = r / max(g + b, 1)
+                        let brightness = (r + g + b) / 3
+                        if redRatio > 1.5 && brightness > 30 && brightness < 240 {
+                            let fade = 1 - (dist / CGFloat(eye.radius))
+                            let redExcess = r - max(g, b)
+                            let newR = r - redExcess * fade
+                            buffer[offset] = UInt8(max(0, min(255, newR)))
+                            pixelsChanged += 1
+                        }
+                    }
+                }
+            }
+
+            if pixelsChanged == 0 {
+                DispatchQueue.main.async { self.showNoRedEyeDetectedAlert = true }
+                return
+            }
+
+            guard let resultCG = bitmapCtx.makeImage() else { return }
+            let result = NSImage(cgImage: resultCG, size: source.size)
             let capturedURL = url
             DispatchQueue.main.async {
                 self.registerUndoForEdit(url: capturedURL, actionName: "Red Eye Removal")

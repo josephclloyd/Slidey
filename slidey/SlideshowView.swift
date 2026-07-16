@@ -145,6 +145,7 @@ struct SlideshowView: View {
     @State var isFaceRestoring = false
     @State var faceRestoreProgress: Double = 0
     @State var showNoFaceAlert = false
+    @State var showNoRedEyeDetectedAlert = false
     @State var redEyedImages: [URL: NSImage] = [:]
     @State var backgroundRemovedImages: [URL: NSImage] = [:]
     @State var artifactRemovedImages: [URL: NSImage] = [:]
@@ -382,34 +383,50 @@ struct SlideshowView: View {
             VStack {
                 HStack {
                     Spacer()
-                    VStack(alignment: .leading, spacing: 8) {
-                        shortcutsSection("Navigate", items: [
-                            ("\u{2190} \u{2192}", "Prev / Next"),
-                            ("j", "Random"),
-                            ("Space", "Play / Pause"),
-                            ("t", "Thumbnails"),
-                        ])
-                        shortcutsSection("Display", items: [
-                            ("z", "Smart zoom"),
-                            ("s / f", "Native / Fill"),
-                            ("r / \u{21e7}R", "Rotate CW / CCW"),
-                            ("n / i", "Filename / Info"),
-                        ])
-                        shortcutsSection("Enhance", items: [
-                            ("a / m / h", "Enhance / Smooth / Sharpen"),
-                            ("u", "Upscale 2\u{00d7}"),
-                            ("e / \u{21e7}E", "Adjustments / Curves"),
-                            ("b (hold)", "Before / After"),
-                        ])
-                        shortcutsSection("Rate", items: [
-                            ("x", "Favourite"),
-                            ("1\u{2013}5 / 0", "Rate / Clear"),
-                        ])
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("\u{2318}/")
-                                .fontWeight(.medium)
-                            Text("Full shortcut list")
-                                .foregroundColor(.white.opacity(0.7))
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            shortcutsSection("Navigate", items: [
+                                ("\u{2190} \u{2192}", "Prev / Next"),
+                                ("j", "Random"),
+                                ("Space", "Play / Pause"),
+                                ("t", "Thumbnails"),
+                            ])
+                            shortcutsSection("Display", items: [
+                                ("z", "Smart zoom"),
+                                ("s / f", "Native / Fill"),
+                                ("n / i", "Filename / Info"),
+                            ])
+                            shortcutsSection("Enhance", items: [
+                                ("a / m / h", "Enhance / Smooth / Sharpen"),
+                                ("u / \u{2325}U", "Upscale 2\u{00d7} / 4\u{00d7}"),
+                                ("e / \u{21e7}E", "Adjustments / Curves"),
+                                ("b (hold)", "Before / After"),
+                            ])
+                            shortcutsSection("Rate", items: [
+                                ("x", "Favourite"),
+                                ("1\u{2013}5 / 0", "Rate / Clear"),
+                            ])
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            shortcutsSection("Denoise & Cleanup", items: [
+                                ("q", "Denoise"),
+                                ("\u{21e7}Q", "JPEG Cleanup"),
+                                ("\u{21e7}N", "AI Grain Reduction"),
+                                ("l / \u{21e7}L", "Artifacts / Restore"),
+                            ])
+                            shortcutsSection("Retouch", items: [
+                                ("p / \u{21e7}P", "Face Restore / Remove"),
+                                ("g / \u{21e7}G", "Red-Eye / Remove"),
+                                ("k / \u{21e7}K", "Bg Remove / Restore"),
+                                ("o / \u{21e7}O", "Colorize / Remove"),
+                            ])
+                            shortcutsSection("Geometry", items: [
+                                ("r / \u{21e7}R", "Rotate CW / CCW"),
+                                ("c / \u{21e7}C", "Flip H / V"),
+                                ("w / \u{21e7}W", "Crop / Remove"),
+                                ("y / \u{21e7}Y", "Straighten / Remove"),
+                                ("\u{2325}Y", "Perspective Correction"),
+                            ])
                         }
                     }
                     .font(.system(.caption, design: .monospaced))
