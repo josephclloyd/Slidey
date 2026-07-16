@@ -1,7 +1,7 @@
 # Sprint 29 — 2026-07-15
 
 Started: 2026-07-15T00:00
-Status: planned
+Status: shipped
 
 ## Issues
 
@@ -56,3 +56,69 @@ None — all 3 open `josephclloyd` issues included.
   #266/#268 were filed in Sprint 28's retro and #269 was filed during this planning
   session, per Joe's live request). Next sprint's planning will likely need fresh issues
   drafted from scratch unless Joe files more.
+
+## Results
+
+Released: v1.28 — 2026-07-15
+
+### Shipped
+- #266 Flaky test: `SlideshowControllerTests.testLoopDisabledStopsAtLastImage` — PR #271,
+  0 repair rounds. Turned out to be a real production bug, not just test flakiness: a
+  missing `deinit` let `SlideshowController`'s timer keep firing on the RunLoop after
+  dealloc even with a `weak self` reference — a genuine resource leak. Fixed at both
+  layers (production `deinit` + deterministic test-side `stop()` calls).
+- #268 Add on-image keyboard shortcuts overlay — PR #272, 0 repair rounds. Toggled with
+  the previously-unbound `/` key (confirmed no conflict with `⌘/`'s existing full-sheet
+  binding). `handleCharacterKeyPress` now at 47/~50 cases — approaching but not yet
+  breaching the SwiftLint cyclomatic-complexity threshold.
+- #269 ⌘Z undo support for all photo edits — PR #273, 0 repair rounds. Extended the
+  existing `NSUndoManager` mechanism (previously only rename/move-to-trash) to every edit
+  tool via a new `SlideshowView+Undo.swift`: snapshots full per-image edit state
+  (including cached images, not just parameters, so undo doesn't re-run expensive AI
+  models) before each edit, registers a redo on undo, and gets multi-level undo/redo for
+  free from `NSUndoManager`'s native stack. Biggest issue this sprint (104 turns, ~$6.79)
+  and the only one with real quota friction — see Deviations.
+
+### Also filed this sprint
+- #274 — Red-Eye Removal doesn't correct anything (Joe's report, root cause found during
+  triage: `CIRedEyeCorrection` needs an `inputEyes` parameter that the code never sets —
+  `VNDetectFaceRectanglesRequest` only returns face bounding boxes, not eye positions, so
+  the filter silently no-ops while the app still marks the edit as applied).
+- #275 — Shortcuts overlay (#268) is missing most editing-tool shortcuts (Joe's report;
+  the overlay's condensed "Enhance" section covers only 4 of the app's ~20 edit tools).
+
+### Deviations from plan
+- **Extra-usage budget climbed to 89.1%** ($4100/$4600) at the start of this sprint, up
+  from 85.2% at the start of Sprint 28 — flagged to Joe before spawning anything; he chose
+  to proceed. Five-hour window also hit 90% right before #269 (the sprint's biggest issue)
+  was due to start — flagged again, Joe chose to proceed anyway.
+- **#269's first impl attempt hit genuine quota exhaustion almost immediately** (4 turns,
+  $0.13, zero commits — a true zero-progress case, nothing to recover). Five-hour window
+  needed a real ~3-hour wait for its full reset this time (longer than Sprint 28's ~30min
+  wait) — scheduled periodic wakeups rather than one long wait. Resumed cleanly once
+  `quota_status` showed 0% utilization; #269 then completed in one full session (104
+  turns) with no further quota issues.
+- **The persistent monitor task silently expired after its 1-hour timeout** during the
+  ~3-hour quota wait, requiring a restart before #269's session.result event could be
+  received. Not noticed until manually checking — worth remembering that a long quota
+  wait will always outlast a single Monitor call's timeout window.
+- **Two impl sessions ran concurrently in the same shared main checkout** (#266 and #268,
+  per the `--worktree`-doesn't-create-a-real-worktree gotcha) — #266's own session flagged
+  seeing "unrelated files being re-modified" mid-run (almost certainly #268's concurrent
+  edits). Both PRs' diffs were verified clean afterward (no cross-contamination, no
+  overlapping files) — the rule of thumb "different files touched → safe to run in
+  parallel" held, but it's worth noting the sessions can observe each other's changes
+  mid-flight even when the final diffs stay clean.
+
+### Needs attention
+None — all three planned issues merged, no open PRs.
+
+### Stats
+- PRs merged: 3 (#271, #272, #273)
+- Issues filed: 2 (#274, #275 — open, backlog)
+- Repair rounds: 0 across all three issues — cleanest sprint yet on that metric
+- Quota-hit recoveries: 2 (one instant zero-progress failure, one genuine ~3h wait for
+  the five-hour window to reset)
+- Total orchestration cost: ~$14.61 across 7 spawned sessions (4 opus impl — one of which
+  cost $0.13 for a zero-progress quota failure before #269's real attempt — 3 sonnet
+  review)
