@@ -105,6 +105,7 @@ extension SlideshowView {
 
     func applyCurvesToImage() {
         guard let url = imageLoader.currentImageURL else { cancelCurvesHUD(); return }
+        registerUndoForEdit(url: url, actionName: "Curves")
         if !curvesData.isIdentity {
             curvesURLLevels[url.absoluteString] = curvesData
         } else {

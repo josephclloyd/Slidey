@@ -137,6 +137,7 @@ extension SlideshowView {
 
     func applyAdjustmentsToImage() {
         guard let url = imageLoader.currentImageURL else { cancelAdjustmentsHUD(); return }
+        registerUndoForEdit(url: url, actionName: "Adjustments")
         if !adjustments.isIdentity {
             adjustmentURLLevels[url.absoluteString] = adjustments
         } else {

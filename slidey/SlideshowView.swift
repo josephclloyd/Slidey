@@ -61,7 +61,7 @@ struct SlideshowView: View {
     @State var smoothedImages: [URL: NSImage] = [:]
     @State var sharpenedImages: [URL: NSImage] = [:]
     @State var upscaledImages: [URL: NSImage] = [:]
-    @State private var upscaleFactors: [URL: Int] = [:]
+    @State var upscaleFactors: [URL: Int] = [:]
     @State var activeUpscaleScale: Int = 4
     @State private var savedZoomScales: [URL: CGFloat] = [:]
     @State private var savedPanOffsets: [URL: CGSize] = [:]
@@ -95,8 +95,10 @@ struct SlideshowView: View {
     @State private var isAutoOpening = false
     @State var showKeyboardShortcuts = false
     @State var showToolsGuide = false
+    @State var showShortcutsOverlay = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
+    @State var isRecomputingStep = false
     @State var denoiseURLLevels: [String: Double] = [:]
     @State var showDenoiseHUD: Bool = false
     @State private var denoiseLevel: Double = 50.0
@@ -375,10 +377,79 @@ struct SlideshowView: View {
     }
 
     @ViewBuilder
+    private var shortcutsOverlay: some View {
+        if showShortcutsOverlay {
+            VStack {
+                HStack {
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        shortcutsSection("Navigate", items: [
+                            ("\u{2190} \u{2192}", "Prev / Next"),
+                            ("j", "Random"),
+                            ("Space", "Play / Pause"),
+                            ("t", "Thumbnails"),
+                        ])
+                        shortcutsSection("Display", items: [
+                            ("z", "Smart zoom"),
+                            ("s / f", "Native / Fill"),
+                            ("r / \u{21e7}R", "Rotate CW / CCW"),
+                            ("n / i", "Filename / Info"),
+                        ])
+                        shortcutsSection("Enhance", items: [
+                            ("a / m / h", "Enhance / Smooth / Sharpen"),
+                            ("u", "Upscale 2\u{00d7}"),
+                            ("e / \u{21e7}E", "Adjustments / Curves"),
+                            ("b (hold)", "Before / After"),
+                        ])
+                        shortcutsSection("Rate", items: [
+                            ("x", "Favourite"),
+                            ("1\u{2013}5 / 0", "Rate / Clear"),
+                        ])
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\u{2318}/")
+                                .fontWeight(.medium)
+                            Text("Full shortcut list")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.trailing, 20)
+                    .padding(.top, 20)
+                }
+                Spacer()
+            }
+        }
+    }
+
+    private func shortcutsSection(_ title: String, items: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .foregroundColor(.white.opacity(0.5))
+                .font(.system(.caption2, design: .monospaced))
+                .textCase(.uppercase)
+            ForEach(items, id: \.0) { key, label in
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(key)
+                        .frame(width: 80, alignment: .trailing)
+                        .fontWeight(.medium)
+                    Text(label)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var overlayViews: some View {
         thumbnailOverlay
         filenameOverlay
         imageInfoOverlay
+        shortcutsOverlay
         toastOverlay
         noiseSuggestionOverlay
         trackInfoOverlay
@@ -1201,6 +1272,9 @@ struct SlideshowView: View {
         case " ":
             toggleSlideshow()
             return .handled
+        case "/":
+            showShortcutsOverlay.toggle()
+            return .handled
         case "0", "1", "2", "3", "4", "5":
             if let digit = Int(keyPress.characters) { setRating(digit) }
             return .handled
@@ -1463,6 +1537,9 @@ struct SlideshowView: View {
     }
 
     private func rotateClockwise() {
+        if let url = imageLoader.currentImageURL {
+            registerUndoForEdit(url: url, actionName: "Rotate")
+        }
         rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
@@ -1471,6 +1548,9 @@ struct SlideshowView: View {
     }
 
     private func rotateCounterClockwise() {
+        if let url = imageLoader.currentImageURL {
+            registerUndoForEdit(url: url, actionName: "Rotate")
+        }
         rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
         if let url = imageLoader.currentImageURL {
             rotationAngles[url] = rotationAngle
@@ -1680,6 +1760,7 @@ struct SlideshowView: View {
 
     func removeEdit(_ tag: EditStepTag) {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Remove \(tag.undoActionName)")
         clearCachesDownstream(of: tag, for: url)
         clearCacheForStep(tag, url: url)
         editStacks[url]?.remove(caseTag: tag)
@@ -1690,6 +1771,8 @@ struct SlideshowView: View {
     }
 
     private func recomputeStep(_ step: EditStep, for url: URL) {
+        isRecomputingStep = true
+        defer { isRecomputingStep = false }
         switch step {
         case .enhance: enhanceCurrentImage()
         case .smooth(let noiseLevel): smoothCurrentImage(noiseLevel: noiseLevel)
@@ -1817,6 +1900,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let enhancedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let enhancedNSImage = NSImage(cgImage: enhancedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Enhance")
             enhancedImages[url] = enhancedNSImage
             clearCachesDownstream(of: .enhance, for: url)
             editStacks[url, default: EditStack()].append(.enhance)
@@ -1849,6 +1933,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let smoothedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let smoothedNSImage = NSImage(cgImage: smoothedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Smooth")
             smoothedImages[url] = smoothedNSImage
             clearCachesDownstream(of: .smooth, for: url)
             editStacks[url, default: EditStack()].append(.smooth(noiseLevel: noiseLevel))
@@ -1880,6 +1965,7 @@ struct SlideshowView: View {
         let context = CIContext()
         if let sharpenedCGImage = context.createCGImage(outputImage, from: outputImage.extent) {
             let sharpenedNSImage = NSImage(cgImage: sharpenedCGImage, size: sourceImage.size)
+            registerUndoForEdit(url: url, actionName: "Sharpen")
             sharpenedImages[url] = sharpenedNSImage
             clearCachesDownstream(of: .sharpen, for: url)
             editStacks[url, default: EditStack()].append(.sharpen)
@@ -1973,6 +2059,7 @@ struct SlideshowView: View {
 
     private func flipCurrentImageHorizontal() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Flip Horizontal")
         let key = url.absoluteString
         if flippedHorizontally.contains(key) { flippedHorizontally.remove(key) } else { flippedHorizontally.insert(key) }
         effectImages[url] = nil
@@ -1982,6 +2069,7 @@ struct SlideshowView: View {
 
     private func flipCurrentImageVertical() {
         guard let url = imageLoader.currentImageURL else { return }
+        registerUndoForEdit(url: url, actionName: "Flip Vertical")
         let key = url.absoluteString
         if flippedVertically.contains(key) { flippedVertically.remove(key) } else { flippedVertically.insert(key) }
         effectImages[url] = nil
@@ -1993,6 +2081,7 @@ struct SlideshowView: View {
         guard let url = imageLoader.currentImageURL else { return }
         let name = filterName.flatMap { $0.isEmpty ? nil : $0 }
         guard imageEffects[url] != name else { return }
+        registerUndoForEdit(url: url, actionName: "Photo Effect")
         imageEffects[url] = name
         effectImages[url] = nil
         saveFavourites()
@@ -2078,6 +2167,7 @@ struct SlideshowView: View {
     private func applyDenoise() {
         guard let url = imageLoader.currentImageURL,
               let result = currentDisplayImage else { cancelDenoise(); return }
+        registerUndoForEdit(url: url, actionName: "Denoise")
         smoothedImages[url] = result
         clearCachesDownstream(of: .smooth, for: url)
         editStacks[url, default: EditStack()].append(.smooth(noiseLevel: denoiseLevel / 1000.0))
@@ -2258,6 +2348,7 @@ struct SlideshowView: View {
 
                 let result = NSImage(cgImage: outCGImage, size: NSSize(width: outW, height: outH))
                 DispatchQueue.main.async {
+                    self.registerUndoForEdit(url: targetURL, actionName: "Upscale")
                     self.upscaledImages[targetURL] = result
                     self.upscaleFactors[targetURL] = scale
                     self.clearCachesDownstream(of: .upscale, for: targetURL)
