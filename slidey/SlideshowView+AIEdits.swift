@@ -80,8 +80,6 @@ extension SlideshowView {
                 bytesPerRow: bytesPerRow, space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
             ) else { return }
-            bitmapCtx.translateBy(x: 0, y: CGFloat(height))
-            bitmapCtx.scaleBy(x: 1, y: -1)
             bitmapCtx.draw(srcCG, in: CGRect(x: 0, y: 0, width: width, height: height))
             guard let data = bitmapCtx.data else { return }
             let buffer = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
