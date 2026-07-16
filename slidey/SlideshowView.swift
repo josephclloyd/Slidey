@@ -145,6 +145,7 @@ struct SlideshowView: View {
     @State var isFaceRestoring = false
     @State var faceRestoreProgress: Double = 0
     @State var showNoFaceAlert = false
+    @State var showNoRedEyeDetectedAlert = false
     @State var redEyedImages: [URL: NSImage] = [:]
     @State var backgroundRemovedImages: [URL: NSImage] = [:]
     @State var artifactRemovedImages: [URL: NSImage] = [:]
