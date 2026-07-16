@@ -102,12 +102,18 @@ extension SlideshowView {
                         let r = CGFloat(buffer[offset])
                         let g = CGFloat(buffer[offset + 1])
                         let b = CGFloat(buffer[offset + 2])
-                        let redRatio = r / max(g + b, 1)
+                        // Absolute red-dominance instead of a ratio: r / (g+b) > 1.5 is too
+                        // strict for real (compressed/blurred) photos - a visibly red-eye
+                        // pixel like r=140,g=70,b=60 only scores ~1.08 on that ratio despite
+                        // being clearly red, so real red-eye was going undetected entirely.
+                        // A pure-white catchlight has redDominance ~0 regardless of
+                        // brightness, so this also makes the old upper brightness bound
+                        // redundant - dropped it rather than keep a threshold with no effect.
+                        let redDominance = r - max(g, b)
                         let brightness = (r + g + b) / 3
-                        if redRatio > 1.5 && brightness > 30 && brightness < 240 {
+                        if redDominance > 25 && brightness > 15 {
                             let fade = 1 - (dist / CGFloat(eye.radius))
-                            let redExcess = r - max(g, b)
-                            let newR = r - redExcess * fade
+                            let newR = r - redDominance * fade
                             buffer[offset] = UInt8(max(0, min(255, newR)))
                             pixelsChanged += 1
                         }
