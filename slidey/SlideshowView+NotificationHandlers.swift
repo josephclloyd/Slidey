@@ -177,6 +177,11 @@ extension SlideshowView {
         } message: {
             Text("No faces were found in this image.")
         }
+        .alert("No Red-Eye Detected", isPresented: $showNoRedEyeDetectedAlert) {
+            Button("OK") {}
+        } message: {
+            Text("Faces were found but no red-eye was detected in this image.")
+        }
         .alert("Image Appears to Be in Color", isPresented: $showColorConfirmAlert) {
             Button("Colorize Anyway") { colorizeCurrentImage(force: true) }
             Button("Cancel", role: .cancel) {}
