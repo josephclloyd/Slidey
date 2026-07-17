@@ -33,6 +33,19 @@ private func maskPixel(_ cg: CGImage, x: Int, y: Int) -> UInt8 {
     return buffer[y * w + x]
 }
 
+private func assertPointEqual(
+    _ actual: CGPoint?,
+    _ expected: CGPoint,
+    accuracy: CGFloat = 1e-10,
+    file: StaticString = #file,
+    line: UInt = #line
+) {
+    XCTAssertNotNil(actual, file: file, line: line)
+    guard let actual else { return }
+    XCTAssertEqual(actual.x, expected.x, accuracy: accuracy, file: file, line: line)
+    XCTAssertEqual(actual.y, expected.y, accuracy: accuracy, file: file, line: line)
+}
+
 // MARK: - Image helpers
 
 /// An image whose visual top half is `top` and bottom half is `bottom`.
@@ -160,14 +173,14 @@ final class CropControllerHandleTests: XCTestCase {
         controller.pendingRegion = CropRegion(x: 0.2, y: 0.3, width: 0.4, height: 0.2)
         let positions = Dictionary(uniqueKeysWithValues: controller.handlePositions())
         XCTAssertEqual(positions.count, 8)
-        XCTAssertEqual(positions[.topLeft], CGPoint(x: 0.2, y: 0.3))
-        XCTAssertEqual(positions[.topRight], CGPoint(x: 0.6, y: 0.3))
-        XCTAssertEqual(positions[.bottomLeft], CGPoint(x: 0.2, y: 0.5))
-        XCTAssertEqual(positions[.bottomRight], CGPoint(x: 0.6, y: 0.5))
-        XCTAssertEqual(positions[.top], CGPoint(x: 0.4, y: 0.3))
-        XCTAssertEqual(positions[.bottom], CGPoint(x: 0.4, y: 0.5))
-        XCTAssertEqual(positions[.left], CGPoint(x: 0.2, y: 0.4))
-        XCTAssertEqual(positions[.right], CGPoint(x: 0.6, y: 0.4))
+        assertPointEqual(positions[.topLeft], CGPoint(x: 0.2, y: 0.3))
+        assertPointEqual(positions[.topRight], CGPoint(x: 0.6, y: 0.3))
+        assertPointEqual(positions[.bottomLeft], CGPoint(x: 0.2, y: 0.5))
+        assertPointEqual(positions[.bottomRight], CGPoint(x: 0.6, y: 0.5))
+        assertPointEqual(positions[.top], CGPoint(x: 0.4, y: 0.3))
+        assertPointEqual(positions[.bottom], CGPoint(x: 0.4, y: 0.5))
+        assertPointEqual(positions[.left], CGPoint(x: 0.2, y: 0.4))
+        assertPointEqual(positions[.right], CGPoint(x: 0.6, y: 0.4))
     }
 
     func testDisplayRegionPrefersPendingRegion() {
