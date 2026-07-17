@@ -157,13 +157,16 @@ extension SlideshowView {
                     Button("Done") { closeLocalAdjustmentsHUD() }
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityHint("Commits any painted layer and closes local adjustments")
                     Spacer()
                     Button("Cancel") { cancelLocalAdjustmentsHUD() }
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityHint("Discards local adjustments")
                     Button("Commit Layer") { commitLocalAdjustmentLayer() }
                         .buttonStyle(.borderedProminent)
                         .disabled(!localAdjController.hasPainted)
+                        .accessibilityHint("Bakes the painted mask and slider settings into a new adjustment layer")
                 }
 
                 Text("Paint mask, adjust sliders, commit. ⏎ commit · Esc cancel · [ ] brush size")
@@ -187,10 +190,13 @@ extension SlideshowView {
             @Bindable var ctrl = localAdjController
             Slider(value: $ctrl.brushRadius, in: 5...200)
                 .tint(.white)
+                .accessibilityLabel("Brush size")
+                .accessibilityValue("\(Int(localAdjController.brushRadius)) points")
             Text("\(Int(localAdjController.brushRadius))")
                 .monospacedDigit()
                 .foregroundColor(.white.opacity(0.7))
                 .frame(width: 50, alignment: .trailing)
+                .accessibilityHidden(true)
         }
     }
 
@@ -202,10 +208,13 @@ extension SlideshowView {
             Slider(value: value, in: range)
                 .onChange(of: value.wrappedValue) { _, _ in scheduleLocalAdjPreview() }
                 .tint(.white)
+                .accessibilityLabel(label)
+                .accessibilityValue(String(format: "%+.2f", value.wrappedValue))
             Text(String(format: "%+.2f", value.wrappedValue))
                 .monospacedDigit()
                 .foregroundColor(.white.opacity(0.7))
                 .frame(width: 50, alignment: .trailing)
+                .accessibilityHidden(true)
         }
     }
 

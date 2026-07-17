@@ -25,10 +25,14 @@ extension SlideshowView {
                                 .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Histogram channels")
+                        .accessibilityValue(histogramShowRGB ? "RGB" : "Luminance")
+                        .accessibilityHint("Toggles the histogram between RGB and luminance")
                     }
                     if let data = histogramData {
                         HistogramView(data: data, showRGB: histogramShowRGB)
                             .frame(height: 60)
+                            .accessibilityHidden(true)
                     }
                     adjustmentRow("Exposure", value: $adjustments.exposure, range: -2...2)
                     adjustmentRow("Highlights", value: $adjustments.highlights, range: -1...1)
@@ -46,8 +50,10 @@ extension SlideshowView {
                         Button("Cancel") { cancelAdjustmentsHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
+                            .accessibilityHint("Discards these adjustments")
                         Button("Apply") { applyAdjustmentsToImage() }
                             .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Applies these adjustments to the image")
                     }
                 }
                 .padding(20)
@@ -68,10 +74,13 @@ extension SlideshowView {
             Slider(value: value, in: range)
                 .onChange(of: value.wrappedValue) { _, _ in scheduleAdjustmentsPreview() }
                 .tint(.white)
+                .accessibilityLabel(label)
+                .accessibilityValue(String(format: "%+.2f", value.wrappedValue))
             Text(String(format: "%+.2f", value.wrappedValue))
                 .monospacedDigit()
                 .foregroundColor(.white.opacity(0.7))
                 .frame(width: 50, alignment: .trailing)
+                .accessibilityHidden(true)
         }
     }
 

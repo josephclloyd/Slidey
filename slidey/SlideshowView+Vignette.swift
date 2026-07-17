@@ -17,16 +17,21 @@ extension SlideshowView {
                         Text(String(format: "%.1f", vignetteIntensity))
                             .monospacedDigit()
                             .foregroundColor(.white.opacity(0.7))
+                            .accessibilityHidden(true)
                     }
                     Slider(value: $vignetteIntensity, in: 0...2, step: 0.1)
                         .onChange(of: vignetteIntensity) { _, _ in scheduleVignettePreview() }
                         .tint(.white)
+                        .accessibilityLabel("Vignette intensity")
+                        .accessibilityValue(String(format: "%.1f", vignetteIntensity))
                     HStack(spacing: 16) {
                         Button("Cancel") { cancelVignetteHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
+                            .accessibilityHint("Discards the vignette")
                         Button("Apply") { applyVignetteToImage() }
                             .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Applies the vignette to the image")
                     }
                 }
                 .padding(20)
