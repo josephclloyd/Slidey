@@ -42,7 +42,12 @@ class ImageLoader: ObservableObject {
     }
     var hasUnfilteredImages: Bool { !allImageURLs.isEmpty }
 
-    let supportedExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
+    let supportedExtensions = [
+        "jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp",
+        // RAW formats decoded via ImageIO/CGImageSource (view/browse only,
+        // no demosaicing or white-balance controls — see #282).
+        "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw"
+    ]
 
     /// Maximum decoded pixel count we will accept. Guards against
     /// decompression bombs - small files that decode to enormous bitmaps and
