@@ -69,6 +69,12 @@ final class SupportedExtensionTests: XCTestCase {
         XCTAssertTrue(loader.supportedExtensions.contains("webp"))
     }
 
+    func testAcceptsRAW() {
+        for ext in ["cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw"] {
+            XCTAssertTrue(loader.supportedExtensions.contains(ext), "expected RAW extension \(ext) to be supported")
+        }
+    }
+
     func testRejectsVideo() {
         XCTAssertFalse(loader.supportedExtensions.contains("mp4"))
         XCTAssertFalse(loader.supportedExtensions.contains("mov"))
