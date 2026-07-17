@@ -74,8 +74,38 @@ extension SlideshowView {
                     cropVisual(containerSize: size)
                         .allowsHitTesting(false)
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Crop region")
+                .accessibilityValue(cropAccessibilityValue)
+                .accessibilityHint("Adjust to resize the crop region. Apply or cancel using the actions.")
+                .accessibilityAction(named: "Apply crop") { confirmCrop() }
+                .accessibilityAction(named: "Cancel crop") { cancelCrop() }
+                .accessibilityAdjustableAction { adjustCropRegionForAccessibility($0) }
             }
         }
+    }
+
+    private var cropAccessibilityValue: String {
+        guard let region = cropController.pendingRegion else {
+            return "No crop region defined. Drag on the image to define one."
+        }
+        let widthPct = Int((region.width * 100).rounded())
+        let heightPct = Int((region.height * 100).rounded())
+        return "\(widthPct) percent wide by \(heightPct) percent tall"
+    }
+
+    private func adjustCropRegionForAccessibility(_ direction: AccessibilityAdjustmentDirection) {
+        guard var region = cropController.pendingRegion else { return }
+        let delta: Double = direction == .increment ? 0.05 : -0.05
+        let centerX = region.x + region.width / 2
+        let centerY = region.y + region.height / 2
+        let newWidth = min(max(region.width + delta, 0.05), 1.0)
+        let newHeight = min(max(region.height + delta, 0.05), 1.0)
+        region.width = newWidth
+        region.height = newHeight
+        region.x = min(max(centerX - newWidth / 2, 0), 1 - newWidth)
+        region.y = min(max(centerY - newHeight / 2, 0), 1 - newHeight)
+        if region.isValid { cropController.pendingRegion = region }
     }
 
     @ViewBuilder private func cropVisual(containerSize: CGSize) -> some View {

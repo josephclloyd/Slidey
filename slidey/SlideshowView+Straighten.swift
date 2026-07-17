@@ -17,10 +17,13 @@ extension SlideshowView {
                         Text(String(format: "%+.1f\u{00b0}", straightenAngle))
                             .monospacedDigit()
                             .foregroundColor(.white.opacity(0.7))
+                            .accessibilityHidden(true)
                     }
                     Slider(value: $straightenAngle, in: -15...15, step: 0.1)
                         .onChange(of: straightenAngle) { _, _ in scheduleStraightenPreview() }
                         .tint(.white)
+                        .accessibilityLabel("Straighten angle")
+                        .accessibilityValue(String(format: "%+.1f degrees", straightenAngle))
                     HStack(spacing: 16) {
                         Button("Reset") {
                             straightenAngle = 0
@@ -28,12 +31,15 @@ extension SlideshowView {
                         }
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityHint("Resets the angle to zero")
                         Spacer()
                         Button("Cancel") { cancelStraightenHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
+                            .accessibilityHint("Discards the straighten adjustment")
                         Button("Apply") { applyStraightenToImage() }
                             .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Applies the straighten adjustment to the image")
                     }
                 }
                 .padding(20)

@@ -18,30 +18,38 @@ extension SlideshowView {
                             Text("\(Int(grainReductionProgress * 100))%")
                                 .monospacedDigit()
                                 .foregroundColor(.white.opacity(0.7))
+                                .accessibilityHidden(true)
                         } else {
                             Text("\(Int(grainReductionStrength))%")
                                 .monospacedDigit()
                                 .foregroundColor(.white.opacity(0.7))
+                                .accessibilityHidden(true)
                         }
                     }
                     if isReducingGrain {
                         ProgressView(value: grainReductionProgress)
                             .progressViewStyle(.linear)
                             .tint(.white)
+                            .accessibilityLabel("Grain reduction progress")
+                            .accessibilityValue("\(Int(grainReductionProgress * 100)) percent")
                     } else {
                         Slider(value: $grainReductionStrength, in: 0...100, step: 1)
                             .onChange(of: grainReductionStrength) { _, _ in
                                 DispatchQueue.main.async { updateGrainReductionBlend() }
                             }
                             .tint(.white)
+                            .accessibilityLabel("Grain reduction strength")
+                            .accessibilityValue("\(Int(grainReductionStrength)) percent")
                     }
                     HStack(spacing: 16) {
                         Button("Cancel") { cancelGrainReductionHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
+                            .accessibilityHint("Discards grain reduction")
                         Button("Apply") { applyGrainReduction() }
                             .buttonStyle(.borderedProminent)
                             .disabled(isReducingGrain)
+                            .accessibilityHint("Applies grain reduction to the image")
                     }
                 }
                 .padding(20)
