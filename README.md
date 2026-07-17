@@ -133,6 +133,8 @@ Vignette, Local Adjustments, and Photo Effects are menu-driven (Edit ▸ Tone & 
 - **⌘P** — Print
 - **⌘Z** — Undo last edit
 
+> **Note:** ⌥⌘C is shared between **Copy to Folder** and **Copy Adjustments** — both are bound to the same key, so whichever the system resolves first fires.
+
 ### Window
 - **⌘N** — New window
 - **⌘,** — Settings
@@ -168,7 +170,7 @@ Vignette, Local Adjustments, and Photo Effects are menu-driven (Edit ▸ Tone & 
 
 ### Edit
 - **Copy Image** (`⌘C`), **Copy File Path** (`⇧⌘C`)
-- **Copy / Paste Adjustments** (`⌥⌘C` / `⌥⌘V`)
+- **Copy / Paste Adjustments** (`⌥⌘C` / `⌥⌘V`) — note ⌥⌘C is shared with **Copy to Folder** above; whichever the system resolves first fires
 - **Scale to Native Size** (`s`), **Scale to Fill Screen** (`f`)
 - **Enhance** submenu — auto-enhance, smooth, sharpen, AI upscale (2×/4×)
 - **Denoise & Cleanup** submenu — denoise, JPEG cleanup, AI grain reduction, remove artifacts
