@@ -24,6 +24,9 @@ extension SlideshowView {
                                 .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Histogram channels")
+                        .accessibilityValue(histogramShowRGB ? "RGB" : "Luminance")
+                        .accessibilityHint("Toggles the histogram between RGB and luminance")
                         Spacer()
                         Picker("", selection: $curvesChannel) {
                             ForEach(CurveChannel.allCases, id: \.self) { ch in
@@ -32,10 +35,12 @@ extension SlideshowView {
                         }
                         .pickerStyle(.segmented)
                         .frame(width: 220)
+                        .accessibilityLabel("Curve channel")
                     }
                     if let data = histogramData {
                         HistogramView(data: data, showRGB: histogramShowRGB)
                             .frame(height: 60)
+                            .accessibilityHidden(true)
                     }
                     CurveGraphView(
                         points: curvePointsBinding,
@@ -50,12 +55,15 @@ extension SlideshowView {
                         }
                         .buttonStyle(.bordered)
                         .tint(.white)
+                        .accessibilityHint("Resets the current channel curve to linear")
                         Spacer()
                         Button("Cancel") { cancelCurvesHUD() }
                             .buttonStyle(.bordered)
                             .tint(.white)
+                            .accessibilityHint("Discards the curves adjustment")
                         Button("Apply") { applyCurvesToImage() }
                             .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Applies the curves adjustment to the image")
                     }
                 }
                 .padding(20)

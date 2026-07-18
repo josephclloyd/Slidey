@@ -3041,10 +3041,15 @@ struct SlideshowView: View {
 
     func setAsDesktopPicture() {
         guard let url = imageLoader.currentImageURL else { return }
-        guard let screen = NSScreen.main else { return }
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return }
         do {
-            try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
-            let message = "Set as desktop picture"
+            for screen in screens {
+                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+            }
+            let message = screens.count > 1
+                ? "Set as desktop picture on \(screens.count) displays"
+                : "Set as desktop picture"
             savedToast = message
             savedToastIsError = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {

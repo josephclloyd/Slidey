@@ -95,6 +95,23 @@ struct CurveGraphView: View {
         )
         .gesture(curveDragGesture)
         .frame(width: graphSize, height: graphSize)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tone curve, \(channel.rawValue) channel")
+        .accessibilityValue(accessibilityValueDescription)
+        .accessibilityHint("Adjust to raise or lower the midtones")
+        .accessibilityAdjustableAction { direction in
+            let delta: CGFloat = direction == .increment ? 0.05 : -0.05
+            let newY = min(max(points.p2.y + delta, 0), 1)
+            points.p2 = CGPoint(x: points.p2.x, y: newY)
+            onChanged()
+        }
+    }
+
+    private var accessibilityValueDescription: String {
+        if points.isIdentity {
+            return "Linear, no change"
+        }
+        return "Midtone output \(Int((points.p2.y * 100).rounded())) percent"
     }
 
     private var curveDragGesture: some Gesture {
