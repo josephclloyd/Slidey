@@ -342,6 +342,23 @@ mcx call _work_items phase_state_delete '{"workItemId":"#N","repoRoot":"/Users/j
 recomputing and setting `review_round`/`repair_round` back down by one — still works as a
 fallback if the flag mechanism itself ever needs bypassing, but prefer the flag.)
 
+**Non-quota `pending:` sentinel: session never spawned.** A `pending:...` session ID can also
+get stuck when the review phase was called but the orchestrator did not execute the resulting
+spawn command (e.g., due to a mid-session interruption or context compaction). The symptom is
+`mcx phase run review` returning `in-flight` with `sessionId: "pending:..."` while `mcx claude
+ls` shows no corresponding session. Fix: clear `review_session_id`, then re-run. If the second
+run returns `action: "spawn"` (with a full `command` array), execute the spawn manually:
+```bash
+mcx call _work_items phase_state_delete '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"review_session_id"}'
+mcx phase run review --work-item "#N"
+# If result is action:"spawn", execute:
+mcx claude spawn --model sonnet --cwd /Users/joe/Projects/xCode/slidey \
+  --allow Read Glob Grep Bash \
+  -t "<prompt-from-spawn-output>"
+```
+The session ID returned by `mcx claude spawn` must then be recorded via `phase_state_set` if
+the phase engine doesn't pick it up automatically. Hit in Sprint 31 for #290's review.
+
 **Verify the retry flag actually held** before re-spawning — don't just trust that the
 returned action came back as `spawn` and move on:
 ```bash
