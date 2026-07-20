@@ -1512,3 +1512,86 @@ final class NoiseEstimatorTests: XCTestCase {
         XCTAssertLessThan(sigma!, 800, "Gradient image should not trigger noise suggestion")
     }
 }
+
+// MARK: - Metadata editing tests
+
+final class MetadataEditingTests: XCTestCase {
+    func testEditMetadataNotificationFires() {
+        let expectation = expectation(description: "editMetadata fires")
+        let observer = NotificationCenter.default.addObserver(forName: .editMetadata, object: nil, queue: .main) { _ in expectation.fulfill() }
+        NotificationCenter.default.post(name: .editMetadata, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
+    func testEditMetadataNotificationNameMatchesExpectedString() {
+        XCTAssertEqual(NSNotification.Name.editMetadata.rawValue, "EditMetadata")
+    }
+
+    func testKeywordListParsingTrimsAndDropsEmpties() {
+        let meta = ImageMetadata(caption: "", keywords: " sunset ,, beach , ,ocean ", copyright: "")
+        XCTAssertEqual(meta.keywordList, ["sunset", "beach", "ocean"])
+    }
+
+    func testKeywordListEmptyStringProducesNoKeywords() {
+        XCTAssertTrue(ImageMetadata(caption: "", keywords: "   ", copyright: "").keywordList.isEmpty)
+    }
+
+    private func makeJPEG() throws -> URL {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        )!
+        let data = rep.representation(using: .jpeg, properties: [:])!
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("metadata-test-\(UUID().uuidString).jpg")
+        try data.write(to: url)
+        return url
+    }
+
+    func testWriteThenReadRoundTrip() throws {
+        let url = try makeJPEG()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let input = ImageMetadata(
+            caption: "A test caption",
+            keywords: "alpha, beta, gamma",
+            copyright: "© 2026 Test"
+        )
+        XCTAssertTrue(SlideshowView.writeImageMetadata(input, to: url))
+
+        let read = SlideshowView.readImageMetadata(for: url)
+        XCTAssertEqual(read.caption, "A test caption")
+        XCTAssertEqual(read.keywordList, ["alpha", "beta", "gamma"])
+        XCTAssertEqual(read.copyright, "© 2026 Test")
+    }
+
+    func testWriteClearsFieldsWhenEmpty() throws {
+        let url = try makeJPEG()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertTrue(SlideshowView.writeImageMetadata(
+            ImageMetadata(caption: "keep", keywords: "one, two", copyright: "notice"), to: url))
+        XCTAssertTrue(SlideshowView.writeImageMetadata(.empty, to: url))
+
+        let read = SlideshowView.readImageMetadata(for: url)
+        XCTAssertEqual(read.caption, "")
+        XCTAssertTrue(read.keywordList.isEmpty)
+        XCTAssertEqual(read.copyright, "")
+    }
+
+    func testWriteReturnsFalseForMissingFile() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("does-not-exist-\(UUID().uuidString).jpg")
+        XCTAssertFalse(SlideshowView.writeImageMetadata(
+            ImageMetadata(caption: "x", keywords: "", copyright: ""), to: url))
+    }
+
+    func testReadMetadataForMissingFileReturnsEmpty() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-\(UUID().uuidString).jpg")
+        XCTAssertEqual(SlideshowView.readImageMetadata(for: url), .empty)
+    }
+}

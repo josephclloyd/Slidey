@@ -108,4 +108,6 @@ extension NSNotification.Name {
 
     static let batchApplyAll = NSNotification.Name("BatchApplyAll")
     static let batchApplyFavourites = NSNotification.Name("BatchApplyFavourites")
+
+    static let editMetadata = NSNotification.Name("EditMetadata")
 }
