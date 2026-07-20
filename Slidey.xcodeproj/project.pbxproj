@@ -40,6 +40,9 @@
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
 		MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = MD100001000000000000001 /* SlideshowView+Metadata.swift */; };
+		DD100002000000000000001 /* DuplicateDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD100001000000000000001 /* DuplicateDetector.swift */; };
+		DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = DU100001000000000000001 /* SlideshowView+Duplicates.swift */; };
+		DT100002000000000000001 /* DuplicateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DT100001000000000000001 /* DuplicateDetectorTests.swift */; };
 		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
 		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
 		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
@@ -99,6 +102,9 @@
 		ST100001000000000000001 /* SlideshowView+Straighten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Straighten.swift"; sourceTree = "<group>"; };
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
 		MD100001000000000000001 /* SlideshowView+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Metadata.swift"; sourceTree = "<group>"; };
+		DD100001000000000000001 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
+		DU100001000000000000001 /* SlideshowView+Duplicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Duplicates.swift"; sourceTree = "<group>"; };
+		DT100001000000000000001 /* DuplicateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetectorTests.swift; sourceTree = "<group>"; };
 		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
 		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
@@ -160,6 +166,8 @@
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
 				MD100001000000000000001 /* SlideshowView+Metadata.swift */,
+				DU100001000000000000001 /* SlideshowView+Duplicates.swift */,
+				DD100001000000000000001 /* DuplicateDetector.swift */,
 				EX100001000000000000001 /* SlideshowView+Export.swift */,
 				PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */,
 				LA100001000000000000001 /* LocalAdjustmentLayer.swift */,
@@ -204,6 +212,7 @@
 				I1000003000000000000001 /* EditStackTests.swift */,
 				K1000003000000000000001 /* RatingTests.swift */,
 				P1000003000000000000001 /* EditingToolsCoordinateTests.swift */,
+				DT100001000000000000001 /* DuplicateDetectorTests.swift */,
 			);
 			path = SlideyTests;
 			sourceTree = "<group>";
@@ -340,6 +349,8 @@
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
 				MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */,
+				DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */,
+				DD100002000000000000001 /* DuplicateDetector.swift in Sources */,
 				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
 				PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */,
 				LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */,
@@ -374,6 +385,7 @@
 				I1000004000000000000001 /* EditStackTests.swift in Sources */,
 				K1000004000000000000001 /* RatingTests.swift in Sources */,
 				P1000004000000000000001 /* EditingToolsCoordinateTests.swift in Sources */,
+				DT100002000000000000001 /* DuplicateDetectorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

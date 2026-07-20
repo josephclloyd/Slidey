@@ -135,7 +135,10 @@ struct SlideshowView: View {
     @State var adjustmentsTask: Task<Void, Never>?
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
-    @State private var showFavouritesOnly: Bool = false
+    @State var showFavouritesOnly: Bool = false
+    @State var showDuplicatesOnly: Bool = false
+    @State var duplicateURLStrings: Set<String> = []
+    @State var isDetectingDuplicates: Bool = false
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
     @State private var keyUpMonitor: Any?
@@ -234,7 +237,7 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if (showFavouritesOnly || minimumRatingFilter > 0) && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
                 Text("\u{2605}")
                     .font(.system(size: 48))
@@ -242,7 +245,7 @@ struct SlideshowView: View {
                 Text("No images match the current filter")
                     .font(.title2)
                     .foregroundColor(.white.opacity(0.7))
-                Text(showFavouritesOnly ? "Press x to favourite images, then v to filter" : "Rate images with 1\u{2013}5, then filter from the Slideshow menu")
+                Text(filterEmptyStateHint)
                     .font(.body)
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -1216,6 +1219,9 @@ struct SlideshowView: View {
         case "d":
             showDebugWindow.toggle()
             return .handled
+        case "D":
+            toggleDuplicatesMode()
+            return .handled
         case "t":
             showThumbnails.toggle()
             return .handled
@@ -1437,6 +1443,11 @@ struct SlideshowView: View {
         infoOverlayURLs = []
         imageInfoCache = [:]
         imageRatings = [:]
+        if showDuplicatesOnly {
+            showDuplicatesOnly = false
+            duplicateURLStrings = []
+            updateFilter()
+        }
         zoomPan.reset()
 
         slideshow.resetShuffleQueue()
@@ -3264,23 +3275,6 @@ struct SlideshowView: View {
         savedToastIsError = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             if savedToast == message { savedToast = nil }
-        }
-    }
-
-    func updateFilter() {
-        let wantFavs = showFavouritesOnly
-        let minRating = minimumRatingFilter
-        let favs = favouriteURLStrings
-        let ratings = imageRatings
-
-        if !wantFavs && minRating <= 0 {
-            imageLoader.urlFilter = nil
-        } else {
-            imageLoader.urlFilter = { url in
-                if wantFavs && !favs.contains(url.absoluteString) { return false }
-                if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
-                return true
-            }
         }
     }
 
