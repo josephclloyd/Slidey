@@ -360,6 +360,11 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(!imageLoaded)
 
+            Button("Edit Metadata\u{2026}") {
+                NotificationCenter.default.post(name: .editMetadata, object: nil)
+            }
+            .disabled(!imageLoaded)
+
             Button("Move to Trash") {
                 NotificationCenter.default.post(name: .moveToTrash, object: nil)
             }

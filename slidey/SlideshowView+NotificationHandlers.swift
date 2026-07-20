@@ -28,6 +28,16 @@ extension SlideshowView {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.renameImage)) { _ in
             ifKeyWindow { renameCurrentImage() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.editMetadata)) { _ in
+            ifKeyWindow { openMetadataEditor() }
+        }
+        .sheet(isPresented: $showMetadataEditor) {
+            if let url = imageLoader.currentImageURL {
+                MetadataEditorView(url: url) { edited in
+                    saveImageMetadata(edited, to: url)
+                }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.moveToTrash)) { _ in
             ifKeyWindow { moveCurrentImageToTrash() }
         }

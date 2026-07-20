@@ -201,6 +201,8 @@ struct SlideshowView: View {
     @State var localAdjBaseImage: NSImage?
     @State var localAdjPreviewTask: Task<Void, Never>?
 
+    @State var showMetadataEditor: Bool = false
+
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
     }
@@ -1204,6 +1206,9 @@ struct SlideshowView: View {
             return .handled
         case "i":
             toggleInfoOverlay()
+            return .handled
+        case "I":
+            openMetadataEditor()
             return .handled
         case "n":
             showFilename.toggle()

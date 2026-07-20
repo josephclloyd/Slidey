@@ -39,6 +39,7 @@
 		CA100002000000000000001 /* CopiedAdjustments.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA100001000000000000001 /* CopiedAdjustments.swift */; };
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
+		MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = MD100001000000000000001 /* SlideshowView+Metadata.swift */; };
 		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
 		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
 		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
@@ -97,6 +98,7 @@
 		79EB805A07F24B97B6498EE2 /* SlideshowView+Curves.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Curves.swift"; sourceTree = "<group>"; };
 		ST100001000000000000001 /* SlideshowView+Straighten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Straighten.swift"; sourceTree = "<group>"; };
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
+		MD100001000000000000001 /* SlideshowView+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Metadata.swift"; sourceTree = "<group>"; };
 		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
 		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 				CA100001000000000000001 /* CopiedAdjustments.swift */,
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
+				MD100001000000000000001 /* SlideshowView+Metadata.swift */,
 				EX100001000000000000001 /* SlideshowView+Export.swift */,
 				PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */,
 				LA100001000000000000001 /* LocalAdjustmentLayer.swift */,
@@ -336,6 +339,7 @@
 				CA100002000000000000001 /* CopiedAdjustments.swift in Sources */,
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
+				MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */,
 				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
 				PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */,
 				LA100002000000000000001 /* LocalAdjustmentLayer.swift in Sources */,
