@@ -34,6 +34,36 @@ extension SlideshowView {
         showCompareMode = true
     }
 
+    /// Handles key presses that are valid in compare mode. Returns nil when
+    /// compare mode is not active (caller should continue normal handling).
+    func handleCompareModeKeyPress(_ key: KeyEquivalent) -> KeyPress.Result? {
+        guard showCompareMode else { return nil }
+        switch key {
+        case .escape:
+            exitCompareMode(); return .handled
+        case .leftArrow:
+            DispatchQueue.main.async { self.imageLoader.previousImage() }; return .handled
+        case .rightArrow:
+            DispatchQueue.main.async { self.imageLoader.nextImage() }; return .handled
+        default:
+            return .ignored
+        }
+    }
+
+    /// Called from onCurrentIndexChanged to keep the right pane in sync when
+    /// the user navigates while compare mode is active.
+    func updateComparePaneIfNeeded() {
+        guard showCompareMode,
+              let targetIndex = Self.compareTargetIndex(
+                  current: imageLoader.currentIndex,
+                  count: imageLoader.imageURLs.count)
+        else { return }
+        let targetURL = imageLoader.imageURLs[targetIndex]
+        compareURL = targetURL
+        compareImage = imageLoader.decodedImage(for: targetURL)
+        compareZoomPan.reset()
+    }
+
     func exitCompareMode() {
         showCompareMode = false
         compareImage = nil
@@ -46,10 +76,12 @@ extension SlideshowView {
     @ViewBuilder var compareModeContent: some View {
         HStack(spacing: 0) {
             ComparePaneView(image: effectiveDisplayImage, url: imageLoader.currentImageURL,
-                            zoomPan: zoomPan, rotation: $rotationAngle)
+                            zoomPan: zoomPan, rotation: $rotationAngle,
+                            showFilename: showFilename)
             Rectangle().fill(Color.white.opacity(0.4)).frame(width: 1)
             ComparePaneView(image: compareImage, url: compareURL,
-                            zoomPan: compareZoomPan, rotation: $compareRotation)
+                            zoomPan: compareZoomPan, rotation: $compareRotation,
+                            showFilename: showFilename)
         }
     }
 }
@@ -62,6 +94,7 @@ struct ComparePaneView: View {
     let url: URL?
     @Bindable var zoomPan: ZoomPanController
     @Binding var rotation: Angle
+    var showFilename: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -84,7 +117,7 @@ struct ComparePaneView: View {
                     ProgressView()
                 }
 
-                if let url {
+                if showFilename, let url {
                     VStack {
                         Spacer()
                         Text(url.lastPathComponent)
