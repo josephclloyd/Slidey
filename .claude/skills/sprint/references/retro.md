@@ -95,7 +95,7 @@ git push
 
 ## 7. Merge the sprint PR
 
-Convert draft → ready and arm auto-merge:
+Convert draft → ready and arm auto-merge. **`mcx pr merge` fails silently on a draft PR** (GraphQL: "Pull Request is still a draft") — always run `gh pr ready` first:
 
 ```bash
 gh pr ready <sprint-pr-number>

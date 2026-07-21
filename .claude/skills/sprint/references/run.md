@@ -396,6 +396,24 @@ git branch -D <branch-name>
 git checkout -- <modified-files>   # restore any partial edits
 ```
 
+**Mid-work quota hit (session left staged changes but no commit):** The most common recovery is `mcx claude send` to the idle session after quota resets — the session retains its context and can continue from where it stopped:
+```bash
+mcx call _metrics quota_status   # confirm available: true
+mcx claude log <sessionId> | tail -20   # see exactly where it stopped
+mcx claude send <sessionId> "Quota has reset. [Brief summary of where you left off and what remains.] Continue where you stopped."
+```
+This is faster than re-spawning and avoids re-deriving all context. The session goes from `idle` → `active` automatically. Hit in Sprint 32: session `bc292e96` stopped mid-pbxproj-registration; the send resume worked without losing any created files. Only re-spawn if the session left no useful state or if the quota hit was so early the branch itself doesn't exist.
+
+## Worktree cd-path persistence hazard
+
+**The Bash tool's working directory persists across calls.** A `cd /path/to/sprint-N-worktree` from one Bash call leaves all subsequent calls running inside that worktree. This causes silent failures: `sed` updates the worktree's files (not main's), `git` operations run against the sprint branch instead of main, and `git checkout main` fails with "already used by worktree."
+
+Two safe patterns:
+1. Always `cd` back to the main checkout in the same compound command: `cd /path/to/worktree && <operations> && cd /Users/joe/Projects/xCode/slidey`
+2. Use absolute paths throughout rather than `cd`ing at all: `sed -i '' ... "$WORKTREE/Slidey.xcodeproj/project.pbxproj"` rather than `cd "$WORKTREE" && sed -i '' ... Slidey.xcodeproj/project.pbxproj`
+
+Hit in Sprint 32: version-bump `sed` ran in the main worktree instead of the sprint worktree; required reverting main's `project.pbxproj` and re-running with an absolute path.
+
 Re-spawn after the quota resets. Do not attempt recovery of a zero-commit, failing-build branch — the session had made no meaningful progress.
 
 **Partial-progress case:** Do not discard — the work is usually complete.
