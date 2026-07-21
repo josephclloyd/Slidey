@@ -50,6 +50,7 @@ extension NSNotification.Name {
     static let showToolsGuide = NSNotification.Name("ShowToolsGuide")
     static let toggleShortcutsOverlay = NSNotification.Name("ToggleShortcutsOverlay")
     static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
+    static let compareSideBySide = NSNotification.Name("CompareSideBySide")
     static let toggleFullScreen = NSNotification.Name("ToggleFullScreen")
     static let zoomIn = NSNotification.Name("ZoomIn")
     static let zoomOut = NSNotification.Name("ZoomOut")
@@ -108,4 +109,6 @@ extension NSNotification.Name {
 
     static let batchApplyAll = NSNotification.Name("BatchApplyAll")
     static let batchApplyFavourites = NSNotification.Name("BatchApplyFavourites")
+
+    static let editMetadata = NSNotification.Name("EditMetadata")
 }

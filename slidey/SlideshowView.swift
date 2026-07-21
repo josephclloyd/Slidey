@@ -135,7 +135,11 @@ struct SlideshowView: View {
     @State var adjustmentsTask: Task<Void, Never>?
     @State private var smartZoomEnabled: Bool = false
     @State private var saliencyRects: [URL: CGRect] = [:]
-    @State private var showFavouritesOnly: Bool = false
+    @State var showFavouritesOnly: Bool = false
+    @State var showDuplicatesOnly: Bool = false
+    @State var duplicateURLStrings: Set<String> = []
+    @State var isDetectingDuplicates: Bool = false
+    @State var duplicateScanGeneration: Int = 0
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
     @State private var keyUpMonitor: Any?
@@ -201,6 +205,11 @@ struct SlideshowView: View {
     @State var localAdjBaseImage: NSImage?
     @State var localAdjPreviewTask: Task<Void, Never>?
 
+    @State var showMetadataEditor: Bool = false
+    @State var showCompareMode: Bool = false
+    @State var compareURL: URL?; @State var compareImage: NSImage?
+    @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
+
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
     }
@@ -232,7 +241,7 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if (showFavouritesOnly || minimumRatingFilter > 0) && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
                 Text("\u{2605}")
                     .font(.system(size: 48))
@@ -240,7 +249,7 @@ struct SlideshowView: View {
                 Text("No images match the current filter")
                     .font(.title2)
                     .foregroundColor(.white.opacity(0.7))
-                Text(showFavouritesOnly ? "Press x to favourite images, then v to filter" : "Rate images with 1\u{2013}5, then filter from the Slideshow menu")
+                Text(filterEmptyStateHint)
                     .font(.body)
                     .foregroundColor(.white.opacity(0.5))
             }
@@ -395,6 +404,7 @@ struct SlideshowView: View {
                                 ("z", "Smart zoom"),
                                 ("s / f", "Native / Fill"),
                                 ("n / i", "Filename / Info"),
+                                ("\u{2325}B", "Compare two images"),
                             ])
                             shortcutsSection("Enhance", items: [
                                 ("a / m / h", "Enhance / Smooth / Sharpen"),
@@ -684,6 +694,8 @@ struct SlideshowView: View {
 
             if imageLoader.imageURLs.isEmpty {
                 emptyStateContent
+            } else if showCompareMode {
+                compareModeContent
             } else {
                 imageDisplayContent
             }
@@ -857,6 +869,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareSideBySide)) { _ in
+            ifKeyWindow { toggleCompareMode() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
             ifKeyWindow { toggleFullScreen() }
         }
@@ -1009,6 +1024,11 @@ struct SlideshowView: View {
 
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
+        // Compare mode: only Escape acts (⌥B exit comes via menu); swallow the rest.
+        if showCompareMode {
+            if key == .escape { exitCompareMode(); return .handled }
+            return .ignored
+        }
 
         if showDenoiseHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelDenoise, apply: applyDenoise)
@@ -1205,11 +1225,17 @@ struct SlideshowView: View {
         case "i":
             toggleInfoOverlay()
             return .handled
+        case "I":
+            openMetadataEditor()
+            return .handled
         case "n":
             showFilename.toggle()
             return .handled
         case "d":
             showDebugWindow.toggle()
+            return .handled
+        case "D":
+            toggleDuplicatesMode()
             return .handled
         case "t":
             showThumbnails.toggle()
@@ -1432,6 +1458,13 @@ struct SlideshowView: View {
         infoOverlayURLs = []
         imageInfoCache = [:]
         imageRatings = [:]
+        duplicateScanGeneration &+= 1
+        isDetectingDuplicates = false
+        if showDuplicatesOnly {
+            showDuplicatesOnly = false
+            duplicateURLStrings = []
+            updateFilter()
+        }
         zoomPan.reset()
 
         slideshow.resetShuffleQueue()
@@ -3259,23 +3292,6 @@ struct SlideshowView: View {
         savedToastIsError = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             if savedToast == message { savedToast = nil }
-        }
-    }
-
-    func updateFilter() {
-        let wantFavs = showFavouritesOnly
-        let minRating = minimumRatingFilter
-        let favs = favouriteURLStrings
-        let ratings = imageRatings
-
-        if !wantFavs && minRating <= 0 {
-            imageLoader.urlFilter = nil
-        } else {
-            imageLoader.urlFilter = { url in
-                if wantFavs && !favs.contains(url.absoluteString) { return false }
-                if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
-                return true
-            }
         }
     }
 

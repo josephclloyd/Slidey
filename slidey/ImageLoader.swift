@@ -301,6 +301,13 @@ class ImageLoader: ObservableObject {
         return NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
     }
 
+    /// Decode an arbitrary image URL (bounded like the main path) without
+    /// touching the current-index cache or navigation state. Used by the
+    /// side-by-side comparison view to load its second pane.
+    func decodedImage(for url: URL) -> NSImage? {
+        decodeBoundedImage(at: url)
+    }
+
     private func preloadNeighbours() {
         let count = imageURLs.count
         guard count > 1 else { return }

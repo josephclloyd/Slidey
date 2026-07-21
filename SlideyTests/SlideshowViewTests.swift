@@ -1134,3 +1134,26 @@ final class CropControllerTests: XCTestCase {
         XCTAssertEqual(r.height, 0.5, accuracy: 1e-10)
     }
 }
+
+// MARK: - Compare Mode Tests
+
+final class CompareModeTests: XCTestCase {
+    func testTargetIsNextImage() {
+        XCTAssertEqual(SlideshowView.compareTargetIndex(current: 0, count: 5), 1)
+        XCTAssertEqual(SlideshowView.compareTargetIndex(current: 2, count: 5), 3)
+    }
+
+    func testTargetWrapsFromLastToFirst() {
+        XCTAssertEqual(SlideshowView.compareTargetIndex(current: 4, count: 5), 0)
+    }
+
+    func testTargetWithExactlyTwoImages() {
+        XCTAssertEqual(SlideshowView.compareTargetIndex(current: 0, count: 2), 1)
+        XCTAssertEqual(SlideshowView.compareTargetIndex(current: 1, count: 2), 0)
+    }
+
+    func testTargetNilWithFewerThanTwoImages() {
+        XCTAssertNil(SlideshowView.compareTargetIndex(current: 0, count: 1))
+        XCTAssertNil(SlideshowView.compareTargetIndex(current: 0, count: 0))
+    }
+}

@@ -66,6 +66,11 @@ struct ViewMenuCommands: Commands {
                 NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
             }
 
+            Button("Compare Side by Side") {
+                NotificationCenter.default.post(name: .compareSideBySide, object: nil)
+            }
+            .keyboardShortcut("b", modifiers: [.option])
+
             Button("Shortcuts Overlay (/)") {
                 NotificationCenter.default.post(name: .toggleShortcutsOverlay, object: nil)
             }
@@ -358,6 +363,11 @@ struct FileMenuCommands: Commands {
                 NotificationCenter.default.post(name: .renameImage, object: nil)
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(!imageLoaded)
+
+            Button("Edit Metadata\u{2026}") {
+                NotificationCenter.default.post(name: .editMetadata, object: nil)
+            }
             .disabled(!imageLoaded)
 
             Button("Move to Trash") {
