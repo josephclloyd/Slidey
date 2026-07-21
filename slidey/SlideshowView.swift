@@ -206,6 +206,9 @@ struct SlideshowView: View {
     @State var localAdjPreviewTask: Task<Void, Never>?
 
     @State var showMetadataEditor: Bool = false
+    @State var showCompareMode: Bool = false
+    @State var compareURL: URL?; @State var compareImage: NSImage?
+    @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -401,6 +404,7 @@ struct SlideshowView: View {
                                 ("z", "Smart zoom"),
                                 ("s / f", "Native / Fill"),
                                 ("n / i", "Filename / Info"),
+                                ("\u{2325}B", "Compare two images"),
                             ])
                             shortcutsSection("Enhance", items: [
                                 ("a / m / h", "Enhance / Smooth / Sharpen"),
@@ -690,6 +694,8 @@ struct SlideshowView: View {
 
             if imageLoader.imageURLs.isEmpty {
                 emptyStateContent
+            } else if showCompareMode {
+                compareModeContent
             } else {
                 imageDisplayContent
             }
@@ -863,6 +869,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSmartZoom)) { _ in
             ifKeyWindow { toggleSmartZoom() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareSideBySide)) { _ in
+            ifKeyWindow { toggleCompareMode() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
             ifKeyWindow { toggleFullScreen() }
         }
@@ -1015,6 +1024,11 @@ struct SlideshowView: View {
 
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
+        // Compare mode: only Escape acts (⌥B exit comes via menu); swallow the rest.
+        if showCompareMode {
+            if key == .escape { exitCompareMode(); return .handled }
+            return .ignored
+        }
 
         if showDenoiseHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelDenoise, apply: applyDenoise)

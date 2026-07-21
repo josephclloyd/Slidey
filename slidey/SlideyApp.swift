@@ -66,6 +66,11 @@ struct ViewMenuCommands: Commands {
                 NotificationCenter.default.post(name: .toggleSmartZoom, object: nil)
             }
 
+            Button("Compare Side by Side") {
+                NotificationCenter.default.post(name: .compareSideBySide, object: nil)
+            }
+            .keyboardShortcut("b", modifiers: [.option])
+
             Button("Shortcuts Overlay (/)") {
                 NotificationCenter.default.post(name: .toggleShortcutsOverlay, object: nil)
             }
