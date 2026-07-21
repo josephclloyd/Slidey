@@ -71,7 +71,7 @@ struct SlideshowView: View {
     @State var isProcessing = false
     @State var debugOutput = ""
     @State var showDebugWindow = false
-    @State private var showFilename = false
+    @State var showFilename = false
     @State var upscaleCancelled = false
     @State var upscaleProgress: Double = 0
     @State private var isDragOver = false
@@ -1024,11 +1024,7 @@ struct SlideshowView: View {
 
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
-        // Compare mode: only Escape acts (⌥B exit comes via menu); swallow the rest.
-        if showCompareMode {
-            if key == .escape { exitCompareMode(); return .handled }
-            return .ignored
-        }
+        if let result = handleCompareModeKeyPress(key) { return result }
 
         if showDenoiseHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelDenoise, apply: applyDenoise)
@@ -1729,6 +1725,7 @@ struct SlideshowView: View {
         }
         rotationAngle = currentURLRotation()
         updateDisplayImage()
+        updateComparePaneIfNeeded()
         if smartZoomEnabled, let url = imageLoader.currentImageURL, let image = imageLoader.currentImage {
             applySmartZoomIfNeeded(for: url, image: image)
         }
