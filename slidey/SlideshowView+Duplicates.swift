@@ -25,6 +25,7 @@ extension SlideshowView {
         savedToastIsError = false
 
         let urls = imageLoader.allImageURLs
+        let generation = duplicateScanGeneration
         Task.detached(priority: .userInitiated) {
             var hashes: [(url: URL, hash: UInt64)] = []
             hashes.reserveCapacity(urls.count)
@@ -39,6 +40,7 @@ extension SlideshowView {
             let imageCount = duplicateSet.count
 
             await MainActor.run {
+                guard generation == self.duplicateScanGeneration else { return }
                 self.isDetectingDuplicates = false
                 guard !duplicateSet.isEmpty else {
                     self.showDuplicatesToast("No duplicates found")

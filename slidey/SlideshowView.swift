@@ -139,6 +139,7 @@ struct SlideshowView: View {
     @State var showDuplicatesOnly: Bool = false
     @State var duplicateURLStrings: Set<String> = []
     @State var isDetectingDuplicates: Bool = false
+    @State var duplicateScanGeneration: Int = 0
     @State private var isCursorHidden = false
     @State private var mouseMonitor: Any?
     @State private var keyUpMonitor: Any?
@@ -1443,6 +1444,8 @@ struct SlideshowView: View {
         infoOverlayURLs = []
         imageInfoCache = [:]
         imageRatings = [:]
+        duplicateScanGeneration &+= 1
+        isDetectingDuplicates = false
         if showDuplicatesOnly {
             showDuplicatesOnly = false
             duplicateURLStrings = []
