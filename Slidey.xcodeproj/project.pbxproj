@@ -40,6 +40,7 @@
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
 		MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = MD100001000000000000001 /* SlideshowView+Metadata.swift */; };
+		SE100002000000000000001 /* SlideshowView+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE100001000000000000001 /* SlideshowView+Search.swift */; };
 		DD100002000000000000001 /* DuplicateDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD100001000000000000001 /* DuplicateDetector.swift */; };
 		DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = DU100001000000000000001 /* SlideshowView+Duplicates.swift */; };
 		CM100002000000000000001 /* SlideshowView+Compare.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM100001000000000000001 /* SlideshowView+Compare.swift */; };
@@ -103,6 +104,7 @@
 		ST100001000000000000001 /* SlideshowView+Straighten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Straighten.swift"; sourceTree = "<group>"; };
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
 		MD100001000000000000001 /* SlideshowView+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Metadata.swift"; sourceTree = "<group>"; };
+		SE100001000000000000001 /* SlideshowView+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Search.swift"; sourceTree = "<group>"; };
 		DD100001000000000000001 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
 		DU100001000000000000001 /* SlideshowView+Duplicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Duplicates.swift"; sourceTree = "<group>"; };
 		CM100001000000000000001 /* SlideshowView+Compare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Compare.swift"; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
 				MD100001000000000000001 /* SlideshowView+Metadata.swift */,
+				SE100001000000000000001 /* SlideshowView+Search.swift */,
 				DU100001000000000000001 /* SlideshowView+Duplicates.swift */,
 				CM100001000000000000001 /* SlideshowView+Compare.swift */,
 				DD100001000000000000001 /* DuplicateDetector.swift */,
@@ -352,6 +355,7 @@
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
 				MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */,
+				SE100002000000000000001 /* SlideshowView+Search.swift in Sources */,
 				DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */,
 				CM100002000000000000001 /* SlideshowView+Compare.swift in Sources */,
 				DD100002000000000000001 /* DuplicateDetector.swift in Sources */,

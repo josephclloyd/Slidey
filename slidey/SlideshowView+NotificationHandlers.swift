@@ -85,6 +85,9 @@ extension SlideshowView {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleShortcutsOverlay)) { _ in
             ifKeyWindow { showShortcutsOverlay.toggle() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSearchBar)) { _ in
+            ifKeyWindow { toggleSearchBar() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showKeyboardShortcuts)) { _ in
             showKeyboardShortcuts = true
         }

@@ -79,8 +79,8 @@ struct SlideshowView: View {
     @State var savedToast: String?
     @State var savedToastIsError: Bool = false
     @State var showThumbnails = false
-    @State private var infoOverlayURLs: Set<URL> = []
-    @State private var imageInfoCache: [URL: ImageInfo] = [:]
+    @State var infoOverlayURLs: Set<URL> = []
+    @State var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
     @State private var hasDisplaySleepAssertion = false
     @AppStorage("slideshowInterval") var slideshowInterval: Double = 5
@@ -96,6 +96,18 @@ struct SlideshowView: View {
     @State var showKeyboardShortcuts = false
     @State var showToolsGuide = false
     @State var showShortcutsOverlay = false
+    // Search / filter bar (#288). Internal (not private) so the filter logic in
+    // SlideshowView+Search.swift and updateFilter() in +Duplicates.swift can read it.
+    @State var showSearchBar = false
+    @State var searchFilenameQuery = ""
+    @State var searchUseStartDate = false
+    @State var searchUseEndDate = false
+    @State var searchStartDate = Date()
+    @State var searchEndDate = Date()
+    /// EXIF-or-modification date cache, populated lazily when a date filter is
+    /// engaged so the `urlFilter` predicate never re-reads the filesystem.
+    @State var captureDateCache: [URL: Date] = [:]
+    @FocusState var searchFieldFocused: Bool
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
     @State var isRecomputingStep = false
@@ -241,7 +253,7 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly) && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly || currentSearchCriteria.isActive) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
                 Text("\u{2605}")
                     .font(.system(size: 48))
@@ -345,48 +357,6 @@ struct SlideshowView: View {
     }
 
     @ViewBuilder
-    private var imageInfoOverlay: some View {
-        if let url = imageLoader.currentImageURL,
-           infoOverlayURLs.contains(url),
-           let info = imageInfoCache[url] {
-            VStack {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let upscaled = upscaledImages[url] {
-                            let upW = Int(upscaled.size.width)
-                            let upH = Int(upscaled.size.height)
-                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
-                        } else {
-                            Text("\(info.width) \u{00d7} \(info.height) px")
-                        }
-                        Text(info.fileSizeText)
-                        Text(info.dateTakenText)
-                        if let camera = info.cameraText {
-                            Text(camera)
-                        }
-                        if let factor = upscaleFactors[url] {
-                            Text("Upscaled \(factor)\u{00d7}")
-                        }
-                        if let r = imageRatings[url], r > 0 {
-                            Text(String(repeating: "\u{2605}", count: r) + String(repeating: "\u{2606}", count: 5 - r))
-                        }
-                    }
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.black.opacity(0.6))
-                    .cornerRadius(6)
-                    .padding(.leading, 20)
-                    .padding(.top, 20)
-                    Spacer()
-                }
-                Spacer()
-            }
-        }
-    }
-
-    @ViewBuilder
     private var shortcutsOverlay: some View {
         if showShortcutsOverlay {
             VStack {
@@ -477,6 +447,7 @@ struct SlideshowView: View {
         filenameOverlay
         imageInfoOverlay
         shortcutsOverlay
+        searchBarOverlay
         toastOverlay
         noiseSuggestionOverlay
         trackInfoOverlay
@@ -1026,6 +997,11 @@ struct SlideshowView: View {
         let key = keyPress.key
         if let result = handleCompareModeKeyPress(key) { return result }
 
+        if showSearchBar && key == .escape {
+            closeSearchBar()
+            return .handled
+        }
+
         if showDenoiseHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelDenoise, apply: applyDenoise)
         }
@@ -1175,6 +1151,7 @@ struct SlideshowView: View {
             zoomPan.zoomToNativeSize(image: effectiveDisplayImage, rotationAngle: rotationAngle)
             return .handled
         case "f", "F":
+            guard !keyPress.modifiers.contains(.command) else { return .ignored }
             zoomPan.zoomToFillScreen(image: effectiveDisplayImage, rotationAngle: rotationAngle)
             return .handled
         case "r":

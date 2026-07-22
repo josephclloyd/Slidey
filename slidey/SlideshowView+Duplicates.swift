@@ -66,20 +66,26 @@ extension SlideshowView {
         let favs = favouriteURLStrings
         let ratings = imageRatings
         let dupes = duplicateURLStrings
+        let search = currentSearchCriteria
+        let dateCache = captureDateCache
 
-        if !wantFavs && minRating <= 0 && !wantDupes {
+        if !wantFavs && minRating <= 0 && !wantDupes && !search.isActive {
             imageLoader.urlFilter = nil
         } else {
             imageLoader.urlFilter = { url in
                 if wantFavs && !favs.contains(url.absoluteString) { return false }
                 if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
                 if wantDupes && !dupes.contains(url.absoluteString) { return false }
+                if search.isActive && !search.matches(url: url, captureDate: dateCache[url]) { return false }
                 return true
             }
         }
     }
 
     var filterEmptyStateHint: String {
+        if currentSearchCriteria.isActive {
+            return "Adjust or clear the search (\u{2318}F, Esc to close)"
+        }
         if showDuplicatesOnly {
             return "Press D to leave duplicates view"
         }
