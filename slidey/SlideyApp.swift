@@ -118,6 +118,11 @@ struct SlideshowMenuCommands: Commands {
                 NotificationCenter.default.post(name: .toggleFavouritesOnly, object: nil)
             }
 
+            Button("Search / Filter\u{2026}") {
+                NotificationCenter.default.post(name: .toggleSearchBar, object: nil)
+            }
+            .keyboardShortcut("f", modifiers: .command)
+
             Divider()
 
             Picker("Filter by Rating", selection: $minimumRatingFilter) {

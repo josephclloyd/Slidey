@@ -846,3 +846,93 @@ final class DirectoryMissingTests: XCTestCase {
         XCTAssertFalse(loader.directoryMissing)
     }
 }
+
+final class SearchCriteriaTests: XCTestCase {
+    let jan1 = DateComponents(calendar: .current, year: 2024, month: 1, day: 1).date!
+    let jun15 = DateComponents(calendar: .current, year: 2024, month: 6, day: 15).date!
+    let dec31 = DateComponents(calendar: .current, year: 2024, month: 12, day: 31).date!
+
+    func testEmptyCriteriaIsInactive() {
+        let c = SearchCriteria()
+        XCTAssertFalse(c.isActive)
+        XCTAssertFalse(c.needsDate)
+    }
+
+    func testWhitespaceQueryIsInactive() {
+        let c = SearchCriteria(filenameQuery: "   ")
+        XCTAssertFalse(c.isActive)
+    }
+
+    func testFilenameQueryIsActiveButNeedsNoDate() {
+        let c = SearchCriteria(filenameQuery: "beach")
+        XCTAssertTrue(c.isActive)
+        XCTAssertFalse(c.needsDate)
+    }
+
+    func testDateBoundIsActiveAndNeedsDate() {
+        let c = SearchCriteria(startDate: jan1)
+        XCTAssertTrue(c.isActive)
+        XCTAssertTrue(c.needsDate)
+    }
+
+    func testFilenameSubstringCaseInsensitive() {
+        let c = SearchCriteria(filenameQuery: "BEACH")
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/summer-beach-01.jpg"), captureDate: nil))
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/mountain.jpg"), captureDate: nil))
+    }
+
+    func testFilenameMatchIgnoresDirectoryPath() {
+        // "beach" appears only in the parent directory, not the filename.
+        let c = SearchCriteria(filenameQuery: "beach")
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/beach/mountain.jpg"), captureDate: nil))
+    }
+
+    func testFilenameOnlyIgnoresCaptureDate() {
+        let c = SearchCriteria(filenameQuery: "cat")
+        // No date bounds → capture date irrelevant, even when nil.
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/cat.jpg"), captureDate: nil))
+    }
+
+    func testDateRangeWithinBounds() {
+        let c = SearchCriteria(startDate: jan1, endDate: dec31)
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: jun15))
+    }
+
+    func testDateBeforeStartExcluded() {
+        let c = SearchCriteria(startDate: jun15)
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: jan1))
+    }
+
+    func testDateAfterEndExcluded() {
+        let c = SearchCriteria(endDate: jun15)
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: dec31))
+    }
+
+    func testBoundsAreInclusive() {
+        let c = SearchCriteria(startDate: jan1, endDate: dec31)
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: jan1))
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: dec31))
+    }
+
+    func testNilCaptureDateFailsActiveDateBound() {
+        let c = SearchCriteria(startDate: jan1)
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/a.jpg"), captureDate: nil))
+    }
+
+    func testCombinedFilenameAndDateBothMustMatch() {
+        let c = SearchCriteria(filenameQuery: "trip", startDate: jan1, endDate: dec31)
+        XCTAssertTrue(c.matches(url: URL(fileURLWithPath: "/img/trip.jpg"), captureDate: jun15))
+        // Right name, out-of-range date.
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/trip.jpg"),
+                                 captureDate: dec31.addingTimeInterval(86_400)))
+        // In-range date, wrong name.
+        XCTAssertFalse(c.matches(url: URL(fileURLWithPath: "/img/other.jpg"), captureDate: jun15))
+    }
+
+    func testEquatable() {
+        XCTAssertEqual(SearchCriteria(filenameQuery: "x", startDate: jan1),
+                       SearchCriteria(filenameQuery: "x", startDate: jan1))
+        XCTAssertNotEqual(SearchCriteria(filenameQuery: "x"),
+                          SearchCriteria(filenameQuery: "y"))
+    }
+}

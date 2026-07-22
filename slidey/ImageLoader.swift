@@ -30,6 +30,49 @@ enum AppSortOrder: String, CaseIterable, Identifiable {
     }
 }
 
+/// Pure, testable description of a filename/date-taken search filter. Held by
+/// `SlideshowView` and combined with the favourites/rating/duplicates filters
+/// into the loader's `urlFilter` predicate. `matches` takes the pre-resolved
+/// capture date so the predicate itself never touches the filesystem.
+struct SearchCriteria: Equatable {
+    var filenameQuery: String = ""
+    /// Inclusive lower bound on date taken (typically start-of-day).
+    var startDate: Date?
+    /// Inclusive upper bound on date taken (typically end-of-day).
+    var endDate: Date?
+
+    var trimmedQuery: String {
+        filenameQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// True when at least one criterion would exclude images.
+    var isActive: Bool {
+        !trimmedQuery.isEmpty || startDate != nil || endDate != nil
+    }
+
+    /// True when the date-range portion is engaged and therefore needs a
+    /// resolved capture date to evaluate.
+    var needsDate: Bool {
+        startDate != nil || endDate != nil
+    }
+
+    /// Evaluates the criteria against a single image. `captureDate` is the
+    /// pre-resolved date taken (EXIF, falling back to file modification date);
+    /// pass nil when unknown — a nil date fails any active date bound.
+    func matches(url: URL, captureDate: Date?) -> Bool {
+        let query = trimmedQuery
+        if !query.isEmpty && !url.lastPathComponent.localizedCaseInsensitiveContains(query) {
+            return false
+        }
+        if needsDate {
+            guard let date = captureDate else { return false }
+            if let start = startDate, date < start { return false }
+            if let end = endDate, date > end { return false }
+        }
+        return true
+    }
+}
+
 class ImageLoader: ObservableObject {
     @Published var imageURLs: [URL] = []
     @Published var currentIndex: Int = 0
@@ -157,6 +200,15 @@ class ImageLoader: ObservableObject {
             ?? exif[kCGImagePropertyExifDateTimeDigitized] as? String
         guard let ds = dateString else { return nil }
         return exifDateFormatter.date(from: ds)
+    }
+
+    /// Best-effort "date taken" for search filtering: EXIF capture date if
+    /// present, otherwise the file's modification date. Matches the semantics
+    /// of the info-overlay's "Date Taken" line. Returns nil only when neither
+    /// is readable.
+    static func dateTaken(for url: URL) -> Date? {
+        if let exif = exifCaptureDate(for: url) { return exif }
+        return (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
     static func sortEntries(_ entries: inout [(url: URL, created: Date, modified: Date, captured: Date?)], by order: AppSortOrder) {

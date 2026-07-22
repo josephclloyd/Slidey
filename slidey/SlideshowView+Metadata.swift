@@ -173,4 +173,48 @@ extension SlideshowView {
             return false
         }
     }
+
+    // The image-info (EXIF/dimensions/date) overlay lives here alongside the
+    // metadata reading it displays. Referenced by `overlayViews` in the main file.
+    @ViewBuilder
+    var imageInfoOverlay: some View {
+        if let url = imageLoader.currentImageURL,
+           infoOverlayURLs.contains(url),
+           let info = imageInfoCache[url] {
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let upscaled = upscaledImages[url] {
+                            let upW = Int(upscaled.size.width)
+                            let upH = Int(upscaled.size.height)
+                            Text("\(info.width) \u{00d7} \(info.height) px \u{2192} \(upW) \u{00d7} \(upH) px")
+                        } else {
+                            Text("\(info.width) \u{00d7} \(info.height) px")
+                        }
+                        Text(info.fileSizeText)
+                        Text(info.dateTakenText)
+                        if let camera = info.cameraText {
+                            Text(camera)
+                        }
+                        if let factor = upscaleFactors[url] {
+                            Text("Upscaled \(factor)\u{00d7}")
+                        }
+                        if let r = imageRatings[url], r > 0 {
+                            Text(String(repeating: "\u{2605}", count: r) + String(repeating: "\u{2606}", count: 5 - r))
+                        }
+                    }
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.6))
+                    .cornerRadius(6)
+                    .padding(.leading, 20)
+                    .padding(.top, 20)
+                    Spacer()
+                }
+                Spacer()
+            }
+        }
+    }
 }
