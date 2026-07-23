@@ -224,6 +224,8 @@ struct SlideshowView: View {
     @State var showCompareMode: Bool = false
     @State var compareURL: URL?; @State var compareImage: NSImage?
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
+    @State var showBeforeAfterSlider: Bool = false
+    @State var beforeAfterSliderPosition: CGFloat = 0.5
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -384,6 +386,7 @@ struct SlideshowView: View {
                                 ("u / \u{2325}U", "Upscale 2\u{00d7} / 4\u{00d7}"),
                                 ("e / \u{21e7}E", "Adjustments / Curves"),
                                 ("b (hold)", "Before / After"),
+                                ("\u{21e7}B", "Before / After Slider"),
                             ])
                             shortcutsSection("Rate", items: [
                                 ("x", "Favourite"),
@@ -671,6 +674,8 @@ struct SlideshowView: View {
                 emptyStateContent
             } else if showCompareMode {
                 compareModeContent
+            } else if showBeforeAfterSlider {
+                beforeAfterSliderContent
             } else {
                 imageDisplayContent
             }
@@ -847,6 +852,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareSideBySide)) { _ in
             ifKeyWindow { toggleCompareMode() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.beforeAfterSlider)) { _ in
+            ifKeyWindow { toggleBeforeAfterSlider() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
             ifKeyWindow { toggleFullScreen() }
         }
@@ -1000,6 +1008,7 @@ struct SlideshowView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
         if let result = handleCompareModeKeyPress(key) { return result }
+        if let result = handleBeforeAfterSliderKeyPress(keyPress) { return result }
 
         if showSearchBar && key == .escape {
             closeSearchBar()
@@ -1288,6 +1297,9 @@ struct SlideshowView: View {
             return .handled
         case "b":
             showingOriginal = true
+            return .handled
+        case "B":
+            toggleBeforeAfterSlider()
             return .handled
         case " ":
             toggleSlideshow()
