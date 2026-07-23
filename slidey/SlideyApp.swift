@@ -71,6 +71,10 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.option])
 
+            Button("Before / After Slider (B)") {
+                NotificationCenter.default.post(name: .beforeAfterSlider, object: nil)
+            }
+
             Button("Shortcuts Overlay (/)") {
                 NotificationCenter.default.post(name: .toggleShortcutsOverlay, object: nil)
             }

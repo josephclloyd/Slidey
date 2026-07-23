@@ -31,6 +31,7 @@ extension SlideshowView {
         compareZoomPan.reset()
         zoomPan.reset()
         slideshow.stop()
+        showBeforeAfterSlider = false
         showCompareMode = true
     }
 
