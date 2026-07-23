@@ -112,6 +112,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
+            Button("Toggle Histogram (\u{2325}H)") {
+                NotificationCenter.default.post(name: .toggleHistogram, object: nil)
+            }
+            .keyboardShortcut("h", modifiers: .option)
 
             Divider()
 

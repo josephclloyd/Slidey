@@ -203,6 +203,9 @@ struct SlideshowView: View {
     @State var histogramData: HistogramData?
     @State var histogramShowRGB: Bool = false
 
+    @State var showHistogramOverlay: Bool = false
+    @State var histogramOverlayData: HistogramData?
+
     @State var straightenAngles: [String: Double] = [:]
     @State var showStraightenHUD: Bool = false
     @State var straightenAngle: Double = 0.0
@@ -452,6 +455,7 @@ struct SlideshowView: View {
         thumbnailOverlay
         filenameOverlay
         imageInfoOverlay
+        histogramOverlay
         shortcutsOverlay
         searchBarOverlay
         toastOverlay
@@ -1917,6 +1921,7 @@ struct SlideshowView: View {
                 self.recomputeStep(step, for: url)
             }
         }
+        refreshHistogramOverlay()
     }
 
     private func enhanceCurrentImage() {
@@ -2078,6 +2083,7 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyCropToImage(image, region: cropRegion) ?? image
         }
+        refreshHistogramOverlay()
     }
 
     func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {
