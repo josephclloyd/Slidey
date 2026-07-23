@@ -87,8 +87,8 @@ struct SlideshowView: View {
     @AppStorage("sortOrder") private var sortOrder: AppSortOrder = .creationDateAscending
     @AppStorage("autoOpenRecent") private var autoOpenRecent: Bool = true
     @AppStorage("autoPlayMusic") private var autoPlayMusic: Bool = true
-    @AppStorage("transitionsEnabled") private var transitionsEnabled: Bool = false
-    @AppStorage("transitionDuration") private var transitionDuration: Double = 0.3
+    @AppStorage("transitionsEnabled") var transitionsEnabled: Bool = false
+    @AppStorage("transitionDuration") var transitionDuration: Double = 0.3
     @AppStorage("slideshowLoop") private var slideshowLoop: Bool = true
     @AppStorage("shuffleOnAdvance") var shuffleOnAdvance: Bool = false
     @AppStorage("floatAboveOtherWindows") private var floatAboveOtherWindows: Bool = false
@@ -177,6 +177,9 @@ struct SlideshowView: View {
     @State var grainReductionCancellationToken: TiledMLCancellationToken?
     @State var showGrainReductionHUD: Bool = false; @State var grainReductionStrength: Double = 100.0
     @State var grainReductionBaseImage: NSImage?; @State var grainReductionMLImage: NSImage?
+    @State var showVideoExportHUD: Bool = false
+    @State var videoExportProgress: Double = 0
+    @State var videoExportCancellationToken: TiledMLCancellationToken?
     @State var colorizedImages: [URL: NSImage] = [:]
     @State var isColorizing = false
     @State var showColorConfirmAlert = false
@@ -472,6 +475,7 @@ struct SlideshowView: View {
         objectRemovalOverlay
         perspectiveCorrectionOverlay
         cropOverlay
+        videoExportHUD
     }
 
     @ViewBuilder
@@ -3179,12 +3183,16 @@ struct SlideshowView: View {
     /// file matches what the user sees. Returns the input untouched if no
     /// rotation is applied.
     func applyRotationIfNeeded(_ image: NSImage) -> NSImage {
-        let degrees = rotationAngle.degrees.truncatingRemainder(dividingBy: 360)
+        applyRotation(image, angle: rotationAngle)
+    }
+
+    func applyRotation(_ image: NSImage, angle: Angle) -> NSImage {
+        let degrees = angle.degrees.truncatingRemainder(dividingBy: 360)
         if degrees == 0 { return image }
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return image
         }
-        let radians = CGFloat(rotationAngle.radians)
+        let radians = CGFloat(angle.radians)
         let originalSize = CGSize(width: cgImage.width, height: cgImage.height)
         let cosV = abs(cos(radians))
         let sinV = abs(sin(radians))
