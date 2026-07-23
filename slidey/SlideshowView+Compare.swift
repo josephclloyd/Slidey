@@ -46,6 +46,8 @@ extension SlideshowView {
             DispatchQueue.main.async { self.imageLoader.previousImage() }; return .handled
         case .rightArrow:
             DispatchQueue.main.async { self.imageLoader.nextImage() }; return .handled
+        case KeyEquivalent("B"):          // ⇧B — switch from compare mode to before/after slider
+            toggleBeforeAfterSlider(); return .handled
         default:
             return .ignored
         }
