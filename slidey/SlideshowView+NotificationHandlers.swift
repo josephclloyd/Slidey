@@ -50,6 +50,9 @@ extension SlideshowView {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportVisibleImages)) { _ in
             ifKeyWindow { exportVisibleImages() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.exportSlideshowVideo)) { _ in
+            ifKeyWindow { startSlideshowVideoExport() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.copyImage)) { _ in
             ifKeyWindow { copyImageToClipboard() }
         }

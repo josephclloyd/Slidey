@@ -401,6 +401,11 @@ struct FileMenuCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!imageLoaded)
 
+            Button("Export Slideshow as Video\u{2026}") {
+                NotificationCenter.default.post(name: .exportSlideshowVideo, object: nil)
+            }
+            .disabled(!imageLoaded)
+
             Divider()
 
             Button("Set as Desktop Picture") {

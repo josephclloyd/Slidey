@@ -5,11 +5,13 @@ import ImageIO
 
 extension SlideshowView {
 
-    func exportWithEdits() {
-        guard let url = imageLoader.currentImageURL else { return }
-        guard let original = imageLoader.currentImage else { return }
-
-        var image = currentComposite(for: url) ?? original
+    /// Applies every re-appliable per-URL edit (flip, photo effect, local
+    /// adjustments, adjustments, curves, vignette, straighten, perspective,
+    /// crop, rotation) on top of a base image, in the same order the single-image
+    /// export uses. Pixel-cached ML edits (enhance/upscale/etc.) are not included
+    /// here — pass a base that already has them baked in when needed.
+    func applyExportEdits(to base: NSImage, for url: URL) -> NSImage {
+        var image = base
 
         let isFlippedH = flippedHorizontally.contains(url.absoluteString)
         let isFlippedV = flippedVertically.contains(url.absoluteString)
@@ -49,6 +51,15 @@ extension SlideshowView {
             image = applyCropToImage(image, region: cropRegion) ?? image
         }
 
+        return image
+    }
+
+    func exportWithEdits() {
+        guard let url = imageLoader.currentImageURL else { return }
+        guard let original = imageLoader.currentImage else { return }
+
+        var image = currentComposite(for: url) ?? original
+        image = applyExportEdits(to: image, for: url)
         image = applyRotationIfNeeded(image)
 
         let ext = url.pathExtension.lowercased()

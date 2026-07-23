@@ -30,6 +30,7 @@ extension NSNotification.Name {
     static let copyToFolder = NSNotification.Name("CopyToFolder")
     static let moveToFolder = NSNotification.Name("MoveToFolder")
     static let exportVisibleImages = NSNotification.Name("ExportVisibleImages")
+    static let exportSlideshowVideo = NSNotification.Name("ExportSlideshowVideo")
     static let renameImage = NSNotification.Name("RenameImage")
     static let copyImage = NSNotification.Name("CopyImage")
     static let copyFilePath = NSNotification.Name("CopyFilePath")
