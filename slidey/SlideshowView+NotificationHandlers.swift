@@ -25,6 +25,9 @@ extension SlideshowView {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
             ifKeyWindow { toggleInfoOverlay() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleHistogram)) { _ in
+            ifKeyWindow { toggleHistogramOverlay() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.renameImage)) { _ in
             ifKeyWindow { renameCurrentImage() }
         }
