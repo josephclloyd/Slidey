@@ -229,6 +229,7 @@ struct SlideshowView: View {
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
     @State var showBeforeAfterSlider: Bool = false
     @State var beforeAfterSliderPosition: CGFloat = 0.5
+    @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -623,8 +624,7 @@ struct SlideshowView: View {
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
-            let displayedImage = showingOriginal ? imageLoader.currentImage : currentDisplayImage
-            if let image = displayedImage {
+            if let image = activeDisplayImage {
                 ImageDisplayView(
                     image: image,
                     zoomScale: $zoomPan.zoomScale,
@@ -1922,7 +1922,7 @@ struct SlideshowView: View {
                 self.recomputeStep(step, for: url)
             }
         }
-        refreshHistogramOverlay()
+        refreshHistogramOverlay(); syncAnimation()
     }
 
     private func enhanceCurrentImage() {
