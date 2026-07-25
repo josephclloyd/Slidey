@@ -53,6 +53,14 @@ final class SlideshowController {
         lastAdvanceDate = nil
     }
 
+    /// Invalidates the fixed-interval timer while keeping `isPlaying` true, so an
+    /// animated GIF/APNG can drive advancement itself. The timer is restored via
+    /// `reschedule` when playback moves to the next image.
+    func pause() {
+        timer?.invalidate()
+        timer = nil
+    }
+
     func reschedule(interval: Double, advance: @escaping () -> Void) {
         timer?.invalidate()
         lastAdvanceDate = Date()
