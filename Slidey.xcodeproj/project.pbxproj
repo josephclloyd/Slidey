@@ -44,9 +44,13 @@
 		DD100002000000000000001 /* DuplicateDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD100001000000000000001 /* DuplicateDetector.swift */; };
 		DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = DU100001000000000000001 /* SlideshowView+Duplicates.swift */; };
 		CM100002000000000000001 /* SlideshowView+Compare.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM100001000000000000001 /* SlideshowView+Compare.swift */; };
+		BF100002000000000000001 /* SlideshowView+BeforeAfterSlider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF100001000000000000001 /* SlideshowView+BeforeAfterSlider.swift */; };
+		H1100002000000000000001 /* SlideshowView+Histogram.swift in Sources */ = {isa = PBXBuildFile; fileRef = H1100001000000000000001 /* SlideshowView+Histogram.swift */; };
+		AN100002000000000000001 /* SlideshowView+Animation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AN100001000000000000001 /* SlideshowView+Animation.swift */; };
 		VE100002000000000000001 /* SlideshowView+VideoExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = VE100001000000000000001 /* SlideshowView+VideoExport.swift */; };
 		DT100002000000000000001 /* DuplicateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DT100001000000000000001 /* DuplicateDetectorTests.swift */; };
 		VT100002000000000000001 /* SlideshowVideoExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VT100001000000000000001 /* SlideshowVideoExportTests.swift */; };
+		AT100002000000000000001 /* AnimationDecoderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AT100001000000000000001 /* AnimationDecoderTests.swift */; };
 		HV100002000000000000001 /* HistogramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = HV100001000000000000001 /* HistogramView.swift */; };
 		EX100002000000000000001 /* SlideshowView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = EX100001000000000000001 /* SlideshowView+Export.swift */; };
 		PC100002000000000000001 /* SlideshowView+PerspectiveCorrection.swift in Sources */ = {isa = PBXBuildFile; fileRef = PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */; };
@@ -110,9 +114,13 @@
 		DD100001000000000000001 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
 		DU100001000000000000001 /* SlideshowView+Duplicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Duplicates.swift"; sourceTree = "<group>"; };
 		CM100001000000000000001 /* SlideshowView+Compare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Compare.swift"; sourceTree = "<group>"; };
+		BF100001000000000000001 /* SlideshowView+BeforeAfterSlider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+BeforeAfterSlider.swift"; sourceTree = "<group>"; };
+		H1100001000000000000001 /* SlideshowView+Histogram.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Histogram.swift"; sourceTree = "<group>"; };
+		AN100001000000000000001 /* SlideshowView+Animation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Animation.swift"; sourceTree = "<group>"; };
 		VE100001000000000000001 /* SlideshowView+VideoExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+VideoExport.swift"; sourceTree = "<group>"; };
 		DT100001000000000000001 /* DuplicateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetectorTests.swift; sourceTree = "<group>"; };
 		VT100001000000000000001 /* SlideshowVideoExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowVideoExportTests.swift; sourceTree = "<group>"; };
+		AT100001000000000000001 /* AnimationDecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimationDecoderTests.swift; sourceTree = "<group>"; };
 		HV100001000000000000001 /* HistogramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistogramView.swift; sourceTree = "<group>"; };
 		EX100001000000000000001 /* SlideshowView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Export.swift"; sourceTree = "<group>"; };
 		PC100001000000000000001 /* SlideshowView+PerspectiveCorrection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+PerspectiveCorrection.swift"; sourceTree = "<group>"; };
@@ -177,6 +185,9 @@
 				SE100001000000000000001 /* SlideshowView+Search.swift */,
 				DU100001000000000000001 /* SlideshowView+Duplicates.swift */,
 				CM100001000000000000001 /* SlideshowView+Compare.swift */,
+				BF100001000000000000001 /* SlideshowView+BeforeAfterSlider.swift */,
+				H1100001000000000000001 /* SlideshowView+Histogram.swift */,
+				AN100001000000000000001 /* SlideshowView+Animation.swift */,
 				VE100001000000000000001 /* SlideshowView+VideoExport.swift */,
 				DD100001000000000000001 /* DuplicateDetector.swift */,
 				EX100001000000000000001 /* SlideshowView+Export.swift */,
@@ -225,6 +236,7 @@
 				P1000003000000000000001 /* EditingToolsCoordinateTests.swift */,
 				DT100001000000000000001 /* DuplicateDetectorTests.swift */,
 				VT100001000000000000001 /* SlideshowVideoExportTests.swift */,
+				AT100001000000000000001 /* AnimationDecoderTests.swift */,
 			);
 			path = SlideyTests;
 			sourceTree = "<group>";
@@ -364,6 +376,9 @@
 				SE100002000000000000001 /* SlideshowView+Search.swift in Sources */,
 				DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */,
 				CM100002000000000000001 /* SlideshowView+Compare.swift in Sources */,
+				BF100002000000000000001 /* SlideshowView+BeforeAfterSlider.swift in Sources */,
+				H1100002000000000000001 /* SlideshowView+Histogram.swift in Sources */,
+				AN100002000000000000001 /* SlideshowView+Animation.swift in Sources */,
 				VE100002000000000000001 /* SlideshowView+VideoExport.swift in Sources */,
 				DD100002000000000000001 /* DuplicateDetector.swift in Sources */,
 				EX100002000000000000001 /* SlideshowView+Export.swift in Sources */,
@@ -402,6 +417,7 @@
 				P1000004000000000000001 /* EditingToolsCoordinateTests.swift in Sources */,
 				DT100002000000000000001 /* DuplicateDetectorTests.swift in Sources */,
 				VT100002000000000000001 /* SlideshowVideoExportTests.swift in Sources */,
+				AT100002000000000000001 /* AnimationDecoderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -561,7 +577,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -591,7 +607,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -608,7 +624,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -626,7 +642,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 1.31;
+				MARKETING_VERSION = 1.32;
 				PRODUCT_BUNDLE_IDENTIFIER = com.josephlloyd.slidey.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;

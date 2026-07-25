@@ -1110,6 +1110,26 @@ final class HistogramDataTests: XCTestCase {
         let image = NSImage(size: .zero)
         XCTAssertNil(HistogramData.compute(from: image))
     }
+
+    func testToggleHistogramNotificationName() {
+        XCTAssertEqual(NSNotification.Name.toggleHistogram.rawValue, "ToggleHistogram")
+    }
+
+    func testToggleHistogramNotificationIsUnique() {
+        let names: [NSNotification.Name] = [.toggleHistogram, .toggleImageInfo, .toggleThumbnails]
+        XCTAssertEqual(Set(names).count, names.count)
+    }
+
+    func testToggleHistogramNotificationFires() {
+        let expectation = expectation(description: "toggleHistogram notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .toggleHistogram, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .toggleHistogram, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
 }
 
 // MARK: - PerspectiveCorners tests

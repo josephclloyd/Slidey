@@ -203,6 +203,9 @@ struct SlideshowView: View {
     @State var histogramData: HistogramData?
     @State var histogramShowRGB: Bool = false
 
+    @State var showHistogramOverlay: Bool = false
+    @State var histogramOverlayData: HistogramData?
+
     @State var straightenAngles: [String: Double] = [:]
     @State var showStraightenHUD: Bool = false
     @State var straightenAngle: Double = 0.0
@@ -224,6 +227,9 @@ struct SlideshowView: View {
     @State var showCompareMode: Bool = false
     @State var compareURL: URL?; @State var compareImage: NSImage?
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
+    @State var showBeforeAfterSlider: Bool = false
+    @State var beforeAfterSliderPosition: CGFloat = 0.5
+    @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -384,6 +390,7 @@ struct SlideshowView: View {
                                 ("u / \u{2325}U", "Upscale 2\u{00d7} / 4\u{00d7}"),
                                 ("e / \u{21e7}E", "Adjustments / Curves"),
                                 ("b (hold)", "Before / After"),
+                                ("\u{21e7}B", "Before / After Slider"),
                             ])
                             shortcutsSection("Rate", items: [
                                 ("x", "Favourite"),
@@ -449,6 +456,7 @@ struct SlideshowView: View {
         thumbnailOverlay
         filenameOverlay
         imageInfoOverlay
+        histogramOverlay
         shortcutsOverlay
         searchBarOverlay
         toastOverlay
@@ -616,8 +624,7 @@ struct SlideshowView: View {
     @ViewBuilder private var imageDisplayContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
-            let displayedImage = showingOriginal ? imageLoader.currentImage : currentDisplayImage
-            if let image = displayedImage {
+            if let image = activeDisplayImage {
                 ImageDisplayView(
                     image: image,
                     zoomScale: $zoomPan.zoomScale,
@@ -671,6 +678,8 @@ struct SlideshowView: View {
                 emptyStateContent
             } else if showCompareMode {
                 compareModeContent
+            } else if showBeforeAfterSlider {
+                beforeAfterSliderContent
             } else {
                 imageDisplayContent
             }
@@ -847,6 +856,9 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareSideBySide)) { _ in
             ifKeyWindow { toggleCompareMode() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.beforeAfterSlider)) { _ in
+            ifKeyWindow { toggleBeforeAfterSlider() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleFullScreen)) { _ in
             ifKeyWindow { toggleFullScreen() }
         }
@@ -1000,6 +1012,7 @@ struct SlideshowView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
         if let result = handleCompareModeKeyPress(key) { return result }
+        if let result = handleBeforeAfterSliderKeyPress(keyPress) { return result }
 
         if showSearchBar && key == .escape {
             closeSearchBar()
@@ -1288,6 +1301,9 @@ struct SlideshowView: View {
             return .handled
         case "b":
             showingOriginal = true
+            return .handled
+        case "B":
+            toggleBeforeAfterSlider()
             return .handled
         case " ":
             toggleSlideshow()
@@ -1820,6 +1836,7 @@ struct SlideshowView: View {
     func updateDisplayImage() {
         guard let url = imageLoader.currentImageURL else {
             currentDisplayImage = imageLoader.currentImage
+            refreshHistogramOverlay()
             return
         }
 
@@ -1905,6 +1922,7 @@ struct SlideshowView: View {
                 self.recomputeStep(step, for: url)
             }
         }
+        refreshHistogramOverlay(); syncAnimation()
     }
 
     private func enhanceCurrentImage() {
@@ -2066,6 +2084,7 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyCropToImage(image, region: cropRegion) ?? image
         }
+        refreshHistogramOverlay()
     }
 
     func applyFlipTransform(horizontal: Bool, vertical: Bool, to image: NSImage) -> NSImage? {

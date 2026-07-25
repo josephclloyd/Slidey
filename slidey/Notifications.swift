@@ -38,6 +38,7 @@ extension NSNotification.Name {
     static let toggleSlideshow = NSNotification.Name("ToggleSlideshow")
     static let toggleThumbnails = NSNotification.Name("ToggleThumbnails")
     static let toggleImageInfo = NSNotification.Name("ToggleImageInfo")
+    static let toggleHistogram = NSNotification.Name("ToggleHistogram")
 
     static let musicOff = NSNotification.Name("MusicOff")
     static let musicChooseSong = NSNotification.Name("MusicChooseSong")
@@ -53,6 +54,7 @@ extension NSNotification.Name {
     static let toggleShortcutsOverlay = NSNotification.Name("ToggleShortcutsOverlay")
     static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
     static let compareSideBySide = NSNotification.Name("CompareSideBySide")
+    static let beforeAfterSlider = NSNotification.Name("BeforeAfterSlider")
     static let toggleFullScreen = NSNotification.Name("ToggleFullScreen")
     static let zoomIn = NSNotification.Name("ZoomIn")
     static let zoomOut = NSNotification.Name("ZoomOut")

@@ -71,6 +71,10 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.option])
 
+            Button("Before / After Slider (\u{21e7}B)") {
+                NotificationCenter.default.post(name: .beforeAfterSlider, object: nil)
+            }
+
             Button("Shortcuts Overlay (/)") {
                 NotificationCenter.default.post(name: .toggleShortcutsOverlay, object: nil)
             }
@@ -108,6 +112,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
+            Button("Toggle Histogram (\u{2325}H)") {
+                NotificationCenter.default.post(name: .toggleHistogram, object: nil)
+            }
+            .keyboardShortcut("h", modifiers: .option)
 
             Divider()
 
