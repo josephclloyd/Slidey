@@ -1836,6 +1836,7 @@ struct SlideshowView: View {
     func updateDisplayImage() {
         guard let url = imageLoader.currentImageURL else {
             currentDisplayImage = imageLoader.currentImage
+            refreshHistogramOverlay()
             return
         }
 
