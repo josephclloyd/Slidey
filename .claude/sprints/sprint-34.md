@@ -16,6 +16,24 @@ Status: planned
 - #312 Grid / contact sheet view — deferred to Sprint 35; large scope
 - #313 Saved filter presets — deferred to Sprint 35; builds on #288
 
+## Results
+
+Released: v1.33 — 2026-07-25
+
+### Shipped
+- #309 Before/after drag slider (⇧B) — draggable reveal divider with clipShape mask; repair: fixed ⇧B routing through compare mode handler, fixed menu label "(B)" → "(⇧B)"
+- #307 Histogram overlay (⌥H) — SwiftUI Canvas RGB+luminosity chart, per-image session state, 3 unit tests; repair: added refreshHistogramOverlay() to early-return path in updateDisplayImage()
+- #308 Animated GIF/APNG playback — SlideshowView+Animation.swift, off-thread frame decode, per-frame UnclampedDelayTime with 0.1s minimum, slideshow pause during animation, unit tests
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 3 (#315, #316, #317)
+- Total cost: ~$7.90 (impl: $1.92 + $2.25 + $2.71, review/repair: ~$1.02)
+- Review rounds: 1 repair each for #309 and #307; #308 clean on first pass
+- CI wall time per PR: ~2.5 min
+
 ## Notes
 
 - All three issues touch `SlideshowView.swift` → fully serialized: #309 → #307 → #308.
