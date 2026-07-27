@@ -131,6 +131,10 @@ struct SlideshowMenuCommands: Commands {
             }
             .keyboardShortcut("f", modifiers: .command)
 
+            Button("Filter Presets\u{2026}") {
+                NotificationCenter.default.post(name: .showFilterPresets, object: nil)
+            }
+
             Divider()
 
             Picker("Filter by Rating", selection: $minimumRatingFilter) {

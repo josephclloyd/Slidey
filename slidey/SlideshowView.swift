@@ -96,18 +96,18 @@ struct SlideshowView: View {
     @State var showKeyboardShortcuts = false
     @State var showToolsGuide = false
     @State var showShortcutsOverlay = false
-    // Search / filter bar (#288). Internal (not private) so the filter logic in
-    // SlideshowView+Search.swift and updateFilter() in +Duplicates.swift can read it.
+    // Search / filter bar (#288). Internal so +Search/+Duplicates can read it.
     @State var showSearchBar = false
     @State var searchFilenameQuery = ""
     @State var searchUseStartDate = false
     @State var searchUseEndDate = false
     @State var searchStartDate = Date()
     @State var searchEndDate = Date()
-    /// EXIF-or-modification date cache, populated lazily when a date filter is
-    /// engaged so the `urlFilter` predicate never re-reads the filesystem.
+    /// EXIF-or-modification capture-date cache, populated lazily for date filters.
     @State var captureDateCache: [URL: Date] = [:]
     @FocusState var searchFieldFocused: Bool
+    @AppStorage("filterPresets") var filterPresetsData: Data = Data()  // saved presets (#313)
+    @State var showPresetsPopover = false
     @State var favouriteURLStrings: Set<String> = []
     @State var editStacks: [URL: EditStack] = [:]
     @State var isRecomputingStep = false
