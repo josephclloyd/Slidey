@@ -176,6 +176,21 @@ final class MusicMenuNotificationTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
 
+    func testToggleGridViewNotificationName() {
+        XCTAssertEqual(NSNotification.Name.toggleGridView.rawValue, "ToggleGridView")
+    }
+
+    func testToggleGridViewNotificationFires() {
+        let expectation = expectation(description: "toggleGridView notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .toggleGridView, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .toggleGridView, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
     func testMusicChooseSongNotificationFires() {
         let expectation = expectation(description: "musicChooseSong notification received")
         let observer = NotificationCenter.default.addObserver(

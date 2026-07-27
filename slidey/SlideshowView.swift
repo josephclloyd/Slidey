@@ -79,6 +79,9 @@ struct SlideshowView: View {
     @State var savedToast: String?
     @State var savedToastIsError: Bool = false
     @State var showThumbnails = false
+    @State var showGridView = false
+    @State var gridSelection = 0
+    @State var gridColumnCount = 1
     @State var infoOverlayURLs: Set<URL> = []
     @State var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
@@ -451,9 +454,14 @@ struct SlideshowView: View {
         }
     }
 
+    @ViewBuilder private var thumbnailAndGridOverlays: some View {
+        gridOverlay
+        thumbnailOverlay
+    }
+
     @ViewBuilder
     private var overlayViews: some View {
-        thumbnailOverlay
+        thumbnailAndGridOverlays
         filenameOverlay
         imageInfoOverlay
         histogramOverlay
@@ -670,19 +678,23 @@ struct SlideshowView: View {
         .animation(transitionsEnabled ? .easeInOut(duration: transitionDuration) : nil, value: imageLoader.currentImageURL)
     }
 
+    @ViewBuilder private var mainContent: some View {
+        if imageLoader.imageURLs.isEmpty {
+            emptyStateContent
+        } else if showCompareMode {
+            compareModeContent
+        } else if showBeforeAfterSlider {
+            beforeAfterSliderContent
+        } else {
+            imageDisplayContent
+        }
+    }
+
     private var coreViewBase: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
 
-            if imageLoader.imageURLs.isEmpty {
-                emptyStateContent
-            } else if showCompareMode {
-                compareModeContent
-            } else if showBeforeAfterSlider {
-                beforeAfterSliderContent
-            } else {
-                imageDisplayContent
-            }
+            mainContent
 
             overlayViews
         }
@@ -725,7 +737,7 @@ struct SlideshowView: View {
         }
     }
 
-    private var coreView: some View {
+    private var coreViewMid: some View {
         coreViewBase
         .onChange(of: showThumbnails) { _, _ in
             updateCursorVisibility()
@@ -760,6 +772,10 @@ struct SlideshowView: View {
             }
             NSApplication.shared.presentationOptions = []
         }
+    }
+
+    private var coreView: some View {
+        coreViewMid
         .onChange(of: pendingOpens.pending) { _, _ in
             consumePendingOpenIfPossible()
         }
@@ -1011,6 +1027,7 @@ struct SlideshowView: View {
 
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
+        if showGridView { return handleGridKeyPress(keyPress) }
         if let result = handleCompareModeKeyPress(key) { return result }
         if let result = handleBeforeAfterSliderKeyPress(keyPress) { return result }
 
@@ -1229,6 +1246,9 @@ struct SlideshowView: View {
             return .handled
         case "t":
             showThumbnails.toggle()
+            return .handled
+        case "T":
+            toggleGridView()
             return .handled
         case "x":
             toggleFavourite()
@@ -3326,172 +3346,6 @@ struct SlideshowView: View {
         }
     }
 
-}
-
-final class ThumbnailCache {
-    static let shared = ThumbnailCache()
-    private let cache = NSCache<NSURL, NSImage>()
-
-    init(countLimit: Int = 500) {
-        cache.countLimit = countLimit
-    }
-
-    func get(_ url: URL) -> NSImage? {
-        cache.object(forKey: url as NSURL)
-    }
-
-    func set(_ url: URL, image: NSImage) {
-        cache.setObject(image, forKey: url as NSURL)
-    }
-}
-
-struct ThumbnailCell: View {
-    let url: URL
-    let size: CGFloat
-    let isSelected: Bool
-    let isFavourite: Bool
-    let onTap: () -> Void
-
-    @State private var thumbnail: NSImage?
-
-    var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                if let thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: size, height: size)
-                        .clipped()
-                } else {
-                    Color.gray.opacity(0.2)
-                        .frame(width: size, height: size)
-                }
-
-                if isFavourite {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Text("★")
-                                .font(.system(size: 14))
-                                .foregroundColor(.yellow)
-                                .shadow(color: .black, radius: 2)
-                                .padding(2)
-                        }
-                        Spacer()
-                    }
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 3)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 3)
-            )
-            .cornerRadius(3)
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(thumbnailAccessibilityLabel)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
-        .accessibilityHint("Double tap to view this image")
-        .task(id: url) {
-            await loadThumbnail()
-        }
-    }
-
-    private var thumbnailAccessibilityLabel: String {
-        var label = url.lastPathComponent
-        if isFavourite { label += ", favourited" }
-        if isSelected { label += ", selected" }
-        return label
-    }
-
-    @MainActor
-    private func loadThumbnail() async {
-        if let cached = ThumbnailCache.shared.get(url) {
-            self.thumbnail = cached
-            return
-        }
-        let maxPixel = Int(size * 2)
-        let target = url
-
-        // Debounce: cells scrolled past in under 50 ms cancel here (Task.sleep
-        // throws on cancellation) instead of spawning a disk-read task.
-        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
-
-        let thumb = await Task.detached(priority: .utility) {
-            return Self.generate(url: target, maxPixelSize: maxPixel)
-        }.value
-        // Cell may have been recycled to a different URL while we were
-        // generating — only commit if we're still the cell for `target`.
-        guard target == url else { return }
-        if let thumb {
-            ThumbnailCache.shared.set(target, image: thumb)
-            self.thumbnail = thumb
-        }
-    }
-
-    /// Uses ImageIO to read just the embedded/scaled thumbnail rather than
-    /// decoding the full image. Cheap even for very large source files.
-    nonisolated private static func generate(url: URL, maxPixelSize: Int) -> NSImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-        ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-    }
-}
-
-struct ThumbnailStrip: View {
-    @ObservedObject var imageLoader: ImageLoader
-    var favouriteURLStrings: Set<String> = []
-    let onSelect: (Int) -> Void
-
-    private let thumbSize: CGFloat = 80
-
-    var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 4) {
-                    ForEach(Array(imageLoader.imageURLs.enumerated()), id: \.element) { pair in
-                        ThumbnailCell(
-                            url: pair.element,
-                            size: thumbSize,
-                            isSelected: pair.offset == imageLoader.currentIndex,
-                            isFavourite: favouriteURLStrings.contains(pair.element.absoluteString),
-                            onTap: { onSelect(pair.offset) }
-                        )
-                        .id(pair.element)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
-            }
-            .frame(height: thumbSize + 16)
-            .background(.black.opacity(0.75))
-            .accessibilityLabel("Thumbnail strip, \(imageLoader.imageURLs.count) images")
-            .onChange(of: imageLoader.currentIndex) { _, _ in
-                DispatchQueue.main.async {
-                    if let url = imageLoader.currentImageURL {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            proxy.scrollTo(url, anchor: .center)
-                        }
-                    }
-                }
-            }
-            .onAppear {
-                DispatchQueue.main.async {
-                    if let url = imageLoader.currentImageURL {
-                        proxy.scrollTo(url, anchor: .center)
-                    }
-                }
-            }
-        }
-    }
 }
 
 #Preview {
