@@ -37,6 +37,7 @@ extension NSNotification.Name {
 
     static let toggleSlideshow = NSNotification.Name("ToggleSlideshow")
     static let toggleThumbnails = NSNotification.Name("ToggleThumbnails")
+    static let toggleGridView = NSNotification.Name("ToggleGridView")
     static let toggleImageInfo = NSNotification.Name("ToggleImageInfo")
     static let toggleHistogram = NSNotification.Name("ToggleHistogram")
 
@@ -48,6 +49,7 @@ extension NSNotification.Name {
     static let toggleFavourite = NSNotification.Name("ToggleFavourite")
     static let toggleFavouritesOnly = NSNotification.Name("ToggleFavouritesOnly")
     static let toggleSearchBar = NSNotification.Name("ToggleSearchBar")
+    static let showFilterPresets = NSNotification.Name("ShowFilterPresets")
 
     static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
     static let showToolsGuide = NSNotification.Name("ShowToolsGuide")

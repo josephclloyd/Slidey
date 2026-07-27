@@ -22,6 +22,9 @@ extension SlideshowView {
                 showThumbnails.toggle()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleGridView)) { _ in
+            ifKeyWindow { toggleGridView() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
             ifKeyWindow { toggleInfoOverlay() }
         }
@@ -93,6 +96,12 @@ extension SlideshowView {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleSearchBar)) { _ in
             ifKeyWindow { toggleSearchBar() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showFilterPresets)) { _ in
+            ifKeyWindow {
+                showSearchBar = true
+                showPresetsPopover = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.showKeyboardShortcuts)) { _ in
             showKeyboardShortcuts = true

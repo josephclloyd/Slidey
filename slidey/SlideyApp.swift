@@ -109,6 +109,9 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Thumbnail Strip (t)") {
                 NotificationCenter.default.post(name: .toggleThumbnails, object: nil)
             }
+            Button("Grid / Contact Sheet (T)") {
+                NotificationCenter.default.post(name: .toggleGridView, object: nil)
+            }
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
@@ -130,6 +133,10 @@ struct SlideshowMenuCommands: Commands {
                 NotificationCenter.default.post(name: .toggleSearchBar, object: nil)
             }
             .keyboardShortcut("f", modifiers: .command)
+
+            Button("Filter Presets\u{2026}") {
+                NotificationCenter.default.post(name: .showFilterPresets, object: nil)
+            }
 
             Divider()
 
