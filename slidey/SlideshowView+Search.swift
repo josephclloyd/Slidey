@@ -116,6 +116,18 @@ extension SlideshowView {
                         .font(.system(.caption, design: .monospaced))
 
                     Button {
+                        showPresetsPopover.toggle()
+                    } label: {
+                        Image(systemName: "bookmark")
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Saved filter presets")
+                    .popover(isPresented: $showPresetsPopover, arrowEdge: .bottom) {
+                        filterPresetsPopover
+                    }
+
+                    Button {
                         closeSearchBar()
                     } label: {
                         Image(systemName: "xmark.circle.fill")

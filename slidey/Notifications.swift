@@ -48,6 +48,7 @@ extension NSNotification.Name {
     static let toggleFavourite = NSNotification.Name("ToggleFavourite")
     static let toggleFavouritesOnly = NSNotification.Name("ToggleFavouritesOnly")
     static let toggleSearchBar = NSNotification.Name("ToggleSearchBar")
+    static let showFilterPresets = NSNotification.Name("ShowFilterPresets")
 
     static let showKeyboardShortcuts = NSNotification.Name("ShowKeyboardShortcuts")
     static let showToolsGuide = NSNotification.Name("ShowToolsGuide")
