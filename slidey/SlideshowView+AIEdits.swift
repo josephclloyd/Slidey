@@ -30,7 +30,7 @@ extension SlideshowView {
 
     func applyRedEyeOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring else { return }
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
@@ -145,7 +145,7 @@ extension SlideshowView {
 
     func removeBackgroundOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring else { return }
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
@@ -218,7 +218,7 @@ extension SlideshowView {
     // swiftlint:disable:next function_body_length
     func removeArtifactsOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
@@ -277,7 +277,7 @@ extension SlideshowView {
     // swiftlint:disable:next function_body_length
     func colorizeCurrentImage(force: Bool = false) {
         guard !isProcessing, !isFaceRestoring, !isRemovingArtifacts, !isColorizing else { return }
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
@@ -461,7 +461,7 @@ extension SlideshowView {
     // swiftlint:disable:next function_body_length
     func restoreFacesOnCurrentImage() {
         guard !isProcessing, !isFaceRestoring, !isColorizing else { return }
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let source = currentComposite(for: url) else { return }
         guard let srcCG = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
 
