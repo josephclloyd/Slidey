@@ -22,6 +22,9 @@ extension SlideshowView {
                 showThumbnails.toggle()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleGridView)) { _ in
+            ifKeyWindow { toggleGridView() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.toggleImageInfo)) { _ in
             ifKeyWindow { toggleInfoOverlay() }
         }

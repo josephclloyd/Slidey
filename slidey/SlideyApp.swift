@@ -109,6 +109,9 @@ struct SlideshowMenuCommands: Commands {
             Button("Toggle Thumbnail Strip (t)") {
                 NotificationCenter.default.post(name: .toggleThumbnails, object: nil)
             }
+            Button("Grid / Contact Sheet (T)") {
+                NotificationCenter.default.post(name: .toggleGridView, object: nil)
+            }
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
