@@ -1,7 +1,7 @@
 # Sprint 38 — 2026-07-28
 
 Started: 2026-07-28T18:30:00Z
-Status: planned
+Status: done
 
 ## Issues
 
@@ -16,6 +16,22 @@ Status: planned
 - #328 Selective colour — touches SlideshowView.swift; serialize after #332
 - #329 Multi-select — large scope, touches SlideshowView.swift; own sprint
 - #334 Introspection findings — tech debt; address incrementally, not as a sprint issue
+
+## Results
+
+Released: v1.37 — 2026-07-28
+
+### Shipped
+- #332 Video playback (mov, mp4, m4v, mkv) inline with AVKit — `SlideshowView+Video.swift` (new, 219 lines), `VideoPlaybackTests.swift` (180 lines, 12 tests), first-frame thumbnails via `AVAssetImageGenerator`, Space key context-aware (play/pause vs slideshow toggle), mute button in HUD, slideshow auto-advance paused during playback, "editing not available" overlay
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 1 (#338)
+- Total cost: ~$4.27 (impl $3.76, review $0.51)
+- Repair rounds: 0
+- CI wall time: ~2.5 min
 
 ## Notes
 
