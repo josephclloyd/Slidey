@@ -68,8 +68,12 @@ extension SlideshowView {
         let dupes = duplicateURLStrings
         let search = currentSearchCriteria
         let dateCache = captureDateCache
+        let orientation = orientationFilter
+        let fileTypes = fileTypeFilter
+        let dims = dimensionCache
 
-        if !wantFavs && minRating <= 0 && !wantDupes && !search.isActive {
+        if !wantFavs && minRating <= 0 && !wantDupes && !search.isActive
+            && orientation == .all && fileTypes.isEmpty {
             imageLoader.urlFilter = nil
         } else {
             imageLoader.urlFilter = { url in
@@ -77,6 +81,13 @@ extension SlideshowView {
                 if minRating > 0 && (ratings[url] ?? 0) < minRating { return false }
                 if wantDupes && !dupes.contains(url.absoluteString) { return false }
                 if search.isActive && !search.matches(url: url, captureDate: dateCache[url]) { return false }
+                if orientation != .all {
+                    // Dimensions are resolved into the cache before the orientation
+                    // chip is applied; an unknown size fails the constraint, matching
+                    // how the date filter treats an unknown capture date.
+                    guard let size = dims[url], orientation.matches(size: size) else { return false }
+                }
+                if !FileTypeFilter.matchesAny(fileTypes, url: url) { return false }
                 return true
             }
         }
@@ -91,6 +102,9 @@ extension SlideshowView {
         }
         if showFavouritesOnly {
             return "Press x to favourite images, then v to filter"
+        }
+        if chipFilterActive {
+            return "Adjust the orientation / file-type chips (\u{2318}F to open search)"
         }
         return "Rate images with 1\u{2013}5, then filter from the Slideshow menu"
     }

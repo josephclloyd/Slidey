@@ -108,6 +108,11 @@ struct SlideshowView: View {
     @State var searchEndDate = Date()
     /// EXIF-or-modification capture-date cache, populated lazily for date filters.
     @State var captureDateCache: [URL: Date] = [:]
+    // Orientation + file-type filter chips (#331). Reset on new directory open.
+    @State var orientationFilter: OrientationFilter = .all
+    @State var fileTypeFilter: Set<FileTypeFilter> = []
+    /// Orientation-corrected pixel-size cache, populated lazily for orientation filtering.
+    @State var dimensionCache: [URL: CGSize] = [:]
     @FocusState var searchFieldFocused: Bool
     @AppStorage("filterPresets") var filterPresetsData: Data = Data()  // saved presets (#313)
     @State var showPresetsPopover = false
@@ -286,7 +291,7 @@ struct SlideshowView: View {
             .onAppear {
                 DispatchQueue.main.async { captureWindow() }
             }
-        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly || currentSearchCriteria.isActive) && imageLoader.hasUnfilteredImages {
+        } else if (showFavouritesOnly || minimumRatingFilter > 0 || showDuplicatesOnly || currentSearchCriteria.isActive || chipFilterActive) && imageLoader.hasUnfilteredImages {
             VStack(spacing: 20) {
                 Text("\u{2605}")
                     .font(.system(size: 48))
@@ -1494,9 +1499,17 @@ struct SlideshowView: View {
         imageRatings = [:]
         duplicateScanGeneration &+= 1
         isDetectingDuplicates = false
+        // Filter chips reset on new directory open (#331); clear the dimension
+        // cache so it can't leak sizes keyed by the previous directory's URLs.
+        let hadChipFilter = chipFilterActive
+        orientationFilter = .all
+        fileTypeFilter = []
+        dimensionCache = [:]
         if showDuplicatesOnly {
             showDuplicatesOnly = false
             duplicateURLStrings = []
+            updateFilter()
+        } else if hadChipFilter {
             updateFilter()
         }
         zoomPan.reset()

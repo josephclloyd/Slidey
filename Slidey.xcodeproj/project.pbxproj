@@ -42,6 +42,7 @@
 		MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = MD100001000000000000001 /* SlideshowView+Metadata.swift */; };
 		SE100002000000000000001 /* SlideshowView+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE100001000000000000001 /* SlideshowView+Search.swift */; };
 		FP100002000000000000001 /* SlideshowView+FilterPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP100001000000000000001 /* SlideshowView+FilterPresets.swift */; };
+		FC100002000000000000001 /* SlideshowView+FilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC100001000000000000001 /* SlideshowView+FilterChips.swift */; };
 		GD100002000000000000001 /* SlideshowView+Grid.swift in Sources */ = {isa = PBXBuildFile; fileRef = GD100001000000000000001 /* SlideshowView+Grid.swift */; };
 		DD100002000000000000001 /* DuplicateDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD100001000000000000001 /* DuplicateDetector.swift */; };
 		DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */ = {isa = PBXBuildFile; fileRef = DU100001000000000000001 /* SlideshowView+Duplicates.swift */; };
@@ -115,6 +116,7 @@
 		MD100001000000000000001 /* SlideshowView+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Metadata.swift"; sourceTree = "<group>"; };
 		SE100001000000000000001 /* SlideshowView+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Search.swift"; sourceTree = "<group>"; };
 		FP100001000000000000001 /* SlideshowView+FilterPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+FilterPresets.swift"; sourceTree = "<group>"; };
+		FC100001000000000000001 /* SlideshowView+FilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+FilterChips.swift"; sourceTree = "<group>"; };
 		GD100001000000000000001 /* SlideshowView+Grid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Grid.swift"; sourceTree = "<group>"; };
 		DD100001000000000000001 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
 		DU100001000000000000001 /* SlideshowView+Duplicates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Duplicates.swift"; sourceTree = "<group>"; };
@@ -190,6 +192,7 @@
 				MD100001000000000000001 /* SlideshowView+Metadata.swift */,
 				SE100001000000000000001 /* SlideshowView+Search.swift */,
 				FP100001000000000000001 /* SlideshowView+FilterPresets.swift */,
+				FC100001000000000000001 /* SlideshowView+FilterChips.swift */,
 				GD100001000000000000001 /* SlideshowView+Grid.swift */,
 				DU100001000000000000001 /* SlideshowView+Duplicates.swift */,
 				CM100001000000000000001 /* SlideshowView+Compare.swift */,
@@ -384,6 +387,7 @@
 				MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */,
 				SE100002000000000000001 /* SlideshowView+Search.swift in Sources */,
 				FP100002000000000000001 /* SlideshowView+FilterPresets.swift in Sources */,
+				FC100002000000000000001 /* SlideshowView+FilterChips.swift in Sources */,
 				GD100002000000000000001 /* SlideshowView+Grid.swift in Sources */,
 				DU100002000000000000001 /* SlideshowView+Duplicates.swift in Sources */,
 				CM100002000000000000001 /* SlideshowView+Compare.swift in Sources */,
