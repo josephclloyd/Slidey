@@ -230,6 +230,14 @@ struct SlideshowView: View {
     @State var showCompareMode: Bool = false
     @State var compareURL: URL?; @State var compareImage: NSImage?
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
+    @State var compareActiveSide: CompareSide = .left   // which pane edits target in compare mode
+
+    /// The URL that edit commands should apply to. In compare mode with the
+    /// right pane selected this is `compareURL`; otherwise the current image.
+    var editTargetURL: URL? {
+        if showCompareMode && compareActiveSide == .right { return compareURL }
+        return imageLoader.currentImageURL
+    }
     @State var showBeforeAfterSlider: Bool = false
     @State var beforeAfterSliderPosition: CGFloat = 0.5
     @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
@@ -1599,26 +1607,23 @@ struct SlideshowView: View {
         return rotationAngles[url] ?? .zero
     }
 
-    private func rotateClockwise() {
-        if let url = imageLoader.currentImageURL {
-            registerUndoForEdit(url: url, actionName: "Rotate")
-        }
-        rotationAngle = Angle(degrees: rotationAngle.degrees + 90)
-        if let url = imageLoader.currentImageURL {
-            rotationAngles[url] = rotationAngle
-            saveFavourites()
-        }
-    }
+    private func rotateClockwise() { rotateActivePane(by: 90) }
 
-    private func rotateCounterClockwise() {
-        if let url = imageLoader.currentImageURL {
-            registerUndoForEdit(url: url, actionName: "Rotate")
-        }
-        rotationAngle = Angle(degrees: rotationAngle.degrees - 90)
-        if let url = imageLoader.currentImageURL {
+    private func rotateCounterClockwise() { rotateActivePane(by: -90) }
+
+    /// Rotates the active edit target. In compare mode with the right pane
+    /// selected this drives `compareRotation`; otherwise the main image.
+    private func rotateActivePane(by degrees: Double) {
+        guard let url = editTargetURL else { return }
+        registerUndoForEdit(url: url, actionName: "Rotate")
+        if showCompareMode && compareActiveSide == .right {
+            compareRotation = Angle(degrees: compareRotation.degrees + degrees)
+            rotationAngles[url] = compareRotation
+        } else {
+            rotationAngle = Angle(degrees: rotationAngle.degrees + degrees)
             rotationAngles[url] = rotationAngle
-            saveFavourites()
         }
+        saveFavourites()
     }
 
     private func toggleFullScreen() {
@@ -1772,7 +1777,7 @@ struct SlideshowView: View {
 
     func currentComposite(for url: URL) -> NSImage? {
         let stack = editStacks[url] ?? EditStack()
-        var result = imageLoader.currentImage
+        var result = baseImage(for: url)
         for step in stack.steps {
             if let cached = cachedImage(for: step, url: url) {
                 result = cached
@@ -1783,9 +1788,16 @@ struct SlideshowView: View {
         return result
     }
 
+    /// The un-edited decoded base bitmap for a URL. Uses the loader's live
+    /// current-image cache when `url` is the current image, otherwise decodes
+    /// the file directly (needed for editing the right compare pane).
+    func baseImage(for url: URL) -> NSImage? {
+        url == imageLoader.currentImageURL ? imageLoader.currentImage : imageLoader.decodedImage(for: url)
+    }
+
     func compositeBeforeStep(_ tag: EditStepTag, for url: URL) -> NSImage? {
         let stack = editStacks[url] ?? EditStack()
-        var result = imageLoader.currentImage
+        var result = baseImage(for: url)
         for step in stack.steps {
             if step.caseTag == tag { break }
             if let cached = cachedImage(for: step, url: url) {
@@ -1823,7 +1835,7 @@ struct SlideshowView: View {
     }
 
     func removeEdit(_ tag: EditStepTag) {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         registerUndoForEdit(url: url, actionName: "Remove \(tag.undoActionName)")
         clearCachesDownstream(of: tag, for: url)
         clearCacheForStep(tag, url: url)
@@ -1943,10 +1955,11 @@ struct SlideshowView: View {
             }
         }
         refreshHistogramOverlay(); syncAnimation()
+        if showCompareMode { refreshCompareImage() }
     }
 
     private func enhanceCurrentImage() {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let sourceImage = currentComposite(for: url),
               let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
@@ -1981,7 +1994,7 @@ struct SlideshowView: View {
     }
 
     private func smoothCurrentImage(noiseLevel: Double = 0.02) {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let sourceImage = currentComposite(for: url),
               let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
@@ -2014,7 +2027,7 @@ struct SlideshowView: View {
     }
 
     private func sharpenCurrentImage() {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         guard let sourceImage = currentComposite(for: url),
               let cgImage = sourceImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return
@@ -2125,7 +2138,7 @@ struct SlideshowView: View {
     }
 
     private func flipCurrentImageHorizontal() {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         registerUndoForEdit(url: url, actionName: "Flip Horizontal")
         let key = url.absoluteString
         if flippedHorizontally.contains(key) { flippedHorizontally.remove(key) } else { flippedHorizontally.insert(key) }
@@ -2135,7 +2148,7 @@ struct SlideshowView: View {
     }
 
     private func flipCurrentImageVertical() {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         registerUndoForEdit(url: url, actionName: "Flip Vertical")
         let key = url.absoluteString
         if flippedVertically.contains(key) { flippedVertically.remove(key) } else { flippedVertically.insert(key) }
@@ -2145,7 +2158,7 @@ struct SlideshowView: View {
     }
 
     private func setPhotoEffect(_ filterName: String?) {
-        guard let url = imageLoader.currentImageURL else { return }
+        guard let url = editTargetURL else { return }
         let name = filterName.flatMap { $0.isEmpty ? nil : $0 }
         guard imageEffects[url] != name else { return }
         registerUndoForEdit(url: url, actionName: "Photo Effect")
@@ -2305,7 +2318,7 @@ struct SlideshowView: View {
 
     private func upscaleCurrentImage(scale: Int) {
         guard !isProcessing else { return }
-        guard let targetURL = imageLoader.currentImageURL else { return }
+        guard let targetURL = editTargetURL else { return }
         guard let sourceImage = currentComposite(for: targetURL) else { return }
 
         isProcessing = true

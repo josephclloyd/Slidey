@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 
+/// Which pane in compare mode is the active target for edit commands.
+enum CompareSide { case left, right }
+
 extension SlideshowView {
     /// The index of the image shown in the second (right) compare pane: the
     /// next image in the current filtered set, wrapping around to the first.
@@ -26,13 +29,40 @@ extension SlideshowView {
         }
         let targetURL = imageLoader.imageURLs[targetIndex]
         compareURL = targetURL
-        compareImage = imageLoader.decodedImage(for: targetURL)
-        compareRotation = .zero
+        compareImage = compareComposite(for: targetURL)
+        compareRotation = rotationAngles[targetURL] ?? .zero
+        compareActiveSide = .left
         compareZoomPan.reset()
         zoomPan.reset()
         slideshow.stop()
         showBeforeAfterSlider = false
         showCompareMode = true
+    }
+
+    /// Composites the direct (non-HUD) edits for a compare-pane URL onto its
+    /// decoded base: the cached edit-stack steps plus flip and photo effect.
+    /// Rotation is applied by the pane's own binding, not baked in here.
+    func compareComposite(for url: URL) -> NSImage? {
+        let stack = editStacks[url] ?? EditStack()
+        var result = baseImage(for: url)
+        for step in stack.steps {
+            if let cached = cachedImage(for: step, url: url) { result = cached } else { break }
+        }
+        let isFlippedH = flippedHorizontally.contains(url.absoluteString)
+        let isFlippedV = flippedVertically.contains(url.absoluteString)
+        if (isFlippedH || isFlippedV), let base = result {
+            result = applyFlipTransform(horizontal: isFlippedH, vertical: isFlippedV, to: base) ?? base
+        }
+        if let effectName = imageEffects[url], let base = result {
+            result = applyPhotoEffect(effectName, to: base) ?? base
+        }
+        return result
+    }
+
+    /// Recomputes the right pane's image after an edit commits to it.
+    func refreshCompareImage() {
+        guard let url = compareURL else { return }
+        compareImage = compareComposite(for: url)
     }
 
     /// Handles key presses that are valid in compare mode. Returns nil when
@@ -49,7 +79,9 @@ extension SlideshowView {
         case KeyEquivalent("B"):          // ⇧B — switch from compare mode to before/after slider
             toggleBeforeAfterSlider(); return .handled
         default:
-            return .ignored
+            // Fall through so edit key bindings still fire in compare mode;
+            // they route to the active pane via `editTargetURL`.
+            return nil
         }
     }
 
@@ -63,7 +95,8 @@ extension SlideshowView {
         else { return }
         let targetURL = imageLoader.imageURLs[targetIndex]
         compareURL = targetURL
-        compareImage = imageLoader.decodedImage(for: targetURL)
+        compareImage = compareComposite(for: targetURL)
+        compareRotation = rotationAngles[targetURL] ?? .zero
         compareZoomPan.reset()
     }
 
@@ -71,6 +104,7 @@ extension SlideshowView {
         showCompareMode = false
         compareImage = nil
         compareURL = nil
+        compareActiveSide = .left
         compareZoomPan.reset()
     }
 
@@ -80,24 +114,31 @@ extension SlideshowView {
         HStack(spacing: 0) {
             ComparePaneView(image: effectiveDisplayImage, url: imageLoader.currentImageURL,
                             zoomPan: zoomPan, rotation: $rotationAngle,
-                            showFilename: showFilename)
+                            showFilename: showFilename,
+                            isActive: compareActiveSide == .left,
+                            onSelect: { compareActiveSide = .left })
             Rectangle().fill(Color.white.opacity(0.4)).frame(width: 1)
             ComparePaneView(image: compareImage, url: compareURL,
                             zoomPan: compareZoomPan, rotation: $compareRotation,
-                            showFilename: showFilename)
+                            showFilename: showFilename,
+                            isActive: compareActiveSide == .right,
+                            onSelect: { compareActiveSide = .right })
         }
     }
 }
 
 /// One half of the comparison split: a fitted image with independent
-/// zoom/pan (via mouse gestures) plus a filename caption. Navigation clicks
-/// are disabled — this view is purely for visual comparison.
+/// zoom/pan (via mouse gestures) plus a filename caption. A left-click selects
+/// the pane as the active edit target rather than navigating; the active pane
+/// is marked with a thin accent-colour border.
 struct ComparePaneView: View {
     let image: NSImage?
     let url: URL?
     @Bindable var zoomPan: ZoomPanController
     @Binding var rotation: Angle
     var showFilename: Bool = false
+    var isActive: Bool = false
+    var onSelect: () -> Void = {}
 
     var body: some View {
         GeometryReader { geo in
@@ -111,7 +152,7 @@ struct ComparePaneView: View {
                         imageOffset: $zoomPan.imageOffset,
                         containerSize: geo.size,
                         rotationAngle: $rotation,
-                        onLeftClick: {},
+                        onLeftClick: onSelect,
                         onRightClick: {},
                         dragURL: url,
                         swipeEnabled: false
@@ -133,6 +174,13 @@ struct ComparePaneView: View {
                             .foregroundStyle(.white)
                             .padding(.bottom, 14)
                     }
+                }
+            }
+            .overlay {
+                if isActive {
+                    Rectangle()
+                        .strokeBorder(Color.accentColor.opacity(0.8), lineWidth: 2)
+                        .allowsHitTesting(false)
                 }
             }
             .onAppear { zoomPan.windowSize = geo.size }
