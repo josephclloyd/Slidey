@@ -238,6 +238,18 @@ struct SlideshowView: View {
         if showCompareMode && compareActiveSide == .right { return compareURL }
         return imageLoader.currentImageURL
     }
+
+    /// The ZoomPanController, image, and rotation for the active pane so that
+    /// zoom commands (keys, menu) target whichever pane is selected.
+    var activeZoomPan: ZoomPanController {
+        showCompareMode && compareActiveSide == .right ? compareZoomPan : zoomPan
+    }
+    var activeZoomImage: NSImage? {
+        showCompareMode && compareActiveSide == .right ? compareImage : effectiveDisplayImage
+    }
+    var activeZoomRotation: Angle {
+        showCompareMode && compareActiveSide == .right ? compareRotation : rotationAngle
+    }
     @State var showBeforeAfterSlider: Bool = false
     @State var beforeAfterSliderPosition: CGFloat = 0.5
     @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
@@ -845,10 +857,10 @@ struct SlideshowView: View {
             ifKeyWindow { removeEnhancement() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToNative)) { _ in
-            ifKeyWindow { zoomPan.zoomToNativeSize(image: effectiveDisplayImage, rotationAngle: rotationAngle) }
+            ifKeyWindow { activeZoomPan.zoomToNativeSize(image: activeZoomImage, rotationAngle: activeZoomRotation) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.scaleToFill)) { _ in
-            ifKeyWindow { zoomPan.zoomToFillScreen(image: effectiveDisplayImage, rotationAngle: rotationAngle) }
+            ifKeyWindow { activeZoomPan.zoomToFillScreen(image: activeZoomImage, rotationAngle: activeZoomRotation) }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.rotateClockwise)) { _ in
             ifKeyWindow { rotateClockwise() }
@@ -893,13 +905,13 @@ struct SlideshowView: View {
         content
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomIn)) { _ in
             ifKeyWindow {
-                zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
+                activeZoomPan.zoomScale = min(activeZoomPan.zoomScale * 1.2, 10.0)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.zoomOut)) { _ in
             ifKeyWindow {
-                zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
-                if zoomPan.zoomScale <= 1.0 { zoomPan.reset() }
+                activeZoomPan.zoomScale = max(activeZoomPan.zoomScale / 1.2, 0.1)
+                if activeZoomPan.zoomScale <= 1.0 { activeZoomPan.reset() }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.flipHorizontal)) { _ in
@@ -1182,19 +1194,19 @@ struct SlideshowView: View {
     private func handleCharacterKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         switch keyPress.characters {
         case "+", "=":
-            zoomPan.zoomScale = min(zoomPan.zoomScale * 1.2, 10.0)
+            activeZoomPan.zoomScale = min(activeZoomPan.zoomScale * 1.2, 10.0)
             return .handled
         case "-", "_":
-            zoomPan.zoomScale = max(zoomPan.zoomScale / 1.2, 0.1)
-            if zoomPan.zoomScale <= 1.0 { zoomPan.reset() }
+            activeZoomPan.zoomScale = max(activeZoomPan.zoomScale / 1.2, 0.1)
+            if activeZoomPan.zoomScale <= 1.0 { activeZoomPan.reset() }
             return .handled
         case "s", "S":
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
-            zoomPan.zoomToNativeSize(image: effectiveDisplayImage, rotationAngle: rotationAngle)
+            activeZoomPan.zoomToNativeSize(image: activeZoomImage, rotationAngle: activeZoomRotation)
             return .handled
         case "f", "F":
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
-            zoomPan.zoomToFillScreen(image: effectiveDisplayImage, rotationAngle: rotationAngle)
+            activeZoomPan.zoomToFillScreen(image: activeZoomImage, rotationAngle: activeZoomRotation)
             return .handled
         case "r":
             guard !keyPress.modifiers.contains(.command) else { return .ignored }
