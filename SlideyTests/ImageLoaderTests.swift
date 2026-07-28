@@ -76,10 +76,18 @@ final class SupportedExtensionTests: XCTestCase {
         }
     }
 
-    func testRejectsVideo() {
-        XCTAssertFalse(loader.supportedExtensions.contains("mp4"))
-        XCTAssertFalse(loader.supportedExtensions.contains("mov"))
+    func testAcceptsPlayableVideo() {
+        // Inline video playback (#332): these are scanned and played via AVKit.
+        XCTAssertTrue(loader.supportedExtensions.contains("mp4"))
+        XCTAssertTrue(loader.supportedExtensions.contains("mov"))
+        XCTAssertTrue(loader.supportedExtensions.contains("m4v"))
+        XCTAssertTrue(loader.supportedExtensions.contains("mkv"))
+    }
+
+    func testRejectsUnsupportedVideo() {
+        // Formats we don't claim to play remain excluded from the scan.
         XCTAssertFalse(loader.supportedExtensions.contains("avi"))
+        XCTAssertFalse(loader.supportedExtensions.contains("wmv"))
     }
 
     func testRejectsText() {

@@ -225,6 +225,9 @@ struct ThumbnailCell: View {
     /// Uses ImageIO to read just the embedded/scaled thumbnail rather than
     /// decoding the full image. Cheap even for very large source files.
     nonisolated private static func generate(url: URL, maxPixelSize: Int) -> NSImage? {
+        if ImageLoader.isVideo(url) {
+            return ImageLoader.videoThumbnail(url: url, maxPixelSize: maxPixelSize)
+        }
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
