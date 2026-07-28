@@ -547,6 +547,20 @@ gh issue create --title "..." --label "..." --body-file /path/to/body.md
 This sidesteps shell quoting entirely — no escaping needed for apostrophes, backticks, or
 embedded double quotes in the body text. Prefer this over `--body "$(cat <<'EOF' ... EOF)"`.
 
+**The same quoting hazard applies to `mcx claude send`.** Backticks and `${...}` inside
+double-quoted arguments are expanded by bash before the argument reaches `mcx`. Write
+risk-note or long-form send messages to a temp file first:
+```bash
+# Write the message body to a temp file (using the Write tool or a heredoc):
+cat > /tmp/send-msg.txt << 'MSGEOF'
+message text with backticks and ${braces} safe here
+MSGEOF
+# Then send:
+mcx claude send <sessionId> "$(cat /tmp/send-msg.txt)"
+```
+Hit in Sprint 38: the first `mcx claude send` with plan-time risk notes contained backtick
+expressions that bash executed as subshell commands; fixed by writing to a temp file.
+
 ## Direct push to main: only when CI/tooling itself is what's broken
 
 The normal flow (branch → PR → passing CI → `mcx pr merge`) requires CI to pass before
