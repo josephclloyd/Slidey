@@ -73,6 +73,8 @@ extension SlideshowView {
 
                     cropVisual(containerSize: size)
                         .allowsHitTesting(false)
+
+                    cropPresetBar
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Crop region")
@@ -82,6 +84,31 @@ extension SlideshowView {
                 .accessibilityAction(named: "Cancel crop") { cancelCrop() }
                 .accessibilityAdjustableAction { adjustCropRegionForAccessibility($0) }
             }
+        }
+    }
+
+    @ViewBuilder private var cropPresetBar: some View {
+        VStack {
+            HStack(spacing: 6) {
+                ForEach(CropAspectPreset.allCases) { preset in
+                    let isActive = cropController.activePreset == preset
+                    Button(preset.label) { selectCropPreset(preset) }
+                        .buttonStyle(.plain)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(isActive ? .black : .white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(isActive ? Color.white : Color.white.opacity(0.15))
+                        .cornerRadius(5)
+                        .help("Constrain crop to \(preset.label)")
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.7))
+            .cornerRadius(8)
+            .padding(.top, 20)
+            Spacer()
         }
     }
 
@@ -210,6 +237,18 @@ extension SlideshowView {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
+    /// Normalized width/height ratio for the active preset given the current
+    /// image's pixel dimensions, or nil when the preset is Free / no image.
+    private func activePresetNormAspect() -> CGFloat? {
+        guard let ratio = cropController.activePreset.pixelRatio,
+              let image = effectiveDisplayImage,
+              let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return CropController.normalizedAspect(
+            pixelRatio: ratio,
+            imagePixelSize: CGSize(width: cg.width, height: cg.height)
+        )
+    }
+
     private func hitTestHandle(at viewPoint: CGPoint, containerSize: CGSize) -> CropController.Handle? {
         let hitRadius: CGFloat = 12
         for (handle, normalizedPos) in cropController.handlePositions() {
@@ -245,21 +284,26 @@ extension SlideshowView {
     private func handleCropMouseDragged(_ point: CGPoint, containerSize: CGSize) {
         guard cropController.isDragging else { return }
         guard var normalized = viewToNormalized(point, containerSize: containerSize) else { return }
+        let presetNormAspect = activePresetNormAspect()
 
-        if NSEvent.modifierFlags.contains(.shift),
-           cropController.activeHandle == nil,
-           let start = cropController.dragStartNormalized,
-           let image = effectiveDisplayImage,
-           let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let ar = CGFloat(cg.width) / CGFloat(cg.height)
-            normalized = CropController.constrainToAspectRatio(start: start, end: normalized, aspectRatio: ar)
+        if let handle = cropController.activeHandle {
+            cropController.dragCurrentNormalized = normalized
+            cropController.applyHandleDrag(handle: handle, to: normalized, normAspect: presetNormAspect)
+            return
+        }
+
+        if let start = cropController.dragStartNormalized {
+            if let na = presetNormAspect {
+                normalized = CropController.constrainToAspectRatio(start: start, end: normalized, aspectRatio: na)
+            } else if NSEvent.modifierFlags.contains(.shift),
+                      let image = effectiveDisplayImage,
+                      let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let ar = CGFloat(cg.width) / CGFloat(cg.height)
+                normalized = CropController.constrainToAspectRatio(start: start, end: normalized, aspectRatio: ar)
+            }
         }
 
         cropController.dragCurrentNormalized = normalized
-
-        if let handle = cropController.activeHandle {
-            cropController.applyHandleDrag(handle: handle, to: normalized)
-        }
     }
 
     private func handleCropMouseUp(_ point: CGPoint, containerSize: CGSize) {
@@ -272,9 +316,11 @@ extension SlideshowView {
             cropController.activeHandle = nil
             cropController.regionBeforeDrag = nil
         } else if let start = cropController.dragStartNormalized {
-            if NSEvent.modifierFlags.contains(.shift),
-               let image = effectiveDisplayImage,
-               let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            if let na = activePresetNormAspect() {
+                normalized = CropController.constrainToAspectRatio(start: start, end: normalized, aspectRatio: na)
+            } else if NSEvent.modifierFlags.contains(.shift),
+                      let image = effectiveDisplayImage,
+                      let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 let ar = CGFloat(cg.width) / CGFloat(cg.height)
                 normalized = CropController.constrainToAspectRatio(start: start, end: normalized, aspectRatio: ar)
             }
@@ -299,10 +345,25 @@ extension SlideshowView {
         }
 
         cropController.isActive = true
+        cropController.activePreset = CropAspectPreset(rawValue: cropAspectPresetRaw) ?? .free
         if let url = imageLoader.currentImageURL,
            let existing = cropRegions[url.absoluteString] {
             cropController.pendingRegion = existing
         }
+    }
+
+    func selectCropPreset(_ preset: CropAspectPreset) {
+        cropController.activePreset = preset
+        cropAspectPresetRaw = preset.rawValue
+        guard let region = cropController.pendingRegion,
+              let ratio = preset.pixelRatio,
+              let image = effectiveDisplayImage,
+              let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let na = CropController.normalizedAspect(
+                pixelRatio: ratio,
+                imagePixelSize: CGSize(width: cg.width, height: cg.height)
+              ) else { return }
+        cropController.pendingRegion = CropController.fitRegion(region, toNormAspect: na)
     }
 
     func cancelCrop() {

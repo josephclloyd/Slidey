@@ -1133,6 +1133,71 @@ final class CropControllerTests: XCTestCase {
         XCTAssertEqual(r.width, 0.5, accuracy: 1e-10)
         XCTAssertEqual(r.height, 0.5, accuracy: 1e-10)
     }
+
+    // MARK: - Aspect preset tests
+
+    func testPresetPixelRatios() {
+        XCTAssertNil(CropAspectPreset.free.pixelRatio)
+        XCTAssertEqual(CropAspectPreset.square.pixelRatio!, 1, accuracy: 1e-10)
+        XCTAssertEqual(CropAspectPreset.ratio16x9.pixelRatio!, 16.0 / 9.0, accuracy: 1e-10)
+        XCTAssertEqual(CropAspectPreset.a4Portrait.pixelRatio!, 210.0 / 297.0, accuracy: 1e-10)
+        XCTAssertEqual(CropAspectPreset.a4Landscape.pixelRatio!, 297.0 / 210.0, accuracy: 1e-10)
+    }
+
+    func testNormalizedAspectAccountsForImageStretch() {
+        // A square (1:1) crop on a 4000x3000 image needs a normalized
+        // width/height of 3000/4000 = 0.75 because axes scale independently.
+        let na = CropController.normalizedAspect(
+            pixelRatio: 1, imagePixelSize: CGSize(width: 4000, height: 3000)
+        )
+        XCTAssertEqual(na!, 0.75, accuracy: 1e-10)
+        // Degenerate inputs return nil.
+        XCTAssertNil(CropController.normalizedAspect(
+            pixelRatio: 1, imagePixelSize: CGSize(width: 0, height: 100)
+        ))
+        XCTAssertNil(CropController.normalizedAspect(
+            pixelRatio: 0, imagePixelSize: CGSize(width: 100, height: 100)
+        ))
+    }
+
+    func testFitRegionKeepsCentreAndMatchesAspect() {
+        let region = CropRegion(x: 0.2, y: 0.2, width: 0.4, height: 0.4)
+        let fitted = CropController.fitRegion(region, toNormAspect: 0.75)
+        XCTAssertEqual(fitted.width / fitted.height, 0.75, accuracy: 1e-10)
+        XCTAssertEqual(fitted.x + fitted.width / 2, 0.4, accuracy: 1e-10)
+        XCTAssertEqual(fitted.y + fitted.height / 2, 0.4, accuracy: 1e-10)
+    }
+
+    func testFitRegionStaysInBounds() {
+        let region = CropRegion(x: 0.7, y: 0.7, width: 0.5, height: 0.5).clamped()
+        let fitted = CropController.fitRegion(region, toNormAspect: 2.0)
+        XCTAssertGreaterThanOrEqual(fitted.x, -1e-12)
+        XCTAssertGreaterThanOrEqual(fitted.y, -1e-12)
+        XCTAssertLessThanOrEqual(fitted.x + fitted.width, 1 + 1e-12)
+        XCTAssertLessThanOrEqual(fitted.y + fitted.height, 1 + 1e-12)
+    }
+
+    func testConstrainedHandleDragCornerPreservesRatio() {
+        let controller = CropController()
+        controller.pendingRegion = CropRegion(x: 0.2, y: 0.3, width: 0.4, height: 0.3)
+        controller.regionBeforeDrag = controller.pendingRegion
+        controller.applyHandleDrag(handle: .bottomRight, to: CGPoint(x: 0.5, y: 0.5), normAspect: 0.75)
+        let r = controller.pendingRegion!
+        XCTAssertEqual(r.x, 0.2, accuracy: 1e-10)
+        XCTAssertEqual(r.y, 0.3, accuracy: 1e-10)
+        XCTAssertEqual(r.width / r.height, 0.75, accuracy: 1e-10)
+    }
+
+    func testConstrainedHandleDragEdgeDerivesPerpendicular() {
+        let controller = CropController()
+        controller.pendingRegion = CropRegion(x: 0.2, y: 0.3, width: 0.4, height: 0.3)
+        controller.regionBeforeDrag = controller.pendingRegion
+        controller.applyHandleDrag(handle: .right, to: CGPoint(x: 0.6, y: 0.45), normAspect: 0.75)
+        let r = controller.pendingRegion!
+        XCTAssertEqual(r.width / r.height, 0.75, accuracy: 1e-10)
+        // Vertical centre of the dragged edge is preserved.
+        XCTAssertEqual(r.y + r.height / 2, 0.45, accuracy: 1e-10)
+    }
 }
 
 // MARK: - Compare Mode Tests
