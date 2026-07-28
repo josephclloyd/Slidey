@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import XCTest
 @testable import Slidey
@@ -934,5 +935,186 @@ final class SearchCriteriaTests: XCTestCase {
                        SearchCriteria(filenameQuery: "x", startDate: jan1))
         XCTAssertNotEqual(SearchCriteria(filenameQuery: "x"),
                           SearchCriteria(filenameQuery: "y"))
+    }
+}
+
+// MARK: - Orientation & file-type filter chips (#331)
+
+final class OrientationFilterTests: XCTestCase {
+    func testAllMatchesEverything() {
+        XCTAssertTrue(OrientationFilter.all.matches(size: CGSize(width: 100, height: 50)))
+        XCTAssertTrue(OrientationFilter.all.matches(size: CGSize(width: 50, height: 100)))
+        XCTAssertTrue(OrientationFilter.all.matches(size: CGSize(width: 80, height: 80)))
+    }
+
+    func testPortraitOnlyMatchesTallerThanWide() {
+        XCTAssertTrue(OrientationFilter.portrait.matches(size: CGSize(width: 50, height: 100)))
+        XCTAssertFalse(OrientationFilter.portrait.matches(size: CGSize(width: 100, height: 50)))
+        XCTAssertFalse(OrientationFilter.portrait.matches(size: CGSize(width: 80, height: 80)))
+    }
+
+    func testLandscapeOnlyMatchesWiderThanTall() {
+        XCTAssertTrue(OrientationFilter.landscape.matches(size: CGSize(width: 100, height: 50)))
+        XCTAssertFalse(OrientationFilter.landscape.matches(size: CGSize(width: 50, height: 100)))
+        XCTAssertFalse(OrientationFilter.landscape.matches(size: CGSize(width: 80, height: 80)))
+    }
+
+    func testSquareOnlyMatchesEqualSides() {
+        XCTAssertTrue(OrientationFilter.square.matches(size: CGSize(width: 80, height: 80)))
+        XCTAssertFalse(OrientationFilter.square.matches(size: CGSize(width: 100, height: 50)))
+        XCTAssertFalse(OrientationFilter.square.matches(size: CGSize(width: 50, height: 100)))
+    }
+
+    func testIdentifiableAndCases() {
+        XCTAssertEqual(OrientationFilter.allCases.count, 4)
+        for option in OrientationFilter.allCases {
+            XCTAssertEqual(option.id, option.rawValue)
+            XCTAssertFalse(option.label.isEmpty)
+        }
+    }
+}
+
+final class FileTypeFilterTests: XCTestCase {
+    func testJPEGCoversBothExtensions() {
+        XCTAssertEqual(FileTypeFilter.jpeg.extensions, ["jpg", "jpeg"])
+    }
+
+    func testTIFFCoversTifAndTiff() {
+        XCTAssertTrue(FileTypeFilter.tiff.extensions.contains("tif"))
+        XCTAssertTrue(FileTypeFilter.tiff.extensions.contains("tiff"))
+    }
+
+    func testRawCoversKnownRawExtensions() {
+        for ext in ["cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw"] {
+            XCTAssertTrue(FileTypeFilter.raw.extensions.contains(ext), "raw should cover \(ext)")
+        }
+    }
+
+    func testEmptySelectionMatchesEverything() {
+        let none: Set<FileTypeFilter> = []
+        XCTAssertTrue(FileTypeFilter.matchesAny(none, url: URL(fileURLWithPath: "/a/photo.heic")))
+        XCTAssertTrue(FileTypeFilter.matchesAny(none, url: URL(fileURLWithPath: "/a/photo.xyz")))
+    }
+
+    func testSingleSelectionMatchesOnlyThatType() {
+        let sel: Set<FileTypeFilter> = [.png]
+        XCTAssertTrue(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.png")))
+        XCTAssertTrue(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.PNG")))
+        XCTAssertFalse(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.jpg")))
+    }
+
+    func testMultiSelectionIsUnion() {
+        let sel: Set<FileTypeFilter> = [.jpeg, .heic]
+        XCTAssertTrue(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.jpeg")))
+        XCTAssertTrue(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.heic")))
+        XCTAssertFalse(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/x.png")))
+    }
+
+    func testUnknownExtensionNeverMatchesActiveSelection() {
+        let sel: Set<FileTypeFilter> = [.jpeg]
+        XCTAssertFalse(FileTypeFilter.matchesAny(sel, url: URL(fileURLWithPath: "/a/clip.mp4")))
+    }
+}
+
+final class PixelDimensionsTests: XCTestCase {
+    var tempDir: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PixelDimensionsTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() {
+        if let tempDir { try? FileManager.default.removeItem(at: tempDir) }
+        super.tearDown()
+    }
+
+    private func writePNG(width: Int, height: Int, name: String) throws -> URL {
+        let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        )
+        let data = try XCTUnwrap(rep?.representation(using: .png, properties: [:]))
+        let url = tempDir.appendingPathComponent(name)
+        try data.write(to: url)
+        return url
+    }
+
+    func testReadsLandscapeDimensions() throws {
+        let url = try writePNG(width: 120, height: 60, name: "land.png")
+        let size = try XCTUnwrap(ImageLoader.pixelDimensions(for: url))
+        XCTAssertEqual(size.width, 120)
+        XCTAssertEqual(size.height, 60)
+        XCTAssertTrue(OrientationFilter.landscape.matches(size: size))
+    }
+
+    func testReadsPortraitDimensions() throws {
+        let url = try writePNG(width: 60, height: 120, name: "port.png")
+        let size = try XCTUnwrap(ImageLoader.pixelDimensions(for: url))
+        XCTAssertEqual(size.width, 60)
+        XCTAssertEqual(size.height, 120)
+        XCTAssertTrue(OrientationFilter.portrait.matches(size: size))
+    }
+
+    func testReadsSquareDimensions() throws {
+        let url = try writePNG(width: 90, height: 90, name: "sq.png")
+        let size = try XCTUnwrap(ImageLoader.pixelDimensions(for: url))
+        XCTAssertTrue(OrientationFilter.square.matches(size: size))
+    }
+
+    func testReturnsNilForNonImage() throws {
+        let url = tempDir.appendingPathComponent("empty.jpg")
+        FileManager.default.createFile(atPath: url.path, contents: Data())
+        XCTAssertNil(ImageLoader.pixelDimensions(for: url))
+    }
+}
+
+/// Verifies the AND-composition semantics that `updateFilter()` builds into the
+/// loader predicate from the orientation + file-type chips, using the same pure
+/// helpers the live predicate calls.
+final class ChipPredicateCompositionTests: XCTestCase {
+    /// Mirrors the orientation + file-type clauses of `SlideshowView.updateFilter()`.
+    private func makePredicate(
+        orientation: OrientationFilter,
+        fileTypes: Set<FileTypeFilter>,
+        dims: [URL: CGSize]
+    ) -> (URL) -> Bool {
+        return { url in
+            if orientation != .all {
+                guard let size = dims[url], orientation.matches(size: size) else { return false }
+            }
+            if !FileTypeFilter.matchesAny(fileTypes, url: url) { return false }
+            return true
+        }
+    }
+
+    func testOrientationAndFileTypeCombineWithAND() {
+        let portraitJPEG = URL(fileURLWithPath: "/a/p.jpg")
+        let landscapeJPEG = URL(fileURLWithPath: "/a/l.jpg")
+        let portraitPNG = URL(fileURLWithPath: "/a/p.png")
+        let dims: [URL: CGSize] = [
+            portraitJPEG: CGSize(width: 50, height: 100),
+            landscapeJPEG: CGSize(width: 100, height: 50),
+            portraitPNG: CGSize(width: 50, height: 100),
+        ]
+        let predicate = makePredicate(orientation: .portrait, fileTypes: [.jpeg], dims: dims)
+        XCTAssertTrue(predicate(portraitJPEG))    // portrait AND jpeg
+        XCTAssertFalse(predicate(landscapeJPEG))  // wrong orientation
+        XCTAssertFalse(predicate(portraitPNG))    // wrong type
+    }
+
+    func testUnknownDimensionsFailActiveOrientation() {
+        let url = URL(fileURLWithPath: "/a/x.jpg")
+        let predicate = makePredicate(orientation: .landscape, fileTypes: [], dims: [:])
+        XCTAssertFalse(predicate(url))
+    }
+
+    func testNeutralChipsMatchEverything() {
+        let url = URL(fileURLWithPath: "/a/x.gif")
+        let predicate = makePredicate(orientation: .all, fileTypes: [], dims: [:])
+        XCTAssertTrue(predicate(url))
     }
 }

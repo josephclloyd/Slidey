@@ -202,6 +202,27 @@ class ImageLoader: ObservableObject {
         return exifDateFormatter.date(from: ds)
     }
 
+    /// Orientation-corrected pixel dimensions read straight from the image's
+    /// metadata without decoding the full bitmap (used by the orientation filter
+    /// chips, #331). EXIF orientations 5–8 rotate the frame 90°, so the stored
+    /// pixel width/height are swapped for display — a portrait phone photo is
+    /// commonly stored as landscape pixels plus a rotation tag, and must classify
+    /// as portrait. Returns nil when dimensions are unreadable.
+    static func pixelDimensions(for url: URL) -> CGSize? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = props[kCGImagePropertyPixelWidth] as? Int,
+              let height = props[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, height > 0 else {
+            return nil
+        }
+        let orientation = props[kCGImagePropertyOrientation] as? Int ?? 1
+        if (5...8).contains(orientation) {
+            return CGSize(width: height, height: width)
+        }
+        return CGSize(width: width, height: height)
+    }
+
     /// Best-effort "date taken" for search filtering: EXIF capture date if
     /// present, otherwise the file's modification date. Matches the semantics
     /// of the info-overlay's "Date Taken" line. Returns nil only when neither

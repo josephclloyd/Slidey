@@ -145,6 +145,12 @@ extension SlideshowView {
                 .padding(.top, 20)
                 .onExitCommand { closeSearchBar() }
 
+                filterChipsRow
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.75))
+                    .cornerRadius(8)
+
                 Spacer()
             }
         }
