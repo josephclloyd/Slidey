@@ -259,6 +259,7 @@ struct SlideshowView: View {
     @State var showBeforeAfterSlider: Bool = false
     @State var beforeAfterSliderPosition: CGFloat = 0.5
     @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
+    @State var videoController = VideoPlayerController()  // Inline video playback (#332)
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -655,7 +656,7 @@ struct SlideshowView: View {
         }
     }
 
-    @ViewBuilder private var imageDisplayContent: some View {
+    @ViewBuilder var imageStillContent: some View {
         @Bindable var zoomPan = zoomPan
         GeometryReader { geometry in
             if let image = activeDisplayImage {
@@ -789,6 +790,7 @@ struct SlideshowView: View {
         }
         .onDisappear {
             slideshow.stop()
+            videoController.stop()
             releaseDisplaySleepAssertion()
             musicManager.deactivate()
             stopMouseMonitor()
@@ -1352,7 +1354,7 @@ struct SlideshowView: View {
             toggleBeforeAfterSlider()
             return .handled
         case " ":
-            toggleSlideshow()
+            if isVideoActive { videoController.togglePlayPause() } else { toggleSlideshow() }
             return .handled
         case "/":
             showShortcutsOverlay.toggle()
@@ -1369,7 +1371,7 @@ struct SlideshowView: View {
         return .ignored
     }
 
-    private func captureWindow() {
+    func captureWindow() {
         myWindow = NSApplication.shared.keyWindow
         if let myWindow {
             windowHasFocus = myWindow.isKeyWindow
@@ -1980,7 +1982,7 @@ struct SlideshowView: View {
                 self.recomputeStep(step, for: url)
             }
         }
-        refreshHistogramOverlay(); syncAnimation()
+        refreshHistogramOverlay(); syncAnimation(); syncVideo()
         if showCompareMode { refreshCompareImage() }
     }
 
