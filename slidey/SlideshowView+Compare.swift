@@ -140,6 +140,9 @@ struct ComparePaneView: View {
     var isActive: Bool = false
     var onSelect: () -> Void = {}
 
+    @State private var borderVisible = true
+    @State private var fadeTimer: Timer?
+
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -176,17 +179,46 @@ struct ComparePaneView: View {
                     }
                 }
             }
+            .clipped()
             .overlay {
-                if isActive {
+                if isActive && borderVisible {
                     Rectangle()
                         .strokeBorder(Color.accentColor.opacity(0.8), lineWidth: 2)
                         .allowsHitTesting(false)
+                }
+            }
+            .onContinuousHover { phase in
+                guard isActive else { return }
+                switch phase {
+                case .active:
+                    borderVisible = true
+                    resetFadeTimer()
+                case .ended:
+                    resetFadeTimer()
+                @unknown default:
+                    break
+                }
+            }
+            .onChange(of: isActive) { _, newVal in
+                if newVal {
+                    borderVisible = true
+                    resetFadeTimer()
+                } else {
+                    fadeTimer?.invalidate()
+                    fadeTimer = nil
                 }
             }
             .onAppear { zoomPan.windowSize = geo.size }
             .onGeometryChange(for: CGSize.self, of: { $0.size }) { _, newSize in
                 zoomPan.windowSize = newSize
             }
+        }
+    }
+
+    private func resetFadeTimer() {
+        fadeTimer?.invalidate()
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
+            DispatchQueue.main.async { borderVisible = false }
         }
     }
 }
