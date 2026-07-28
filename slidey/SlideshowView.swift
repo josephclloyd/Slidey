@@ -193,6 +193,7 @@ struct SlideshowView: View {
     @State var objectRemovalBaseImage: NSImage?
     @State var cropRegions: [String: CropRegion] = [:]
     @State var cropController = CropController()
+    @AppStorage("cropAspectPreset") var cropAspectPresetRaw: String = CropAspectPreset.free.rawValue
     @State var imageRatings: [URL: Int] = [:]
     @AppStorage("minimumRatingFilter") var minimumRatingFilter: Int = 0
 

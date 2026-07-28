@@ -36,6 +36,45 @@ struct CropRegion: Codable, Equatable {
     }
 }
 
+// MARK: - Aspect ratio presets
+
+enum CropAspectPreset: String, CaseIterable, Identifiable {
+    case free
+    case square
+    case ratio4x3
+    case ratio3x2
+    case ratio16x9
+    case a4Portrait
+    case a4Landscape
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .free: return "Free"
+        case .square: return "1:1"
+        case .ratio4x3: return "4:3"
+        case .ratio3x2: return "3:2"
+        case .ratio16x9: return "16:9"
+        case .a4Portrait: return "A4 ↕"
+        case .a4Landscape: return "A4 ↔"
+        }
+    }
+
+    /// Target width:height ratio in pixel space; nil for unconstrained (Free).
+    var pixelRatio: CGFloat? {
+        switch self {
+        case .free: return nil
+        case .square: return 1
+        case .ratio4x3: return 4.0 / 3.0
+        case .ratio3x2: return 3.0 / 2.0
+        case .ratio16x9: return 16.0 / 9.0
+        case .a4Portrait: return 210.0 / 297.0
+        case .a4Landscape: return 297.0 / 210.0
+        }
+    }
+}
+
 // MARK: - CropController
 
 @Observable
@@ -47,6 +86,7 @@ final class CropController {
     var dragCurrentNormalized: CGPoint?
     var activeHandle: Handle?
     var regionBeforeDrag: CropRegion?
+    var activePreset: CropAspectPreset = .free
 
     enum Handle: CaseIterable {
         case topLeft, topRight, bottomLeft, bottomRight
@@ -141,6 +181,33 @@ final class CropController {
         return CGPoint(x: end.x, y: start.y + (dy >= 0 ? desiredHeight : -desiredHeight))
     }
 
+    /// Converts a pixel-space width:height ratio into a normalized-space
+    /// width/height ratio (normalized coords stretch each axis independently).
+    static func normalizedAspect(pixelRatio: CGFloat, imagePixelSize: CGSize) -> CGFloat? {
+        guard pixelRatio > 0,
+              imagePixelSize.width > 0, imagePixelSize.height > 0 else { return nil }
+        return pixelRatio * imagePixelSize.height / imagePixelSize.width
+    }
+
+    /// Resizes a region to match `normAspect` (normalized width/height) while
+    /// keeping its centre fixed and staying within the unit square.
+    static func fitRegion(_ region: CropRegion, toNormAspect normAspect: CGFloat) -> CropRegion {
+        guard normAspect > 0 else { return region }
+        let cx = region.x + region.width / 2
+        let cy = region.y + region.height / 2
+        var w = region.width
+        var h = w / normAspect
+        if h > region.height {
+            h = region.height
+            w = h * normAspect
+        }
+        w = min(w, 1)
+        h = min(h, 1)
+        let x = min(max(cx - w / 2, 0), 1 - w)
+        let y = min(max(cy - h / 2, 0), 1 - h)
+        return CropRegion(x: x, y: y, width: w, height: h)
+    }
+
     // MARK: - Handle positions (normalized coords)
 
     func handlePositions() -> [(Handle, CGPoint)] {
@@ -160,8 +227,14 @@ final class CropController {
         ]
     }
 
-    func applyHandleDrag(handle: Handle, to point: CGPoint) {
+    func applyHandleDrag(handle: Handle, to point: CGPoint, normAspect: CGFloat? = nil) {
         guard let r = regionBeforeDrag else { return }
+        if let na = normAspect, na > 0 {
+            pendingRegion = CropController.constrainedHandleRegion(
+                from: r, handle: handle, point: point, normAspect: na
+            ).normalized()
+            return
+        }
         let p = point
         let result: CropRegion
         switch handle {
@@ -191,5 +264,50 @@ final class CropController {
                                 width: p.x - r.x, height: r.height)
         }
         pendingRegion = result.normalized()
+    }
+
+    /// Computes a handle-drag result locked to `normAspect`. Corner handles keep
+    /// the opposite corner fixed and drive off the axis with larger travel; edge
+    /// handles keep the opposite edge fixed and derive the perpendicular
+    /// dimension, centred on the dragged edge's midpoint.
+    static func constrainedHandleRegion(
+        from r: CropRegion, handle: Handle, point p: CGPoint, normAspect na: CGFloat
+    ) -> CropRegion {
+        switch handle {
+        case .topLeft, .topRight, .bottomLeft, .bottomRight:
+            let anchor: CGPoint
+            switch handle {
+            case .topLeft: anchor = CGPoint(x: r.x + r.width, y: r.y + r.height)
+            case .topRight: anchor = CGPoint(x: r.x, y: r.y + r.height)
+            case .bottomLeft: anchor = CGPoint(x: r.x + r.width, y: r.y)
+            default: anchor = CGPoint(x: r.x, y: r.y)
+            }
+            let dw = p.x - anchor.x
+            let dh = p.y - anchor.y
+            let signW: CGFloat = dw >= 0 ? 1 : -1
+            let signH: CGFloat = dh >= 0 ? 1 : -1
+            var width = dw
+            var height = dh
+            if abs(dw) >= abs(dh) * na {
+                height = signH * abs(dw) / na
+            } else {
+                width = signW * abs(dh) * na
+            }
+            return CropRegion(x: anchor.x, y: anchor.y, width: width, height: height)
+        case .left, .right:
+            let fixedX = handle == .left ? r.x + r.width : r.x
+            let cy = r.y + r.height / 2
+            let w = abs(fixedX - p.x)
+            let h = w / na
+            let x = min(fixedX, p.x)
+            return CropRegion(x: x, y: cy - h / 2, width: w, height: h)
+        case .top, .bottom:
+            let fixedY = handle == .top ? r.y + r.height : r.y
+            let cx = r.x + r.width / 2
+            let h = abs(fixedY - p.y)
+            let w = h * na
+            let y = min(fixedY, p.y)
+            return CropRegion(x: cx - w / 2, y: y, width: w, height: h)
+        }
     }
 }
