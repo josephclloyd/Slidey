@@ -85,12 +85,17 @@ class ImageLoader: ObservableObject {
     }
     var hasUnfilteredImages: Bool { !allImageURLs.isEmpty }
 
+    /// Video containers played inline via AVKit (see SlideshowView+Video.swift).
+    /// These are scanned into the directory listing but decode/edit paths treat
+    /// them specially — a still-image decode of these returns nil.
+    static let videoExtensions = ["mov", "mp4", "m4v", "mkv"]
+
     let supportedExtensions = [
         "jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp",
         // RAW formats decoded via ImageIO/CGImageSource (view/browse only,
         // no demosaicing or white-balance controls — see #282).
         "cr2", "cr3", "nef", "arw", "dng", "raf", "orf", "rw2", "pef", "srw"
-    ]
+    ] + ImageLoader.videoExtensions
 
     /// Maximum decoded pixel count we will accept. Guards against
     /// decompression bombs - small files that decode to enormous bitmaps and
