@@ -1,7 +1,7 @@
 # Sprint 36 — 2026-07-27
 
 Started: 2026-07-27T15:30:00Z
-Status: planned
+Status: done
 
 ## Issues
 
@@ -21,3 +21,19 @@ Status: planned
 - Pane tap: add `onTapGesture` callback to `ComparePaneView` — do NOT make the tap gesture part of `ImageDisplayView` (it already handles click for navigation outside compare mode).
 - Active pane indicator: a thin accent-colour border (`Color.accentColor.opacity(0.8)`, ~2pt) around the active pane is sufficient. Keep it subtle.
 - Pure SwiftUI state + view wiring — no extractable unit test logic. PR description must state this explicitly.
+
+## Results
+
+Released: v1.35 — 2026-07-28
+
+### Shipped
+- #321 Apply edits to active pane in compare mode — `compareActiveSide` enum, `editTargetURL` computed var, pane tap/highlight, all edit entry points rerouted; clean review on first pass
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 1 (#323)
+- Total cost: ~$1.36 (impl: $0.69, review: $0.67)
+- Review rounds: 0 repairs (clean first pass)
+- CI wall time per PR: ~2.5 min
