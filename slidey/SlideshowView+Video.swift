@@ -297,6 +297,9 @@ extension SlideshowView {
                         captureWindow()
                     }
                 }
+                .onGeometryChange(for: CGSize.self, of: { $0.size }) { _, newSize in
+                    zoomPan.windowSize = newSize
+                }
             }
         } else {
             imageStillContent
