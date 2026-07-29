@@ -251,10 +251,10 @@ struct SlideshowView: View {
         showCompareMode && compareActiveSide == .right ? compareZoomPan : zoomPan
     }
     var activeZoomImage: NSImage? {
-        showCompareMode && compareActiveSide == .right ? compareImage : effectiveDisplayImage
+        isVideoActive ? videoController.frameImage : (showCompareMode && compareActiveSide == .right ? compareImage : effectiveDisplayImage)
     }
     var activeZoomRotation: Angle {
-        showCompareMode && compareActiveSide == .right ? compareRotation : rotationAngle
+        isVideoActive ? .zero : (showCompareMode && compareActiveSide == .right ? compareRotation : rotationAngle)
     }
     @State var showBeforeAfterSlider: Bool = false
     @State var beforeAfterSliderPosition: CGFloat = 0.5
@@ -2198,6 +2198,7 @@ struct SlideshowView: View {
     }
 
     private func toggleSmartZoom() {
+        if isVideoActive { toggleVideoFitFill(); return }
         smartZoomEnabled.toggle()
         if smartZoomEnabled {
             guard let url = imageLoader.currentImageURL,
