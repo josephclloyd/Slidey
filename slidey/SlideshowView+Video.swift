@@ -49,7 +49,16 @@ final class VideoPlayerController {
     }
     private var adjustmentsByURL: [URL: VideoAdjustments] = [:]
 
+    private(set) var currentTime: Double = 0
+    private(set) var duration: Double = 0
+    private var timeObserverToken: Any?
     private var endObserver: NSObjectProtocol?
+
+    func seek(to fraction: Double) {
+        guard duration > 0 else { return }
+        let target = CMTime(seconds: fraction * duration, preferredTimescale: 600)
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
 
     func load(url: URL) {
         stop()
@@ -71,6 +80,7 @@ final class VideoPlayerController {
         }
         player.replaceCurrentItem(with: item)
         player.isMuted = isMuted
+        setupTimeObserver()
         // Restore per-URL adjustments and apply to the new item. Called
         // explicitly (not just via didSet) so a video whose stored values happen
         // to equal the outgoing video's still gets its composition wired up.
@@ -111,7 +121,23 @@ final class VideoPlayerController {
         )
     }
 
+    private func setupTimeObserver() {
+        if let token = timeObserverToken { player.removeTimeObserver(token); timeObserverToken = nil }
+        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.currentTime = CMTimeGetSeconds(time)
+                if let item = self.player.currentItem, item.status == .readyToPlay {
+                    let d = CMTimeGetSeconds(item.duration)
+                    if d.isFinite && d > 0 { self.duration = d }
+                }
+            }
+        }
+    }
+
     func stop() {
+        if let token = timeObserverToken { player.removeTimeObserver(token); timeObserverToken = nil }
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
@@ -122,6 +148,8 @@ final class VideoPlayerController {
         isPlaying = false
         url = nil
         frameImage = nil
+        currentTime = 0
+        duration = 0
     }
 
     /// Decodes the natural-size first frame off the main thread and publishes it
@@ -160,6 +188,10 @@ final class VideoPlayerController {
         isMuted.toggle()
     }
 
+    func stepFrame(by count: Int) {
+        player.currentItem?.step(byCount: count)
+    }
+
     /// Returns the current video to its unmodified appearance and drops its saved
     /// per-URL adjustments so it reopens clean next time (#342).
     func resetAdjustments() {
@@ -168,14 +200,78 @@ final class VideoPlayerController {
     }
 }
 
-/// `AVPlayerView` subclass that forwards magnify / scroll / drag gestures for
-/// zoom and pan while leaving normal clicks to reach the floating transport
-/// controls (scrubber, volume) — those live in subviews, so only gestures on
-/// the video body itself hit these overrides.
+/// `AVPlayerView` subclass that:
+/// - Reports mouse activity via `onControlsVisibilityChanged` so the SwiftUI
+///   overlay can show/hide on mouse move and hide after 2.5 s idle. AVKit's
+///   own controls stay at `.none` permanently — the SwiftUI layer owns the UI.
+/// - Forwards magnify/scroll/drag gestures for zoom and pan.
+/// - Intercepts all hit-testing when zoomed so the pan handler gets all events.
 final class ZoomableAVPlayerView: AVPlayerView {
     var onZoom: ((CGFloat) -> Void)?
     var onScroll: ((CGFloat, CGFloat) -> Void)?
     var onDragPan: ((CGFloat, CGFloat) -> Void)?
+    /// Called with `true` when the overlay should appear, `false` when it should hide.
+    var onControlsVisibilityChanged: ((Bool) -> Void)?
+    var isZoomed: Bool = false {
+        didSet {
+            if isZoomed {
+                hideControlsTimer?.invalidate()
+                onControlsVisibilityChanged?(false)
+            }
+        }
+    }
+
+    private var hideControlsTimer: Timer?
+    private var mouseTrackingArea: NSTrackingArea?
+
+    // MARK: - Tracking area
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let old = mouseTrackingArea { removeTrackingArea(old) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.activeInActiveApp, .mouseEnteredAndExited, .mouseMoved, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        mouseTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { wakeControls() }
+    override func mouseMoved(with event: NSEvent)   { wakeControls() }
+
+    override func mouseExited(with event: NSEvent) {
+        scheduleHide(after: 0.8)
+    }
+
+    private func wakeControls() {
+        guard !isZoomed else { return }
+        onControlsVisibilityChanged?(true)
+        hideControlsTimer?.invalidate()
+        hideControlsTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: false) { [weak self] _ in
+            self?.onControlsVisibilityChanged?(false)
+        }
+    }
+
+    private func scheduleHide(after delay: TimeInterval) {
+        hideControlsTimer?.invalidate()
+        hideControlsTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.onControlsVisibilityChanged?(false)
+        }
+    }
+
+    // MARK: - Hit-testing and gestures
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isZoomed else { return super.hitTest(point) }
+        return bounds.contains(point) ? self : nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if !isZoomed { super.mouseDown(with: event) }
+    }
 
     override func magnify(with event: NSEvent) {
         onZoom?(1.0 + event.magnification)
@@ -200,27 +296,33 @@ final class ZoomableAVPlayerView: AVPlayerView {
 /// fullscreen) are available over the video, plus zoom/pan gesture forwarding.
 struct VideoPlayerNSView: NSViewRepresentable {
     let player: AVPlayer
+    var isZoomed: Bool = false
     var onZoom: ((CGFloat) -> Void)?
     var onScroll: ((CGFloat, CGFloat) -> Void)?
     var onDragPan: ((CGFloat, CGFloat) -> Void)?
+    var onControlsVisibilityChanged: ((Bool) -> Void)?
 
     func makeNSView(context: Context) -> ZoomableAVPlayerView {
         let view = ZoomableAVPlayerView()
         view.player = player
-        view.controlsStyle = .floating
+        view.controlsStyle = .none
         view.videoGravity = .resizeAspect
         view.allowsPictureInPicturePlayback = false
+        view.isZoomed = isZoomed
         view.onZoom = onZoom
         view.onScroll = onScroll
         view.onDragPan = onDragPan
+        view.onControlsVisibilityChanged = onControlsVisibilityChanged
         return view
     }
 
     func updateNSView(_ nsView: ZoomableAVPlayerView, context: Context) {
         if nsView.player !== player { nsView.player = player }
+        nsView.isZoomed = isZoomed
         nsView.onZoom = onZoom
         nsView.onScroll = onScroll
         nsView.onDragPan = onDragPan
+        nsView.onControlsVisibilityChanged = onControlsVisibilityChanged
     }
 }
 
@@ -243,20 +345,28 @@ struct VideoPlayerView: View {
     var onCaptureFrame: (() -> Void)?
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
+    @State private var overlayControlsVisible = false
+    @State private var isScrubbing = false
+    @State private var scrubPosition: Double = 0
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack {
             Color.black
             VideoPlayerNSView(
                 player: controller.player,
+                isZoomed: zoomScale > 1.0,
                 onZoom: { applyZoom($0) },
                 onScroll: { applyPan(dx: $0, dy: $1) },
-                onDragPan: { applyDragPan(dx: $0, dy: $1) }
+                onDragPan: { applyDragPan(dx: $0, dy: $1) },
+                onControlsVisibilityChanged: { visible in
+                    withAnimation(.easeInOut(duration: 0.25)) { overlayControlsVisible = visible }
+                }
             )
             .scaleEffect(zoomScale)
             .offset(imageOffset)
-
-            // Editing keys are reserved for images, so these live on buttons.
+        }
+        // Utility buttons (top-right) — editing keys are reserved for images.
+        .overlay(alignment: .topTrailing) {
             HStack(spacing: 10) {
                 Button {
                     onToggleAdjustments?()
@@ -283,6 +393,67 @@ struct VideoPlayerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Capture frame")
                 .accessibilityHint("Grabs the current frame as an editable image")
+            }
+            .padding(14)
+            .opacity(overlayControlsVisible ? 1 : 0)
+        }
+        // Transport bar (bottom) — play/pause, scrubber, time, mute.
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 10) {
+                Button {
+                    controller.stepFrame(by: -1)
+                } label: {
+                    Image(systemName: "backward.frame.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(controller.isPlaying ? .white.opacity(0.4) : .white)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(controller.isPlaying)
+                .accessibilityLabel("Previous frame")
+
+                Button {
+                    controller.togglePlayPause()
+                } label: {
+                    Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(controller.isPlaying ? "Pause" : "Play")
+
+                Button {
+                    controller.stepFrame(by: 1)
+                } label: {
+                    Image(systemName: "forward.frame.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(controller.isPlaying ? .white.opacity(0.4) : .white)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(controller.isPlaying)
+                .accessibilityLabel("Next frame")
+
+                Text(formatTime(controller.currentTime))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 36, alignment: .trailing)
+
+                Slider(value: $scrubPosition, in: 0...1) { editing in
+                    isScrubbing = editing
+                    if !editing { controller.seek(to: scrubPosition) }
+                }
+                .tint(.white)
+                .onChange(of: controller.currentTime) { _, time in
+                    guard !isScrubbing, controller.duration > 0 else { return }
+                    scrubPosition = time / controller.duration
+                }
+
+                Text(formatTime(controller.duration))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(minWidth: 36, alignment: .leading)
 
                 Button {
                     controller.toggleMute()
@@ -290,23 +461,27 @@ struct VideoPlayerView: View {
                     Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(.black.opacity(0.55), in: Circle())
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(controller.isMuted ? "Unmute video" : "Mute video")
             }
-            .padding(14)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.black.opacity(0.65), in: RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 14)
+            .opacity(overlayControlsVisible ? 1 : 0)
         }
-        .overlay(alignment: .bottomLeading) {
-            Text("Editing not available for video")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.75))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.45), in: Capsule())
-                .padding(14)
-        }
+    }
+
+    private func formatTime(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let s = Int(seconds)
+        let m = s / 60
+        let h = m / 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m % 60, s % 60) }
+        return String(format: "%d:%02d", m, s % 60)
     }
 
     // MARK: - Zoom / pan (mirrors ImageDisplayView's transform math)
@@ -345,11 +520,15 @@ struct VideoPlayerView: View {
     }
 
     private func panBounds() -> (x: CGFloat, y: CGFloat) {
-        guard let cg = controller.frameImage?.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              containerSize.width > 0, containerSize.height > 0 else {
+        guard containerSize.width > 0, containerSize.height > 0 else { return (0, 0) }
+        let natural: CGSize
+        if let cg = controller.frameImage?.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            natural = CGSize(width: cg.width, height: cg.height)
+        } else if let ps = controller.player.currentItem?.presentationSize, ps.width > 0 {
+            natural = ps
+        } else {
             return (0, 0)
         }
-        let natural = CGSize(width: cg.width, height: cg.height)
         let fitScale = min(containerSize.width / natural.width, containerSize.height / natural.height)
         let displayed = CGSize(width: natural.width * fitScale * zoomScale, height: natural.height * fitScale * zoomScale)
         return (
@@ -546,6 +725,22 @@ extension SlideshowView {
     /// True when the current file is a video that should render in the player
     /// rather than the still-image view. A captured still (#341) suppresses this
     /// so the frozen frame renders in the image view and inherits all edit tools.
+    /// Arrow-key frame stepping when a video is paused and not zoomed.
+    /// Returns `.handled` if the key was consumed, nil to fall through.
+    func handleVideoFrameStepKey(_ key: KeyEquivalent) -> KeyPress.Result? {
+        guard isVideoActive, !videoController.isPlaying, zoomPan.zoomScale <= 1.0 else { return nil }
+        switch key {
+        case .leftArrow:
+            DispatchQueue.main.async { self.videoController.stepFrame(by: -1) }
+            return .handled
+        case .rightArrow:
+            DispatchQueue.main.async { self.videoController.stepFrame(by: 1) }
+            return .handled
+        default:
+            return nil
+        }
+    }
+
     var isVideoActive: Bool {
         guard capturedFrameURL == nil else { return false }
         guard let url = imageLoader.currentImageURL else { return false }

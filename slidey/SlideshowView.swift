@@ -1160,29 +1160,32 @@ struct SlideshowView: View {
         // Defer all state mutations: SwiftUI processes .onKeyPress within its own
         // update pipeline, so synchronous @Published/@Observable writes here fire
         // "Publishing changes from within view updates" warnings.
+
+        if let result = handleVideoFrameStepKey(key) { return result }
+
         if zoomPan.zoomScale > 1.0 {
             switch key {
             case .leftArrow:
-                if zoomPan.canPan(direction: .left, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                if zoomPan.canPan(direction: .left, image: activeZoomImage, rotationAngle: activeZoomRotation) {
                     DispatchQueue.main.async { zoomPan.imageOffset.width += 50 }
                 } else {
                     DispatchQueue.main.async { imageLoader.previousImage() }
                 }
                 return .handled
             case .rightArrow:
-                if zoomPan.canPan(direction: .right, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                if zoomPan.canPan(direction: .right, image: activeZoomImage, rotationAngle: activeZoomRotation) {
                     DispatchQueue.main.async { zoomPan.imageOffset.width -= 50 }
                 } else {
                     DispatchQueue.main.async { imageLoader.nextImage() }
                 }
                 return .handled
             case .upArrow:
-                if zoomPan.canPan(direction: .up, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                if zoomPan.canPan(direction: .up, image: activeZoomImage, rotationAngle: activeZoomRotation) {
                     DispatchQueue.main.async { zoomPan.imageOffset.height += 50 }
                 }
                 return .handled
             case .downArrow:
-                if zoomPan.canPan(direction: .down, image: effectiveDisplayImage, rotationAngle: rotationAngle) {
+                if zoomPan.canPan(direction: .down, image: activeZoomImage, rotationAngle: activeZoomRotation) {
                     DispatchQueue.main.async { zoomPan.imageOffset.height -= 50 }
                 }
                 return .handled
