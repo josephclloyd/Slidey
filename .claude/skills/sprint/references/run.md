@@ -164,6 +164,8 @@ Leave this running as a background `Monitor` tool. Each ndjson line is a push no
 Do NOT use `mcx claude wait` as the main loop mechanism — it's one-at-a-time polling.
 The monitor stream handles N concurrent sessions with one open connection.
 
+**Monitor 90s silence timeout:** `mcx monitor` exits with code 1 and "no events or heartbeat for 90s" when impl sessions produce no daemon events for 90 seconds. This happens reliably during long-running impl sessions (AI work, multi-file changes). Restart the Monitor tool immediately when it dies — but if it dies repeatedly, switch to `mcx claude wait <sessionId>` with `run_in_background: true` as the completion signal for that session. `run_in_background: true` has no timeout and will reliably notify you when the session finishes. Hit 4 times in Sprint 39 for #341's impl session.
+
 Payloads include: `session.result`, `work_item.phase_changed`, `ci.finished`,
 `pr.merge_state_changed`. The `allGreen` field on `ci.finished` is pre-computed —
 no follow-up `gh pr checks` needed for the common case.
@@ -358,6 +360,15 @@ mcx claude spawn --model sonnet --cwd /Users/joe/Projects/xCode/slidey \
 ```
 The session ID returned by `mcx claude spawn` must then be recorded via `phase_state_set` if
 the phase engine doesn't pick it up automatically. Hit in Sprint 31 for #290's review.
+
+**Stale `pending:` sentinel when verdict IS known — go to repair directly, do NOT re-run review.** If a review session completed and you know the verdict from `mcx claude log <id>` or the monitor event, but the sentinel was left stale, clearing it and re-running `mcx phase run review` increments `review_round` even though no real review runs — this can falsely hit the max-round cap and route the item to `needs-attention`. Correct path when verdict is `has-issues` and verdict is known:
+```bash
+mcx call _work_items phase_state_delete '{"workItemId":"#N","repoRoot":"/Users/joe/Projects/xCode/slidey","key":"review_session_id"}'
+# Do NOT re-run: mcx phase run review  ← increments review_round wastefully
+# Instead, go directly to repair:
+mcx phase run repair --work-item "#N" --from review
+```
+If the round counter was already inflated by the accidental re-run, set `review_round_retry=true` before re-entering review after repair so the re-review doesn't count as another round. Hit in Sprint 39 for #340.
 
 **Verify the retry flag actually held** before re-spawning — don't just trust that the
 returned action came back as `spawn` and move on:
