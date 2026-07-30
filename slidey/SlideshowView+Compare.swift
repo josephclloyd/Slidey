@@ -107,6 +107,8 @@ extension SlideshowView {
             DispatchQueue.main.async { self.imageLoader.nextImage() }; return .handled
         case KeyEquivalent("B"):          // ⇧B — switch from compare mode to before/after slider
             toggleBeforeAfterSlider(); return .handled
+        case KeyEquivalent("S"):          // ⇧S — toggle pan/zoom sync between the two panes
+            toggleCompareSync(); return .handled
         default:
             // Fall through so edit key bindings still fire in compare mode;
             // they route to the active pane via `editTargetURL`.
@@ -135,7 +137,46 @@ extension SlideshowView {
         compareURL = nil
         compareActiveSide = .left
         compareManualPin = false
+        compareSyncEnabled = false
         compareZoomPan.reset()
+    }
+
+    /// Toggles pane pan/zoom sync. Sync does not force the panes into alignment
+    /// on toggle (no jump); it only mirrors changes made by the *next* gesture.
+    func toggleCompareSync() {
+        compareSyncEnabled.toggle()
+        let message = compareSyncEnabled ? "Pane sync on" : "Pane sync off"
+        savedToast = message
+        savedToastIsError = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if savedToast == message { savedToast = nil }
+        }
+    }
+
+    /// Mirrors the source pane's zoom/pan onto the target when sync is enabled.
+    /// The value-equality check — not a transient flag — is what breaks the
+    /// feedback loop: SwiftUI's `onChange` fires in a later update cycle, so a
+    /// flag set-then-cleared within this call is already clear by the time the
+    /// target's own `onChange` re-enters here. Because we only assign when the
+    /// values differ, the re-entrant call finds them equal and stops.
+    func syncComparePanes(from source: ZoomPanController, to target: ZoomPanController) {
+        guard compareSyncEnabled,
+              let synced = Self.syncedPaneState(
+                  source: (source.zoomScale, source.imageOffset),
+                  target: (target.zoomScale, target.imageOffset))
+        else { return }
+        target.zoomScale = synced.scale
+        target.imageOffset = synced.offset
+    }
+
+    /// Pure helper: the zoom/pan the target should adopt to mirror the source,
+    /// or nil if the panes already match (no propagation needed).
+    static func syncedPaneState(
+        source: (scale: CGFloat, offset: CGSize),
+        target: (scale: CGFloat, offset: CGSize)
+    ) -> (scale: CGFloat, offset: CGSize)? {
+        if target.scale == source.scale && target.offset == source.offset { return nil }
+        return (source.scale, source.offset)
     }
 
     /// Static 50/50 horizontal split: current image on the left, pinned next
@@ -153,6 +194,22 @@ extension SlideshowView {
                             showFilename: showFilename,
                             isActive: compareActiveSide == .right,
                             onSelect: { compareActiveSide = .right })
+        }
+        .onChange(of: zoomPan.zoomScale) { _, _ in syncComparePanes(from: zoomPan, to: compareZoomPan) }
+        .onChange(of: zoomPan.imageOffset) { _, _ in syncComparePanes(from: zoomPan, to: compareZoomPan) }
+        .onChange(of: compareZoomPan.zoomScale) { _, _ in syncComparePanes(from: compareZoomPan, to: zoomPan) }
+        .onChange(of: compareZoomPan.imageOffset) { _, _ in syncComparePanes(from: compareZoomPan, to: zoomPan) }
+        .overlay(alignment: .top) {
+            if compareSyncEnabled {
+                Text("Pan/zoom synced")
+                    .font(.caption).bold()
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.top, 12)
+                    .allowsHitTesting(false)
+            }
         }
     }
 }

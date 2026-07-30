@@ -55,6 +55,11 @@ struct KeyboardShortcutsView: View {
             ("o", "Colorize B&W photo (DDColor)"),
             ("\u{21e7}O", "Remove colorization"),
         ]),
+        ("Compare", [
+            ("\u{2325}B", "Toggle side-by-side compare"),
+            ("\u{21e7}B", "Switch compare \u{2192} before/after"),
+            ("\u{21e7}S", "Sync pan/zoom between panes"),
+        ]),
         ("Favourites & Rating", [
             ("x", "Toggle favourite"),
             ("v", "Show favourites only"),
