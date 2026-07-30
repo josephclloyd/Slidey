@@ -244,6 +244,7 @@ struct SlideshowView: View {
     @State var compareActiveSide: CompareSide = .left   // which pane edits target in compare mode
     @State var comparePickerShowing: Bool = false       // right-pane thumbnail picker sheet
     @State var compareManualPin: Bool = false           // right pane chosen via picker; don't auto-repin on navigation
+    @State var compareSyncEnabled: Bool = false          // mirror zoom/pan between the two compare panes (⇧S)
 
     /// The ZoomPanController, image, and rotation for the active pane so that
     /// zoom commands (keys, menu) target whichever pane is selected.
