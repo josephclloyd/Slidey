@@ -242,6 +242,8 @@ struct SlideshowView: View {
     @State var compareURL: URL?; @State var compareImage: NSImage?
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
     @State var compareActiveSide: CompareSide = .left   // which pane edits target in compare mode
+    @State var comparePickerShowing: Bool = false       // right-pane thumbnail picker sheet
+    @State var compareManualPin: Bool = false           // right pane chosen via picker; don't auto-repin on navigation
 
     /// The ZoomPanController, image, and rotation for the active pane so that
     /// zoom commands (keys, menu) target whichever pane is selected.
@@ -906,6 +908,18 @@ struct SlideshowView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareSideBySide)) { _ in
             ifKeyWindow { toggleCompareMode() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.compareChooseRightPane)) { _ in
+            ifKeyWindow { openComparePicker() }
+        }
+        .sheet(isPresented: $comparePickerShowing) {
+            ComparePickerSheet(
+                imageLoader: imageLoader,
+                favouriteURLStrings: favouriteURLStrings,
+                currentURL: imageLoader.currentImageURL,
+                onSelect: { url in setCompareRightPane(url) },
+                onCancel: { comparePickerShowing = false }
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.beforeAfterSlider)) { _ in
             ifKeyWindow { toggleBeforeAfterSlider() }
