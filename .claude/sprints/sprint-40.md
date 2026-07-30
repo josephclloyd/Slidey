@@ -1,7 +1,7 @@
 # Sprint 40 — 2026-07-30
 
 Started: 2026-07-30T00:00:00Z
-Status: planned
+Status: done
 
 ## Issues
 
@@ -15,6 +15,24 @@ Status: planned
 
 - #329 Multi-select images for batch operations — large scope, own sprint
 - #328 Selective colour — touches SlideshowView.swift; defer until #334 ships to clear file-length headroom
+
+## Results
+
+Released: v1.39 — 2026-07-30
+
+### Shipped
+- #334 Sprint 37 introspection fixes — extracted upscale pipeline to `SlideshowView+Upscale.swift` (-275 lines from SlideshowView.swift, now 3,104); fixed directory-reset gaps for `grainReducedImages`, `grainReductionRawImages`, `objectRemovedImages`; added `imageEffects` asymmetry comment. PR #349.
+- #326 Compare any two images — sheet picker (thumbnail LazyVGrid) lets users choose any image from the current directory as the right compare pane; ⌥⇧B opens picker, existing ⌥B keeps direct-compare behaviour. PR #350.
+- #325 Sync pan/zoom between compare panes — ⇧S toggles sync mode; `onChange` propagation with feedback-loop guard; no-jump on enable; auto-resets when compare mode exits. PR #351.
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 3 (#349, #350, #351)
+- Total cost: ~$4.64 (impl $3.52, review $1.12)
+- Repair rounds: 0
+- CI wall time: ~2–2.5 min per PR
 
 ## Notes
 
