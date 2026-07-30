@@ -6,6 +6,9 @@ extension SlideshowView {
     @ViewBuilder
     func attachFileNotifications<Content: View>(_ content: Content) -> some View {
         content
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.captureVideoFrame)) { _ in
+            ifKeyWindow { captureCurrentVideoFrame() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.saveEditedImage)) { _ in
             ifKeyWindow { saveEditedImage() }
         }
