@@ -150,6 +150,7 @@ struct SlideshowView: View {
     }
     @State var adjustmentURLLevels: [String: ImageAdjustments] = [:]
     @State var showAdjustmentsHUD: Bool = false
+    @State var showVideoAdjustmentsHUD: Bool = false  // #342
     @State var adjustments: ImageAdjustments = .init()
     @State var adjustmentsBaseImage: NSImage?
     @State var adjustmentsTask: Task<Void, Never>?
@@ -512,6 +513,7 @@ struct SlideshowView: View {
         grainReductionHUD
         vignetteHUD
         adjustmentsHUD
+        videoAdjustmentsHUD
         curvesHUD
         straightenHUD
         localAdjustmentsOverlay
@@ -1082,6 +1084,10 @@ struct SlideshowView: View {
 
         if showAdjustmentsHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelAdjustmentsHUD, apply: applyAdjustmentsToImage)
+        }
+
+        if showVideoAdjustmentsHUD {
+            return handleSimpleHUDKeyPress(keyPress, cancel: closeVideoAdjustmentsHUD, apply: closeVideoAdjustmentsHUD)
         }
 
         if showCurvesHUD {

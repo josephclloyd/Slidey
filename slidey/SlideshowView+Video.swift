@@ -2,6 +2,17 @@ import SwiftUI
 import AVKit
 import AVFoundation
 import AppKit
+import CoreImage
+
+/// Non-destructive brightness/contrast/gamma applied to video playback (#342).
+/// Identity is brightness 0, contrast 1, gamma 1 — the unmodified video.
+struct VideoAdjustments: Equatable {
+    var brightness: Double = 0   // CIColorControls inputBrightness, -1...1
+    var contrast: Double = 1     // CIColorControls inputContrast, 0...2
+    var gamma: Double = 1        // CIGammaAdjust inputPower, 0.25...4
+
+    var isIdentity: Bool { brightness == 0 && contrast == 1 && gamma == 1 }
+}
 
 /// Owns the `AVPlayer` for inline video playback (#332). Videos start muted and
 /// loop forever; `onPlayToEnd` fires at each loop boundary so the slideshow can
@@ -26,6 +37,18 @@ final class VideoPlayerController {
     /// to the start). The slideshow uses this to advance to the next file.
     var onPlayToEnd: (() -> Void)?
 
+    /// Live brightness/contrast/gamma for the current video (#342). Setting this
+    /// rebuilds and reassigns the player item's `videoComposition`, which forces
+    /// the current frame to re-render even while paused. Persisted per-URL.
+    var adjustments = VideoAdjustments() {
+        didSet {
+            guard adjustments != oldValue else { return }
+            if let url { adjustmentsByURL[url] = adjustments }
+            applyComposition()
+        }
+    }
+    private var adjustmentsByURL: [URL: VideoAdjustments] = [:]
+
     private var endObserver: NSObjectProtocol?
 
     func load(url: URL) {
@@ -48,8 +71,44 @@ final class VideoPlayerController {
         }
         player.replaceCurrentItem(with: item)
         player.isMuted = isMuted
+        // Restore per-URL adjustments and apply to the new item. Called
+        // explicitly (not just via didSet) so a video whose stored values happen
+        // to equal the outgoing video's still gets its composition wired up.
+        adjustments = adjustmentsByURL[url] ?? VideoAdjustments()
+        applyComposition()
         player.play()
         isPlaying = true
+    }
+
+    /// Rebuilds the CIFilter chain and assigns it to the current item. Identity
+    /// adjustments clear the composition so playback runs unfiltered. Reassigning
+    /// a fresh composition object re-renders the current frame even when paused.
+    private func applyComposition() {
+        guard let item = player.currentItem else { return }
+        if adjustments.isIdentity {
+            item.videoComposition = nil
+            return
+        }
+        let adj = adjustments
+        item.videoComposition = AVVideoComposition(
+            asset: item.asset,
+            applyingCIFiltersWithHandler: { request in
+                let source = request.sourceImage.clampedToExtent()
+                var output = source
+                if let f = CIFilter(name: "CIColorControls") {
+                    f.setValue(output, forKey: kCIInputImageKey)
+                    f.setValue(adj.brightness, forKey: kCIInputBrightnessKey)
+                    f.setValue(adj.contrast, forKey: kCIInputContrastKey)
+                    output = f.outputImage ?? output
+                }
+                if adj.gamma != 1, let f = CIFilter(name: "CIGammaAdjust") {
+                    f.setValue(output, forKey: kCIInputImageKey)
+                    f.setValue(adj.gamma, forKey: "inputPower")
+                    output = f.outputImage ?? output
+                }
+                request.finish(with: output.cropped(to: request.sourceImage.extent), context: nil)
+            }
+        )
     }
 
     func stop() {
@@ -99,6 +158,13 @@ final class VideoPlayerController {
 
     func toggleMute() {
         isMuted.toggle()
+    }
+
+    /// Returns the current video to its unmodified appearance and drops its saved
+    /// per-URL adjustments so it reopens clean next time (#342).
+    func resetAdjustments() {
+        adjustments = VideoAdjustments()
+        if let url { adjustmentsByURL.removeValue(forKey: url) }
     }
 }
 
@@ -168,6 +234,10 @@ struct VideoPlayerView: View {
     @Binding var zoomScale: CGFloat
     @Binding var imageOffset: CGSize
     let containerSize: CGSize
+    /// Toggles the brightness/contrast/gamma panel (#342). The HUD is opened from
+    /// this control rather than a key press so it stays discoverable and doesn't
+    /// clash with the image-editing key registry.
+    var onToggleAdjustments: (() -> Void)?
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
@@ -183,19 +253,34 @@ struct VideoPlayerView: View {
             .scaleEffect(zoomScale)
             .offset(imageOffset)
 
-            // `m` is bound to smoothing for images, so mute lives on a button.
-            Button {
-                controller.toggleMute()
-            } label: {
-                Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.55), in: Circle())
+            // Editing keys are reserved for images, so these live on buttons.
+            HStack(spacing: 10) {
+                Button {
+                    onToggleAdjustments?()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Video adjustments")
+                .accessibilityHint("Shows brightness, contrast, and gamma controls")
+
+                Button {
+                    controller.toggleMute()
+                } label: {
+                    Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(controller.isMuted ? "Unmute video" : "Mute video")
             }
-            .buttonStyle(.plain)
             .padding(14)
-            .accessibilityLabel(controller.isMuted ? "Unmute video" : "Mute video")
         }
         .overlay(alignment: .bottomLeading) {
             Text("Editing not available for video")
@@ -287,7 +372,8 @@ extension SlideshowView {
                     url: url,
                     zoomScale: $zoomPan.zoomScale,
                     imageOffset: $zoomPan.imageOffset,
-                    containerSize: geometry.size
+                    containerSize: geometry.size,
+                    onToggleAdjustments: { toggleVideoAdjustmentsHUD() }
                 )
                 .id(url)
                 .onAppear {
@@ -304,6 +390,75 @@ extension SlideshowView {
         } else {
             imageStillContent
         }
+    }
+
+    /// Live brightness/contrast/gamma panel for video (#342). Mutually exclusive
+    /// with the image Adjustments HUD: this only opens when a video is active and
+    /// `openAdjustmentsHUD()` only opens when a still image is loaded.
+    @ViewBuilder var videoAdjustmentsHUD: some View {
+        if showVideoAdjustmentsHUD {
+            @Bindable var vc = videoController
+            VStack {
+                Spacer()
+                VStack(spacing: 10) {
+                    HStack {
+                        Text("Video Adjustments")
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    videoAdjustmentRow("Brightness", value: $vc.adjustments.brightness, range: -1...1, format: "%+.2f")
+                    videoAdjustmentRow("Contrast", value: $vc.adjustments.contrast, range: 0...2, format: "%.2f")
+                    videoAdjustmentRow("Gamma", value: $vc.adjustments.gamma, range: 0.25...4, format: "%.2f")
+                    HStack(spacing: 16) {
+                        Button("Reset") { videoController.resetAdjustments() }
+                            .buttonStyle(.bordered)
+                            .tint(.white)
+                            .accessibilityHint("Returns the video to its unmodified appearance")
+                        Spacer()
+                        Button("Done") { closeVideoAdjustmentsHUD() }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Closes the panel; adjustments stay applied to playback")
+                    }
+                }
+                .padding(20)
+                .background(.black.opacity(0.85))
+                .cornerRadius(12)
+                .frame(maxWidth: 400)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 40)
+            }
+        }
+    }
+
+    func videoAdjustmentRow(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(.white)
+                .frame(width: 90, alignment: .leading)
+            Slider(value: value, in: range)
+                .tint(.white)
+                .accessibilityLabel(label)
+                .accessibilityValue(String(format: format, value.wrappedValue))
+            Text(String(format: format, value.wrappedValue))
+                .monospacedDigit()
+                .foregroundColor(.white.opacity(0.7))
+                .frame(width: 50, alignment: .trailing)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Shows/hides the video adjustments panel from the on-video control. No-op
+    /// unless a video is loaded (the button only appears over a video anyway).
+    func toggleVideoAdjustmentsHUD() {
+        guard isVideoActive, videoController.url != nil else { return }
+        showVideoAdjustmentsHUD.toggle()
+    }
+
+    /// Hides the panel; the adjustments themselves persist on playback (and are
+    /// stored per-URL in `VideoPlayerController`).
+    func closeVideoAdjustmentsHUD() {
+        showVideoAdjustmentsHUD = false
     }
 
     /// Saliency doesn't apply to video, so `z` (smart zoom) instead toggles the
@@ -362,6 +517,7 @@ extension SlideshowView {
 
     func stopVideoIfNeeded() {
         guard videoController.url != nil else { return }
+        showVideoAdjustmentsHUD = false
         videoController.stop()
         // Restore the fixed-interval timer we paused when the video started.
         if slideshow.isPlaying {
