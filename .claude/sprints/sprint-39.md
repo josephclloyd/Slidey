@@ -1,7 +1,7 @@
 # Sprint 39 — 2026-07-29
 
 Started: 2026-07-29T00:00:00Z
-Status: planned
+Status: done
 
 ## Issues
 
@@ -18,6 +18,24 @@ Status: planned
 - #328 Selective colour — touches SlideshowView.swift; next sprint
 - #326 Compare any two images — touches SlideshowView.swift; next sprint
 - #325 Sync pan/zoom between compare panes — touches SlideshowView.swift; next sprint
+
+## Results
+
+Released: v1.38 — 2026-07-30
+
+### Shipped
+- #340 Video: zoom and pan controls — `ZoomableContainerView` wrapping `AVPlayerView`, existing zoom keys (`s`, `f`, `z`, `⌘+`/`⌘-`, pinch, scroll, drag) routed to `VideoPlayerController.zoomPan` when video is active, per-URL state; 1 repair (missing `.onGeometryChange` on video path)
+- #342 Video: real-time brightness/contrast/gamma via AVVideoComposition — CIColorControls + CIGammaAdjust chain on `AVPlayerItem.videoComposition`, HUD slider panel opened from video controls, per-URL `VideoAdjustments` state with Reset, session-only non-destructive
+- #341 Video: capture current frame as image for editing — Capture Frame button in video HUD, `AVAssetImageGenerator` on background thread, synthetic URL (`?frame=N`) keying, routes through `setDisplay(base:for:)`, saves JPEG alongside video; unit tests for frame extraction and filename generation in `ImageLoaderTests`
+
+### Needs attention
+(none)
+
+### Stats
+- PRs merged: 3 (#344, #345, #346)
+- Total cost: ~$11.64 (impl $9.78, review/repair $1.86)
+- Repair rounds: 1 (#340 — missing `.onGeometryChange`)
+- CI wall time: ~2–2.5 min per PR
 
 ## Notes
 
