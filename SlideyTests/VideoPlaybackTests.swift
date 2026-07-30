@@ -116,6 +116,21 @@ final class VideoThumbnailTests: XCTestCase {
         XCTAssertLessThanOrEqual(thumb.size.height, 256)
     }
 
+    func testVideoFrameExtractsFullResolutionStill() throws {
+        let size = CGSize(width: 96, height: 64)
+        let url: URL
+        do {
+            url = try makeTestVideo(size: size)
+        } catch {
+            throw XCTSkip("Could not encode a test video in this environment: \(error)")
+        }
+        let frame = try XCTUnwrap(ImageLoader.videoFrame(url: url, at: .zero),
+                                  "Expected a full-resolution still frame")
+        // videoFrame does not downscale, so it should match the source dimensions.
+        XCTAssertEqual(frame.size.width, size.width)
+        XCTAssertEqual(frame.size.height, size.height)
+    }
+
     // MARK: - Test video synthesis
 
     private enum VideoError: Error { case setup }

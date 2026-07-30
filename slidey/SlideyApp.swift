@@ -533,6 +533,12 @@ struct EditMenuCommands: Commands {
 
             Divider()
 
+            Button("Capture Video Frame") {
+                NotificationCenter.default.post(name: .captureVideoFrame, object: nil)
+            }
+
+            Divider()
+
             Menu("Enhance") {
                 Button("Auto-Enhance Image") {
                     NotificationCenter.default.post(name: .enhanceImage, object: nil)

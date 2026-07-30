@@ -1126,3 +1126,38 @@ final class ChipPredicateCompositionTests: XCTestCase {
         XCTAssertTrue(predicate(url))
     }
 }
+
+// MARK: - Captured video frame filename (#341)
+
+final class VideoFrameFilenameTests: XCTestCase {
+    func testBasicTimestamp() {
+        let url = URL(fileURLWithPath: "/movies/myvideo.mp4")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: 12), "myvideo_frame_00m12s.jpg")
+    }
+
+    func testMinutesAndSeconds() {
+        let url = URL(fileURLWithPath: "/movies/clip.mov")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: 125), "clip_frame_02m05s.jpg")
+    }
+
+    func testRoundsToNearestSecond() {
+        let url = URL(fileURLWithPath: "/movies/clip.mov")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: 12.7), "clip_frame_00m13s.jpg")
+    }
+
+    func testZeroSeconds() {
+        let url = URL(fileURLWithPath: "/movies/clip.mov")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: 0), "clip_frame_00m00s.jpg")
+    }
+
+    func testNonFiniteSecondsFallsBackToZero() {
+        let url = URL(fileURLWithPath: "/movies/clip.mov")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: .nan), "clip_frame_00m00s.jpg")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: .infinity), "clip_frame_00m00s.jpg")
+    }
+
+    func testStripsVideoExtensionKeepsBaseName() {
+        let url = URL(fileURLWithPath: "/a/b/Holiday.2024.MOV")
+        XCTAssertEqual(ImageLoader.frameFilename(for: url, seconds: 3), "Holiday.2024_frame_00m03s.jpg")
+    }
+}

@@ -238,6 +238,9 @@ struct VideoPlayerView: View {
     /// this control rather than a key press so it stays discoverable and doesn't
     /// clash with the image-editing key registry.
     var onToggleAdjustments: (() -> Void)?
+    /// Captures the current frame as a still image for editing (#341). On a button
+    /// (not a key) for the same reason as the adjustments panel.
+    var onCaptureFrame: (() -> Void)?
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
@@ -267,6 +270,19 @@ struct VideoPlayerView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Video adjustments")
                 .accessibilityHint("Shows brightness, contrast, and gamma controls")
+
+                Button {
+                    onCaptureFrame?()
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Capture frame")
+                .accessibilityHint("Grabs the current frame as an editable image")
 
                 Button {
                     controller.toggleMute()
@@ -348,6 +364,30 @@ extension ImageLoader {
         videoExtensions.contains(url.pathExtension.lowercased())
     }
 
+    /// Full-resolution frame at `time` from a video, oriented via the preferred
+    /// track transform — the extraction half of Capture Frame (#341). Tolerance
+    /// is zero so the returned frame matches the exact playback position the user
+    /// sees. Pure and safe to call off the main thread; returns nil if the frame
+    /// can't be extracted.
+    nonisolated static func videoFrame(url: URL, at time: CMTime) -> NSImage? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        guard let cg = try? generator.copyCGImage(at: time, actualTime: nil) else { return nil }
+        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    }
+
+    /// Filename for a captured video frame: `<video-basename>_frame_<MMmSSs>.jpg`
+    /// (#341). Pure/testable; seconds are clamped to ≥ 0 and rounded.
+    static func frameFilename(for videoURL: URL, seconds: Double) -> String {
+        let base = videoURL.deletingPathExtension().lastPathComponent
+        let total = seconds.isFinite ? max(0, Int(seconds.rounded())) : 0
+        let stamp = String(format: "%02dm%02ds", total / 60, total % 60)
+        return "\(base)_frame_\(stamp).jpg"
+    }
+
     /// First-frame thumbnail for a video via `AVAssetImageGenerator`. Returns nil
     /// if the frame can't be extracted. Safe to call off the main thread.
     nonisolated static func videoThumbnail(url: URL, maxPixelSize: Int) -> NSImage? {
@@ -373,7 +413,8 @@ extension SlideshowView {
                     zoomScale: $zoomPan.zoomScale,
                     imageOffset: $zoomPan.imageOffset,
                     containerSize: geometry.size,
-                    onToggleAdjustments: { toggleVideoAdjustmentsHUD() }
+                    onToggleAdjustments: { toggleVideoAdjustmentsHUD() },
+                    onCaptureFrame: { captureCurrentVideoFrame() }
                 )
                 .id(url)
                 .onAppear {
@@ -387,9 +428,40 @@ extension SlideshowView {
                     zoomPan.windowSize = newSize
                 }
             }
+        } else if capturedFrameURL != nil {
+            imageStillContent
+                .overlay(alignment: .top) { capturedFrameBar }
         } else {
             imageStillContent
         }
+    }
+
+    /// Toolbar shown over a captured video still (#341): save it beside the source
+    /// video, or discard it and return to playback. The still is a normal editable
+    /// image otherwise, so every image tool applies before saving.
+    @ViewBuilder var capturedFrameBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                saveCapturedFrame()
+            } label: {
+                Label("Save Frame", systemImage: "square.and.arrow.down")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(.borderedProminent)
+
+            Button {
+                dismissCapturedFrame()
+            } label: {
+                Label("Back to Video", systemImage: "chevron.backward")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.black.opacity(0.6), in: Capsule())
+        .padding(.top, 16)
     }
 
     /// Live brightness/contrast/gamma panel for video (#342). Mutually exclusive
@@ -472,8 +544,10 @@ extension SlideshowView {
     }
 
     /// True when the current file is a video that should render in the player
-    /// rather than the still-image view.
+    /// rather than the still-image view. A captured still (#341) suppresses this
+    /// so the frozen frame renders in the image view and inherits all edit tools.
     var isVideoActive: Bool {
+        guard capturedFrameURL == nil else { return false }
         guard let url = imageLoader.currentImageURL else { return false }
         return ImageLoader.isVideo(url)
     }
@@ -522,6 +596,160 @@ extension SlideshowView {
         // Restore the fixed-interval timer we paused when the video started.
         if slideshow.isPlaying {
             slideshow.reschedule(interval: slideshowInterval, advance: makeAdvanceClosure())
+        }
+    }
+
+    // MARK: - Capture Frame (#341)
+
+    /// Captures the frame at the current playback position and shows it as a
+    /// still, editable image in place of the video. The frame is held in memory
+    /// (keyed by a synthetic `?frame=` URL) and only written to disk when the
+    /// user chooses Save Frame, so it can be enhanced, cropped, upscaled, etc.
+    /// first. Extraction runs off the main thread; the commit happens on main.
+    func captureCurrentVideoFrame() {
+        guard isVideoActive, let videoURL = imageLoader.currentImageURL else { return }
+        let time = videoController.player.currentTime()
+        let seconds = time.seconds.isFinite ? max(0, time.seconds) : 0
+        DispatchQueue.global(qos: .userInitiated).async {
+            let frame = ImageLoader.videoFrame(url: videoURL, at: time)
+            DispatchQueue.main.async {
+                // Bail if the user navigated away or already captured while we decoded.
+                guard self.imageLoader.currentImageURL == videoURL, self.isVideoActive else { return }
+                guard let frame else {
+                    self.showErrorToast("Could not capture the current frame")
+                    return
+                }
+                guard let synthetic = URL(string: videoURL.absoluteString + "?frame=\(seconds)") else {
+                    self.showErrorToast("Could not capture the current frame")
+                    return
+                }
+                self.videoController.player.pause()
+                self.showVideoAdjustmentsHUD = false
+                self.capturedFrameBase = frame
+                self.capturedFrameURL = synthetic
+                self.rotationAngle = .zero
+                self.zoomPan.reset()
+                // Routes through the captured-frame branch → setDisplay commit path.
+                self.updateDisplayImage()
+            }
+        }
+    }
+
+    /// Writes the (possibly edited) captured frame to disk as a JPEG beside the
+    /// source video, e.g. `myvideo_frame_00m12s.jpg`. Repeated saves don't
+    /// overwrite — a numeric suffix is appended when the name is taken.
+    func saveCapturedFrame() {
+        guard let synthetic = capturedFrameURL, let videoURL = imageLoader.currentImageURL else { return }
+        guard let image = currentDisplayImage ?? capturedFrameBase else {
+            showErrorToast("No captured frame to save")
+            return
+        }
+        let output = applyRotationIfNeeded(image)
+        guard let data = encodeCapturedFrameJPEG(output) else {
+            showErrorToast("Could not encode the captured frame")
+            return
+        }
+        let filename = ImageLoader.frameFilename(for: videoURL, seconds: capturedFrameSeconds(from: synthetic))
+        let outputURL = Self.uniqueFileURL(in: videoURL.deletingLastPathComponent(), preferred: filename)
+        do {
+            try data.write(to: outputURL)
+            showSavedToast(filename: outputURL.lastPathComponent)
+        } catch {
+            showErrorToast("Frame save failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// Discards the captured still and returns to video playback.
+    func dismissCapturedFrame() {
+        clearCapturedFrame()
+        rotationAngle = .zero
+        updateDisplayImage()
+        if isVideoActive { videoController.player.play() }
+    }
+
+    /// Drops the captured still and every edit-state entry keyed to its synthetic
+    /// URL, so a fresh capture always starts clean and nothing lingers in the
+    /// per-URL caches once the frame is gone.
+    func clearCapturedFrame() {
+        guard let url = capturedFrameURL else { return }
+        let key = url.absoluteString
+        editStacks[url] = nil
+        enhancedImages[url] = nil; smoothedImages[url] = nil; sharpenedImages[url] = nil
+        upscaledImages[url] = nil; upscaleFactors[url] = nil
+        faceRestoredImages[url] = nil; redEyedImages[url] = nil
+        backgroundRemovedImages[url] = nil; artifactRemovedImages[url] = nil
+        jpegCleanedImages[url] = nil; jpegCleanupRawImages[url] = nil
+        colorizedImages[url] = nil
+        grainReducedImages[url] = nil; grainReductionRawImages[url] = nil
+        objectRemovedImages[url] = nil
+        effectImages[url] = nil; imageEffects[url] = nil
+        rotationAngles[url] = nil
+        adjustmentURLLevels[key] = nil; curvesURLLevels[key] = nil; vignetteURLLevels[key] = nil
+        straightenAngles[key] = nil; perspectiveCorners[key] = nil; cropRegions[key] = nil
+        localAdjustmentURLLayers[key] = nil
+        flippedHorizontally.remove(key); flippedVertically.remove(key)
+        capturedFrameURL = nil
+        capturedFrameBase = nil
+    }
+
+    /// The seconds payload from a synthetic `<video>?frame=<seconds>` URL.
+    func capturedFrameSeconds(from synthetic: URL) -> Double {
+        let value = URLComponents(url: synthetic, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "frame" })?.value
+        return Double(value ?? "") ?? 0
+    }
+
+    /// Window-title text for a captured still: the filename it would save as.
+    func capturedFrameTitle(for synthetic: URL) -> String {
+        guard let videoURL = imageLoader.currentImageURL else { return synthetic.lastPathComponent }
+        return ImageLoader.frameFilename(for: videoURL, seconds: capturedFrameSeconds(from: synthetic))
+    }
+
+    /// The URL that edit commands should apply to. In compare mode with the
+    /// right pane selected this is `compareURL`; otherwise the current image.
+    var editTargetURL: URL? {
+        if showCompareMode && compareActiveSide == .right { return compareURL }
+        if let capturedFrameURL { return capturedFrameURL }
+        return imageLoader.currentImageURL
+    }
+
+    /// The un-edited decoded base bitmap for a URL. Uses the loader's live
+    /// current-image cache when `url` is the current image, otherwise decodes
+    /// the file directly (needed for editing the right compare pane).
+    func baseImage(for url: URL) -> NSImage? {
+        if url == capturedFrameURL { return capturedFrameBase }
+        return url == imageLoader.currentImageURL ? imageLoader.currentImage : imageLoader.decodedImage(for: url)
+    }
+
+    /// Composite path for a captured video still (#341): rebuilds the display from
+    /// the synthetic-URL edit stack via the shared `setDisplay` commit path.
+    func updateCapturedFrameDisplay() {
+        guard let capturedURL = capturedFrameURL else { return }
+        if let base = currentComposite(for: capturedURL) ?? capturedFrameBase {
+            setDisplay(base: base, for: capturedURL)
+        }
+    }
+
+    private func encodeCapturedFrameJPEG(_ image: NSImage, quality: CGFloat = 0.92) -> Data? {
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
+        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: quality])
+    }
+
+    /// A non-colliding URL in `dir` for `preferred`, inserting ` 2`, ` 3`, … before
+    /// the extension if a file already exists so repeated captures never clobber.
+    static func uniqueFileURL(in dir: URL, preferred: String) -> URL {
+        let fm = FileManager.default
+        let first = dir.appendingPathComponent(preferred)
+        guard fm.fileExists(atPath: first.path) else { return first }
+        let stem = (preferred as NSString).deletingPathExtension
+        let ext = (preferred as NSString).pathExtension
+        var n = 2
+        while true {
+            let name = ext.isEmpty ? "\(stem) \(n)" : "\(stem) \(n).\(ext)"
+            let candidate = dir.appendingPathComponent(name)
+            if !fm.fileExists(atPath: candidate.path) { return candidate }
+            n += 1
         }
     }
 }

@@ -239,13 +239,6 @@ struct SlideshowView: View {
     @State var compareZoomPan = ZoomPanController(); @State var compareRotation: Angle = .zero
     @State var compareActiveSide: CompareSide = .left   // which pane edits target in compare mode
 
-    /// The URL that edit commands should apply to. In compare mode with the
-    /// right pane selected this is `compareURL`; otherwise the current image.
-    var editTargetURL: URL? {
-        if showCompareMode && compareActiveSide == .right { return compareURL }
-        return imageLoader.currentImageURL
-    }
-
     /// The ZoomPanController, image, and rotation for the active pane so that
     /// zoom commands (keys, menu) target whichever pane is selected.
     var activeZoomPan: ZoomPanController {
@@ -261,6 +254,14 @@ struct SlideshowView: View {
     @State var beforeAfterSliderPosition: CGFloat = 0.5
     @State var animator = AnimationPlayer(); @State var pendingAnimationURL: URL?  // Animated GIF/APNG (#308)
     @State var videoController = VideoPlayerController()  // Inline video playback (#332)
+    /// Synthetic URL (`<videoURL>?frame=<seconds>`) keying the per-image edit
+    /// state of a still frame captured from the current video (#341). Non-nil
+    /// while a captured frame is shown in place of the video; navigation clears
+    /// it. The `?frame=` query never appears in a real filesystem scan result,
+    /// so it can't collide with a scanned image URL.
+    @State var capturedFrameURL: URL?
+    /// The pristine captured frame that seeds the edit stack for `capturedFrameURL`.
+    @State var capturedFrameBase: NSImage?
 
     var effectiveDisplayImage: NSImage? {
         currentDisplayImage ?? imageLoader.currentImage
@@ -1764,6 +1765,8 @@ struct SlideshowView: View {
     }
 
     private func onCurrentIndexChanged() {
+        // Leaving the current file discards any captured video still shown over it.
+        if capturedFrameURL != nil { clearCapturedFrame() }
         let newURL = imageLoader.currentImageURL
         if newURL != lastDisplayedURL {
             if let departingURL = lastDisplayedURL {
@@ -1820,13 +1823,6 @@ struct SlideshowView: View {
             }
         }
         return result
-    }
-
-    /// The un-edited decoded base bitmap for a URL. Uses the loader's live
-    /// current-image cache when `url` is the current image, otherwise decodes
-    /// the file directly (needed for editing the right compare pane).
-    func baseImage(for url: URL) -> NSImage? {
-        url == imageLoader.currentImageURL ? imageLoader.currentImage : imageLoader.decodedImage(for: url)
     }
 
     func compositeBeforeStep(_ tag: EditStepTag, for url: URL) -> NSImage? {
@@ -1900,6 +1896,8 @@ struct SlideshowView: View {
     }
 
     func updateDisplayImage() {
+        // A captured video still (#341) composites via its own synthetic-URL path.
+        if capturedFrameURL != nil { updateCapturedFrameDisplay(); return }
         guard let url = imageLoader.currentImageURL else {
             currentDisplayImage = imageLoader.currentImage
             refreshHistogramOverlay()
