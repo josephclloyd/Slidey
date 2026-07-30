@@ -21,6 +21,8 @@ extension NSNotification.Name {
     static let rotateClockwise = NSNotification.Name("RotateClockwise")
     static let rotateCounterClockwise = NSNotification.Name("RotateCounterClockwise")
 
+    static let captureVideoFrame = NSNotification.Name("CaptureVideoFrame")
+
     static let saveEditedImage = NSNotification.Name("SaveEditedImage")
     static let exportWithEdits = NSNotification.Name("ExportWithEdits")
     static let revealInFinder = NSNotification.Name("RevealInFinder")
