@@ -58,6 +58,7 @@ extension NSNotification.Name {
     static let toggleShortcutsOverlay = NSNotification.Name("ToggleShortcutsOverlay")
     static let toggleSmartZoom = NSNotification.Name("ToggleSmartZoom")
     static let compareSideBySide = NSNotification.Name("CompareSideBySide")
+    static let compareChooseRightPane = NSNotification.Name("CompareChooseRightPane")
     static let beforeAfterSlider = NSNotification.Name("BeforeAfterSlider")
     static let toggleFullScreen = NSNotification.Name("ToggleFullScreen")
     static let zoomIn = NSNotification.Name("ZoomIn")

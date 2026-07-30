@@ -71,6 +71,11 @@ struct ViewMenuCommands: Commands {
             }
             .keyboardShortcut("b", modifiers: [.option])
 
+            Button("Compare With\u{2026}") {
+                NotificationCenter.default.post(name: .compareChooseRightPane, object: nil)
+            }
+            .keyboardShortcut("b", modifiers: [.option, .shift])
+
             Button("Before / After Slider (\u{21e7}B)") {
                 NotificationCenter.default.post(name: .beforeAfterSlider, object: nil)
             }

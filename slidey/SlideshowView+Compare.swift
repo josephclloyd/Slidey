@@ -32,6 +32,35 @@ extension SlideshowView {
         compareImage = compareComposite(for: targetURL)
         compareRotation = rotationAngles[targetURL] ?? .zero
         compareActiveSide = .left
+        compareManualPin = false
+        compareZoomPan.reset()
+        zoomPan.reset()
+        slideshow.stop()
+        showBeforeAfterSlider = false
+        showCompareMode = true
+    }
+
+    /// Opens the thumbnail picker sheet for choosing any image in the active
+    /// (filtered) set as the right compare pane. Distinct from ⌥B, which pins
+    /// the next image for speed.
+    func openComparePicker() {
+        guard imageLoader.imageURLs.count >= 2 else {
+            showErrorToast("Need at least two images to compare")
+            return
+        }
+        comparePickerShowing = true
+    }
+
+    /// Loads the picked image into the right pane and enters compare mode with
+    /// the current image on the left. The pane is manually pinned, so navigating
+    /// the left pane will not auto-repin the right pane to the next image.
+    func setCompareRightPane(_ url: URL) {
+        comparePickerShowing = false
+        compareURL = url
+        compareImage = compareComposite(for: url)
+        compareRotation = rotationAngles[url] ?? .zero
+        compareActiveSide = .left
+        compareManualPin = true
         compareZoomPan.reset()
         zoomPan.reset()
         slideshow.stop()
@@ -88,7 +117,7 @@ extension SlideshowView {
     /// Called from onCurrentIndexChanged to keep the right pane in sync when
     /// the user navigates while compare mode is active.
     func updateComparePaneIfNeeded() {
-        guard showCompareMode,
+        guard showCompareMode, !compareManualPin,
               let targetIndex = Self.compareTargetIndex(
                   current: imageLoader.currentIndex,
                   count: imageLoader.imageURLs.count)
@@ -105,6 +134,7 @@ extension SlideshowView {
         compareImage = nil
         compareURL = nil
         compareActiveSide = .left
+        compareManualPin = false
         compareZoomPan.reset()
     }
 
@@ -220,5 +250,53 @@ struct ComparePaneView: View {
         fadeTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { _ in
             DispatchQueue.main.async { borderVisible = false }
         }
+    }
+}
+
+/// Sheet for choosing any image in the active (filtered) set as the right
+/// compare pane. Reuses the thumbnail-grid pattern (`LazyVGrid` + `ThumbnailCell`)
+/// from the contact-sheet grid. The current image (left pane) is highlighted.
+struct ComparePickerSheet: View {
+    @ObservedObject var imageLoader: ImageLoader
+    var favouriteURLStrings: Set<String> = []
+    let currentURL: URL?
+    let onSelect: (URL) -> Void
+    let onCancel: () -> Void
+
+    private let thumbSize: CGFloat = 140
+    private let spacing: CGFloat = 8
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: thumbSize), spacing: spacing)]
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Choose an image to compare")
+                    .font(.headline)
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding()
+            Divider()
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: spacing) {
+                    ForEach(Array(imageLoader.imageURLs.enumerated()), id: \.element) { pair in
+                        ThumbnailCell(
+                            url: pair.element,
+                            size: thumbSize,
+                            isSelected: pair.element == currentURL,
+                            isFavourite: favouriteURLStrings.contains(pair.element.absoluteString),
+                            onTap: { onSelect(pair.element) }
+                        )
+                    }
+                }
+                .padding(spacing)
+            }
+        }
+        .frame(minWidth: 560, minHeight: 440)
+        .accessibilityLabel("Compare picker, \(imageLoader.imageURLs.count) images")
     }
 }
