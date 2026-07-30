@@ -1341,7 +1341,7 @@ struct SlideshowView: View {
             removeCropForCurrentImage()
             return .handled
         case "e":
-            if isVideoActive { openVideoAdjustmentsHUD() } else { openAdjustmentsHUD() }
+            openAdjustmentsHUD()
             return .handled
         case "E":
             openCurvesHUD()

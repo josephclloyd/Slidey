@@ -159,6 +159,13 @@ final class VideoPlayerController {
     func toggleMute() {
         isMuted.toggle()
     }
+
+    /// Returns the current video to its unmodified appearance and drops its saved
+    /// per-URL adjustments so it reopens clean next time (#342).
+    func resetAdjustments() {
+        adjustments = VideoAdjustments()
+        if let url { adjustmentsByURL.removeValue(forKey: url) }
+    }
 }
 
 /// `AVPlayerView` subclass that forwards magnify / scroll / drag gestures for
@@ -227,6 +234,10 @@ struct VideoPlayerView: View {
     @Binding var zoomScale: CGFloat
     @Binding var imageOffset: CGSize
     let containerSize: CGSize
+    /// Toggles the brightness/contrast/gamma panel (#342). The HUD is opened from
+    /// this control rather than a key press so it stays discoverable and doesn't
+    /// clash with the image-editing key registry.
+    var onToggleAdjustments: (() -> Void)?
 
     @AppStorage("naturalScrollPan") private var naturalScrollPan: Bool = false
 
@@ -242,19 +253,34 @@ struct VideoPlayerView: View {
             .scaleEffect(zoomScale)
             .offset(imageOffset)
 
-            // `m` is bound to smoothing for images, so mute lives on a button.
-            Button {
-                controller.toggleMute()
-            } label: {
-                Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 34, height: 34)
-                    .background(.black.opacity(0.55), in: Circle())
+            // Editing keys are reserved for images, so these live on buttons.
+            HStack(spacing: 10) {
+                Button {
+                    onToggleAdjustments?()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Video adjustments")
+                .accessibilityHint("Shows brightness, contrast, and gamma controls")
+
+                Button {
+                    controller.toggleMute()
+                } label: {
+                    Image(systemName: controller.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(controller.isMuted ? "Unmute video" : "Mute video")
             }
-            .buttonStyle(.plain)
             .padding(14)
-            .accessibilityLabel(controller.isMuted ? "Unmute video" : "Mute video")
         }
         .overlay(alignment: .bottomLeading) {
             Text("Editing not available for video")
@@ -346,7 +372,8 @@ extension SlideshowView {
                     url: url,
                     zoomScale: $zoomPan.zoomScale,
                     imageOffset: $zoomPan.imageOffset,
-                    containerSize: geometry.size
+                    containerSize: geometry.size,
+                    onToggleAdjustments: { toggleVideoAdjustmentsHUD() }
                 )
                 .id(url)
                 .onAppear {
@@ -384,7 +411,7 @@ extension SlideshowView {
                     videoAdjustmentRow("Contrast", value: $vc.adjustments.contrast, range: 0...2, format: "%.2f")
                     videoAdjustmentRow("Gamma", value: $vc.adjustments.gamma, range: 0.25...4, format: "%.2f")
                     HStack(spacing: 16) {
-                        Button("Reset") { videoController.adjustments = VideoAdjustments() }
+                        Button("Reset") { videoController.resetAdjustments() }
                             .buttonStyle(.bordered)
                             .tint(.white)
                             .accessibilityHint("Returns the video to its unmodified appearance")
@@ -421,11 +448,11 @@ extension SlideshowView {
         }
     }
 
-    /// Opens the video adjustments panel. No-op unless a video is loaded and the
-    /// slideshow isn't auto-advancing (mirrors `openAdjustmentsHUD`'s guards).
-    func openVideoAdjustmentsHUD() {
-        guard isVideoActive, videoController.url != nil, !slideshow.isPlaying else { return }
-        showVideoAdjustmentsHUD = true
+    /// Shows/hides the video adjustments panel from the on-video control. No-op
+    /// unless a video is loaded (the button only appears over a video anyway).
+    func toggleVideoAdjustmentsHUD() {
+        guard isVideoActive, videoController.url != nil else { return }
+        showVideoAdjustmentsHUD.toggle()
     }
 
     /// Hides the panel; the adjustments themselves persist on playback (and are
