@@ -1221,4 +1221,29 @@ final class CompareModeTests: XCTestCase {
         XCTAssertNil(SlideshowView.compareTargetIndex(current: 0, count: 1))
         XCTAssertNil(SlideshowView.compareTargetIndex(current: 0, count: 0))
     }
+
+    // MARK: - Pane sync (#325)
+
+    func testSyncPropagatesScaleAndOffset() {
+        let result = SlideshowView.syncedPaneState(
+            source: (scale: 2.0, offset: CGSize(width: 30, height: -10)),
+            target: (scale: 1.0, offset: .zero)
+        )
+        XCTAssertEqual(result?.scale, 2.0)
+        XCTAssertEqual(result?.offset, CGSize(width: 30, height: -10))
+    }
+
+    func testSyncReturnsNilWhenAlreadyEqual() {
+        // Equal panes must yield nil — this is what stops the onChange feedback loop.
+        let state: (scale: CGFloat, offset: CGSize) = (scale: 1.5, offset: CGSize(width: 5, height: 5))
+        XCTAssertNil(SlideshowView.syncedPaneState(source: state, target: state))
+    }
+
+    func testSyncPropagatesWhenOnlyOffsetDiffers() {
+        let result = SlideshowView.syncedPaneState(
+            source: (scale: 1.0, offset: CGSize(width: 40, height: 0)),
+            target: (scale: 1.0, offset: .zero)
+        )
+        XCTAssertEqual(result?.offset, CGSize(width: 40, height: 0))
+    }
 }
