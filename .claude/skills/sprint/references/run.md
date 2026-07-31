@@ -166,6 +166,8 @@ The monitor stream handles N concurrent sessions with one open connection.
 
 **Monitor 90s silence timeout:** `mcx monitor` exits with code 1 and "no events or heartbeat for 90s" when impl sessions produce no daemon events for 90 seconds. This happens reliably during long-running impl sessions (AI work, multi-file changes). Restart the Monitor tool immediately when it dies — but if it dies repeatedly, switch to `mcx claude wait <sessionId>` with `run_in_background: true` as the completion signal for that session. `run_in_background: true` has no timeout and will reliably notify you when the session finishes. Hit 4 times in Sprint 39 for #341's impl session.
 
+**`mcx claude wait` can return early before the session fully exits.** After the `run_in_background` notification fires, always confirm the session state with `mcx claude ls | grep <id>` before acting on the result. If the session still shows `active`, issue a second `wait` call — it is safe and will fire again when the session truly finishes. Hit in Sprint 41 during the #329 review session (session was active at 176 tokens when the first wait returned; a second wait caught the real completion).
+
 Payloads include: `session.result`, `work_item.phase_changed`, `ci.finished`,
 `pr.merge_state_changed`. The `allGreen` field on `ci.finished` is pre-computed —
 no follow-up `gh pr checks` needed for the common case.
@@ -250,6 +252,19 @@ follow-up immediately after spawning, in your own words with the specific file/s
 Don't rely on the session reading the plan file itself or re-deriving the risk from the issue
 text alone. Sprint 24 did this for two issues (a stale key-binding suggestion, a gesture-
 precedence hazard) and both landed with 0 repair rounds.
+
+**Write the risk-note message file BEFORE spawning**, not after. Opus sessions are fast (under
+2 minutes for a focused issue); if you compose the message after the spawn returns, the session
+may already be done before the send arrives. Pattern:
+```bash
+cat > /tmp/risk-NNN.txt << 'MSGEOF'
+... risk note text ...
+MSGEOF
+mcx claude spawn ... -t "/implement NNN" ...
+mcx claude send <sessionId> "$(cat /tmp/risk-NNN.txt)"
+```
+Sprint 40's #334 impl session finished before its risk notes arrived — it still satisfied all
+points by luck, but timing is unreliable. Pre-writing the file costs nothing.
 
 ## The main loop
 
