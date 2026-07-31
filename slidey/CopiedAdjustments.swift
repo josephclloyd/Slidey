@@ -5,6 +5,7 @@ struct CopiedAdjustments {
     var adjustments: SlideshowView.ImageAdjustments?
     var curves: CurvesData?
     var vignetteIntensity: Double?
+    var selectiveColour: SelectiveColourSettings?
     var denoiseLevel: Double?
     var rotationAngle: Angle?
     var flipH: Bool
@@ -20,6 +21,7 @@ struct CopiedAdjustments {
             || (adjustments != nil && !adjustments!.isIdentity)
             || (curves != nil && !curves!.isIdentity)
             || (vignetteIntensity != nil && vignetteIntensity! > 0)
+            || selectiveColour != nil
             || denoiseLevel != nil
             || rotationAngle != nil
             || flipH || flipV
@@ -38,6 +40,7 @@ struct CopiedAdjustments {
         if let adj = adjustments, !adj.isIdentity { result.append("adjustments") }
         if let c = curves, !c.isIdentity { result.append("curves") }
         if let v = vignetteIntensity, v > 0 { result.append("vignette") }
+        if selectiveColour != nil { result.append("selective colour") }
         if denoiseLevel != nil { result.append("denoise") }
         if rotationAngle != nil { result.append("rotation") }
         if flipH || flipV { result.append("flip") }

@@ -69,6 +69,9 @@ extension NSNotification.Name {
 
     static let vignetteImage = NSNotification.Name("VignetteImage")
 
+    static let selectiveColourImage = NSNotification.Name("SelectiveColourImage")
+    static let removeSelectiveColour = NSNotification.Name("RemoveSelectiveColour")
+
     static let adjustmentsImage = NSNotification.Name("AdjustmentsImage")
 
     static let curvesImage = NSNotification.Name("CurvesImage")

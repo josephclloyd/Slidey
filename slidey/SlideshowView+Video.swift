@@ -880,6 +880,7 @@ extension SlideshowView {
         effectImages[url] = nil; imageEffects[url] = nil
         rotationAngles[url] = nil
         adjustmentURLLevels[key] = nil; curvesURLLevels[key] = nil; vignetteURLLevels[key] = nil
+        selectiveColourURLLevels[key] = nil
         straightenAngles[key] = nil; perspectiveCorners[key] = nil; cropRegions[key] = nil
         localAdjustmentURLLayers[key] = nil
         flippedHorizontally.remove(key); flippedVertically.remove(key)

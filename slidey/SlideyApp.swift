@@ -651,6 +651,14 @@ struct EditMenuCommands: Commands {
                     NotificationCenter.default.post(name: .vignetteImage, object: nil)
                 }
 
+                Button("Selective Colour\u{2026}") {
+                    NotificationCenter.default.post(name: .selectiveColourImage, object: nil)
+                }
+
+                Button("Remove Selective Colour") {
+                    NotificationCenter.default.post(name: .removeSelectiveColour, object: nil)
+                }
+
                 Divider()
 
                 Button("Local Adjustments\u{2026}") {

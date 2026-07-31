@@ -39,6 +39,10 @@ extension SlideshowView {
             image = applyVignette(intensity: vigLevel, to: image) ?? image
         }
 
+        if let selective = selectiveColourURLLevels[url.absoluteString] {
+            image = applySelectiveColour(selective, to: image) ?? image
+        }
+
         if let sAngle = straightenAngles[url.absoluteString], sAngle != 0 {
             image = applyStraightenTransform(angle: sAngle, to: image) ?? image
         }
