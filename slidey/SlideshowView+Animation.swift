@@ -163,6 +163,7 @@ extension SlideshowView {
         if let adj = adjustmentURLLevels[key], !adj.isIdentity { return false }
         if let curves = curvesURLLevels[key], !curves.isIdentity { return false }
         if let vignette = vignetteURLLevels[key], vignette > 0 { return false }
+        if selectiveColourURLLevels[key] != nil { return false }
         if let straighten = straightenAngles[key], straighten != 0 { return false }
         if perspectiveCorners[key] != nil { return false }
         if cropRegions[key] != nil { return false }
