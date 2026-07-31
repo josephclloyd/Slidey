@@ -41,6 +41,7 @@ extension NSNotification.Name {
     static let toggleThumbnails = NSNotification.Name("ToggleThumbnails")
     static let toggleGridView = NSNotification.Name("ToggleGridView")
     static let toggleImageInfo = NSNotification.Name("ToggleImageInfo")
+    static let toggleSelectionMode = NSNotification.Name("ToggleSelectionMode")
     static let toggleHistogram = NSNotification.Name("ToggleHistogram")
 
     static let musicOff = NSNotification.Name("MusicOff")

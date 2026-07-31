@@ -40,6 +40,7 @@
 		ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST100001000000000000001 /* SlideshowView+Straighten.swift */; };
 		VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */ = {isa = PBXBuildFile; fileRef = VG100001000000000000001 /* SlideshowView+Vignette.swift */; };
 		SC100002000000000000001 /* SlideshowView+SelectiveColour.swift in Sources */ = {isa = PBXBuildFile; fileRef = SC100001000000000000001 /* SlideshowView+SelectiveColour.swift */; };
+		MS100002000000000000001 /* SlideshowView+MultiSelect.swift in Sources */ = {isa = PBXBuildFile; fileRef = MS100001000000000000001 /* SlideshowView+MultiSelect.swift */; };
 		MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = MD100001000000000000001 /* SlideshowView+Metadata.swift */; };
 		SE100002000000000000001 /* SlideshowView+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = SE100001000000000000001 /* SlideshowView+Search.swift */; };
 		FP100002000000000000001 /* SlideshowView+FilterPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = FP100001000000000000001 /* SlideshowView+FilterPresets.swift */; };
@@ -118,6 +119,7 @@
 		ST100001000000000000001 /* SlideshowView+Straighten.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Straighten.swift"; sourceTree = "<group>"; };
 		VG100001000000000000001 /* SlideshowView+Vignette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Vignette.swift"; sourceTree = "<group>"; };
 		SC100001000000000000001 /* SlideshowView+SelectiveColour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+SelectiveColour.swift"; sourceTree = "<group>"; };
+		MS100001000000000000001 /* SlideshowView+MultiSelect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+MultiSelect.swift"; sourceTree = "<group>"; };
 		MD100001000000000000001 /* SlideshowView+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Metadata.swift"; sourceTree = "<group>"; };
 		SE100001000000000000001 /* SlideshowView+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+Search.swift"; sourceTree = "<group>"; };
 		FP100001000000000000001 /* SlideshowView+FilterPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SlideshowView+FilterPresets.swift"; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 				ST100001000000000000001 /* SlideshowView+Straighten.swift */,
 				VG100001000000000000001 /* SlideshowView+Vignette.swift */,
 				SC100001000000000000001 /* SlideshowView+SelectiveColour.swift */,
+				MS100001000000000000001 /* SlideshowView+MultiSelect.swift */,
 				MD100001000000000000001 /* SlideshowView+Metadata.swift */,
 				SE100001000000000000001 /* SlideshowView+Search.swift */,
 				FP100001000000000000001 /* SlideshowView+FilterPresets.swift */,
@@ -397,6 +400,7 @@
 				ST100002000000000000001 /* SlideshowView+Straighten.swift in Sources */,
 				VG100002000000000000001 /* SlideshowView+Vignette.swift in Sources */,
 				SC100002000000000000001 /* SlideshowView+SelectiveColour.swift in Sources */,
+				MS100002000000000000001 /* SlideshowView+MultiSelect.swift in Sources */,
 				MD100002000000000000001 /* SlideshowView+Metadata.swift in Sources */,
 				SE100002000000000000001 /* SlideshowView+Search.swift in Sources */,
 				FP100002000000000000001 /* SlideshowView+FilterPresets.swift in Sources */,

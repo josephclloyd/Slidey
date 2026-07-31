@@ -117,6 +117,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Grid / Contact Sheet (T)") {
                 NotificationCenter.default.post(name: .toggleGridView, object: nil)
             }
+            Button("Select Multiple Images\u{2026}") {
+                NotificationCenter.default.post(name: .toggleSelectionMode, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .option])
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
