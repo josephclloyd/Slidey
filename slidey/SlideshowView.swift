@@ -82,6 +82,9 @@ struct SlideshowView: View {
     @State var showGridView = false
     @State var gridSelection = 0
     @State var gridColumnCount = 1
+    // Multi-select mode: not private — SlideshowView+MultiSelect extension mutates these.
+    @State var selectionModeActive = false
+    @State var selectedURLs: Set<URL> = []
     @State var infoOverlayURLs: Set<URL> = []
     @State var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
@@ -499,6 +502,7 @@ struct SlideshowView: View {
     @ViewBuilder private var thumbnailAndGridOverlays: some View {
         gridOverlay
         thumbnailOverlay
+        selectionOverlay
     }
 
     @ViewBuilder
@@ -1095,6 +1099,7 @@ struct SlideshowView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
         if showGridView { return handleGridKeyPress(keyPress) }
+        if selectionModeActive { return handleSelectionKeyPress(keyPress) }
         if let result = handleCompareModeKeyPress(key) { return result }
         if let result = handleBeforeAfterSliderKeyPress(keyPress) { return result }
 
@@ -1809,6 +1814,7 @@ struct SlideshowView: View {
         savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
         infoOverlayURLs = infoOverlayURLs.intersection(valid)
         imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
+        selectedURLs = selectedURLs.intersection(valid)
         rotationAngle = currentURLRotation()
         if !newURLs.isEmpty { updateDisplayImage() }
     }

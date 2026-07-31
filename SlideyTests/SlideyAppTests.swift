@@ -191,6 +191,21 @@ final class MusicMenuNotificationTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
 
+    func testToggleSelectionModeNotificationName() {
+        XCTAssertEqual(NSNotification.Name.toggleSelectionMode.rawValue, "ToggleSelectionMode")
+    }
+
+    func testToggleSelectionModeNotificationFires() {
+        let expectation = expectation(description: "toggleSelectionMode notification received")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .toggleSelectionMode, object: nil, queue: .main
+        ) { _ in expectation.fulfill() }
+
+        NotificationCenter.default.post(name: .toggleSelectionMode, object: nil)
+        waitForExpectations(timeout: 1)
+        NotificationCenter.default.removeObserver(observer)
+    }
+
     func testMusicChooseSongNotificationFires() {
         let expectation = expectation(description: "musicChooseSong notification received")
         let observer = NotificationCenter.default.addObserver(
