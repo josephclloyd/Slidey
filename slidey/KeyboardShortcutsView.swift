@@ -36,6 +36,7 @@ struct KeyboardShortcutsView: View {
             ("⇧U", "Remove upscaling"),
             ("b (hold)", "Preview original (before/after)"),
             ("Edit > Vignette\u{2026}", "Open Vignette HUD"),
+            ("\u{21e7}V", "Selective colour (desaturate all but one hue)"),
             ("y", "Open Straighten HUD"),
             ("\u{21e7}Y", "Remove straighten"),
             ("\u{2325}Y", "Perspective correction"),

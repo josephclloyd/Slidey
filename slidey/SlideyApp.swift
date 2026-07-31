@@ -117,6 +117,10 @@ struct SlideshowMenuCommands: Commands {
             Button("Grid / Contact Sheet (T)") {
                 NotificationCenter.default.post(name: .toggleGridView, object: nil)
             }
+            Button("Select Multiple Images\u{2026}") {
+                NotificationCenter.default.post(name: .toggleSelectionMode, object: nil)
+            }
+            .keyboardShortcut("s", modifiers: [.command, .option])
             Button("Toggle Image Info (i)") {
                 NotificationCenter.default.post(name: .toggleImageInfo, object: nil)
             }
@@ -649,6 +653,14 @@ struct EditMenuCommands: Commands {
 
                 Button("Vignette\u{2026}") {
                     NotificationCenter.default.post(name: .vignetteImage, object: nil)
+                }
+
+                Button("Selective Colour\u{2026}") {
+                    NotificationCenter.default.post(name: .selectiveColourImage, object: nil)
+                }
+
+                Button("Remove Selective Colour") {
+                    NotificationCenter.default.post(name: .removeSelectiveColour, object: nil)
                 }
 
                 Divider()

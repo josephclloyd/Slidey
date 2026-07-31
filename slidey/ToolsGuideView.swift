@@ -90,6 +90,13 @@ struct ToolsGuideView: View {
                 when: "Drawing the viewer\u{2019}s eye toward the centre of the image."
             ),
             ToolEntry(
+                name: "Selective Colour",
+                key: "\u{21e7}V",
+                removeKey: nil,
+                summary: "Opens a HUD to keep one hue vivid while desaturating everything else to greyscale, with adjustable hue centre and range. Remove via Edit \u{203a} Remove Selective Colour.",
+                when: "Isolating a single colour for a colour-pop effect against a monochrome background."
+            ),
+            ToolEntry(
                 name: "Local Adjustments",
                 key: "Menu only",
                 removeKey: nil,

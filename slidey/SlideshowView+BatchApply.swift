@@ -24,6 +24,7 @@ extension SlideshowView {
             adjustments: adjustmentURLLevels[key],
             curves: curvesURLLevels[key],
             vignetteIntensity: vignetteURLLevels[key],
+            selectiveColour: selectiveColourURLLevels[key],
             denoiseLevel: denoiseURLLevels[key],
             rotationAngle: rotationAngles[url],
             flipH: flippedHorizontally.contains(key),
@@ -63,6 +64,12 @@ extension SlideshowView {
             vignetteURLLevels[key] = v
         } else {
             vignetteURLLevels.removeValue(forKey: key)
+        }
+
+        if let selective = copied.selectiveColour {
+            selectiveColourURLLevels[key] = selective
+        } else {
+            selectiveColourURLLevels.removeValue(forKey: key)
         }
 
         if let d = copied.denoiseLevel {

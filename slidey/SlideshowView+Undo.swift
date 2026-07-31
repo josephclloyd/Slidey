@@ -46,6 +46,7 @@ extension SlideshowView {
         let adjustments: ImageAdjustments?
         let curves: CurvesData?
         let vignetteIntensity: Double?
+        let selectiveColour: SelectiveColourSettings?
         let flipH: Bool
         let flipV: Bool
         let straightenAngle: Double?
@@ -80,6 +81,7 @@ extension SlideshowView {
             adjustments: adjustmentURLLevels[key],
             curves: curvesURLLevels[key],
             vignetteIntensity: vignetteURLLevels[key],
+            selectiveColour: selectiveColourURLLevels[key],
             flipH: flippedHorizontally.contains(key),
             flipV: flippedVertically.contains(key),
             straightenAngle: straightenAngles[key],
@@ -116,6 +118,7 @@ extension SlideshowView {
         if let val = snapshot.adjustments { adjustmentURLLevels[key] = val } else { adjustmentURLLevels.removeValue(forKey: key) }
         if let val = snapshot.curves { curvesURLLevels[key] = val } else { curvesURLLevels.removeValue(forKey: key) }
         if let val = snapshot.vignetteIntensity { vignetteURLLevels[key] = val } else { vignetteURLLevels.removeValue(forKey: key) }
+        if let val = snapshot.selectiveColour { selectiveColourURLLevels[key] = val } else { selectiveColourURLLevels.removeValue(forKey: key) }
         if snapshot.flipH { flippedHorizontally.insert(key) } else { flippedHorizontally.remove(key) }
         if snapshot.flipV { flippedVertically.insert(key) } else { flippedVertically.remove(key) }
         if let val = snapshot.straightenAngle { straightenAngles[key] = val } else { straightenAngles.removeValue(forKey: key) }

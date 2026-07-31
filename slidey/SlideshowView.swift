@@ -82,6 +82,9 @@ struct SlideshowView: View {
     @State var showGridView = false
     @State var gridSelection = 0
     @State var gridColumnCount = 1
+    // Multi-select mode: not private — SlideshowView+MultiSelect extension mutates these.
+    @State var selectionModeActive = false
+    @State var selectedURLs: Set<URL> = []
     @State var infoOverlayURLs: Set<URL> = []
     @State var imageInfoCache: [URL: ImageInfo] = [:]
     @State private var displaySleepAssertionID: IOPMAssertionID = 0
@@ -141,6 +144,12 @@ struct SlideshowView: View {
     @State var vignetteIntensity: Double = 1.0
     @State var vignetteBaseImage: NSImage?
     @State var vignetteTask: Task<Void, Never>?
+    @State var selectiveColourURLLevels: [String: SelectiveColourSettings] = [:]
+    @State var showSelectiveColourHUD: Bool = false
+    @State var selectiveColourHue: Double = 0
+    @State var selectiveColourWidth: Double = 30
+    @State var selectiveColourBaseImage: NSImage?
+    @State var selectiveColourTask: Task<Void, Never>?
 
     struct ImageAdjustments: Codable, Equatable {
         var exposure: Double = 0
@@ -493,6 +502,7 @@ struct SlideshowView: View {
     @ViewBuilder private var thumbnailAndGridOverlays: some View {
         gridOverlay
         thumbnailOverlay
+        selectionOverlay
     }
 
     @ViewBuilder
@@ -520,6 +530,7 @@ struct SlideshowView: View {
         jpegCleanupHUD
         grainReductionHUD
         vignetteHUD
+        selectiveColourHUD
         adjustmentsHUD
         videoAdjustmentsHUD
         curvesHUD
@@ -782,7 +793,11 @@ struct SlideshowView: View {
         .onChange(of: slideshow.isPlaying) { _, isPlaying in
             cursorShowTask?.cancel()
             updateCursorVisibility()
-            if isPlaying { cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning(); cancelVignetteHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD(); cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); cancelObjectRemovalHUD(); dismissNoiseSuggestion() }
+            if isPlaying {
+                cancelDenoise(); cancelJPEGCleanupHUD(); cancelGrainReductionHUD(); cancelTiledMLIfRunning()
+                cancelVignetteHUD(); cancelSelectiveColourHUD(); cancelAdjustmentsHUD(); cancelCurvesHUD()
+                cancelStraightenHUD(); cancelLocalAdjustmentsHUD(); cancelObjectRemovalHUD(); dismissNoiseSuggestion()
+            }
         }
         .onChange(of: sortOrder) { _, newValue in
             imageLoader.sortOrder = newValue
@@ -953,6 +968,12 @@ struct SlideshowView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.vignetteImage)) { _ in
             ifKeyWindow { openVignetteHUD() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.selectiveColourImage)) { _ in
+            ifKeyWindow { openSelectiveColourHUD() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.removeSelectiveColour)) { _ in
+            ifKeyWindow { removeSelectiveColourForCurrentImage() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.adjustmentsImage)) { _ in
             ifKeyWindow { openAdjustmentsHUD() }
         }
@@ -1078,6 +1099,7 @@ struct SlideshowView: View {
     private func handleKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
         let key = keyPress.key
         if showGridView { return handleGridKeyPress(keyPress) }
+        if selectionModeActive { return handleSelectionKeyPress(keyPress) }
         if let result = handleCompareModeKeyPress(key) { return result }
         if let result = handleBeforeAfterSliderKeyPress(keyPress) { return result }
 
@@ -1100,6 +1122,10 @@ struct SlideshowView: View {
 
         if showVignetteHUD {
             return handleSimpleHUDKeyPress(keyPress, cancel: cancelVignetteHUD, apply: applyVignetteToImage)
+        }
+
+        if showSelectiveColourHUD {
+            return handleSimpleHUDKeyPress(keyPress, cancel: cancelSelectiveColourHUD, apply: applySelectiveColourToImage)
         }
 
         if showAdjustmentsHUD {
@@ -1312,6 +1338,9 @@ struct SlideshowView: View {
             return .handled
         case "v":
             toggleShowFavouritesOnly()
+            return .handled
+        case "V":
+            openSelectiveColourHUD()
             return .handled
         case "j":
             if !imageLoader.imageURLs.isEmpty {
@@ -1785,6 +1814,7 @@ struct SlideshowView: View {
         savedPanOffsets = savedPanOffsets.filter { valid.contains($0.key) }
         infoOverlayURLs = infoOverlayURLs.intersection(valid)
         imageInfoCache = imageInfoCache.filter { valid.contains($0.key) }
+        selectedURLs = selectedURLs.intersection(valid)
         rotationAngle = currentURLRotation()
         if !newURLs.isEmpty { updateDisplayImage() }
     }
@@ -1985,6 +2015,11 @@ struct SlideshowView: View {
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
         }
+        // Apply selective colour (skip during HUD preview)
+        if !showSelectiveColourHUD, let selective = selectiveColourURLLevels[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applySelectiveColour(selective, to: image) ?? image
+        }
         // Apply straighten (skip during HUD preview)
         if !showStraightenHUD, let sAngle = straightenAngles[url.absoluteString], sAngle != 0,
            let image = currentDisplayImage {
@@ -2158,6 +2193,11 @@ struct SlideshowView: View {
         if !showVignetteHUD, let vigLevel = vignetteURLLevels[url.absoluteString], vigLevel > 0,
            let image = currentDisplayImage {
             currentDisplayImage = applyVignette(intensity: vigLevel, to: image) ?? image
+        }
+        // Selective colour (skip during HUD preview)
+        if !showSelectiveColourHUD, let selective = selectiveColourURLLevels[url.absoluteString],
+           let image = currentDisplayImage {
+            currentDisplayImage = applySelectiveColour(selective, to: image) ?? image
         }
         // Straighten (skip during HUD preview)
         if !showStraightenHUD, let sAngle = straightenAngles[url.absoluteString], sAngle != 0,
